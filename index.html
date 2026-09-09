@@ -6,6 +6,11 @@
 <title>HBM Integrated Project Control System</title>
 <meta name="theme-color" content="#0E2233">
 <style>
+/* ============================================================
+   HBM IPCS — Design tokens
+   Control-room palette: steel & navy body, amber for HBM face,
+   olive for Site face. Numbers always tabular monospace.
+   ============================================================ */
 :root{
   --navy:#0E2233; --navy-2:#183349; --navy-3:#22455f;
   --steel:#EEF1F4; --line:#D3DAE1; --line-soft:#E4E9EE;
@@ -44,6 +49,7 @@ a{color:var(--blue)}
 .spread{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .grow{flex:1 1 auto;min-width:0}
 
+/* ---------- LOGIN ---------- */
 #login{
   min-height:100dvh;display:grid;place-items:center;padding:24px;
   background:
@@ -60,6 +66,7 @@ a{color:var(--blue)}
 .pindots i{width:12px;height:12px;border-radius:50%;background:var(--line);display:block}
 .pindots i.on{background:var(--navy)}
 
+/* ---------- LOGO ---------- */
 .logo{width:52px;height:52px;flex:0 0 auto;border-radius:10px;overflow:hidden;display:grid;place-items:center;background:var(--navy)}
 .logo svg,.logo img{width:100%;height:100%;object-fit:contain;display:block}
 .logo.sm{width:44px;height:44px;border-radius:9px}
@@ -67,13 +74,22 @@ a{color:var(--blue)}
 .logo.xl{width:130px;height:130px;border-radius:16px}
 .logo.custom{width:auto;height:auto;max-width:100%;background:#fff;padding:7px 10px;display:block}
 .logo.custom img{width:auto;height:auto;max-width:100%;max-height:46px;margin:0 auto;object-fit:contain}
+.logo.custom.sm img{max-height:42px}
+.logo.custom.lg{padding:10px 14px}
+.logo.custom.lg img{max-height:76px}
+.logo.custom.xl{padding:12px 16px}
+.logo.custom.xl img{max-height:112px}
+@media(max-width:520px){.logo.lg{width:74px;height:74px}.logo.custom.lg img{max-height:62px}}
 .brandname{font-size:15px;font-weight:800;letter-spacing:.02em;line-height:1.15}
 .brandsub{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
 
+/* ---------- SHELL ---------- */
 #shell{display:none;min-height:100dvh;grid-template-columns:236px 1fr}
 #shell.on{display:grid}
 aside{background:var(--navy);color:#DCE6EE;display:flex;flex-direction:column;position:sticky;top:0;height:100dvh;overflow:auto}
 .asidehead{padding:16px 14px;border-bottom:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;gap:9px;align-items:center;text-align:center}
+.asidehead .logo{max-width:100%}
+.asidehead .logo.custom{width:100%}
 .asidehead .brandname{line-height:1.2;color:#fff}
 .asidehead .brandsub{color:#8AA2B5}
 .facechip{margin:12px 12px 6px;padding:8px 10px;border-radius:var(--r-s);background:rgba(255,255,255,.06);border-left:3px solid var(--rail)}
@@ -102,6 +118,7 @@ header.top h1{font-size:16px}
 .who span{font-size:10.5px;color:var(--ink-3);letter-spacing:.05em;text-transform:uppercase;font-weight:700}
 .content{padding:18px;max-width:1400px;width:100%}
 
+/* ---------- CARDS / PANELS ---------- */
 .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);margin-bottom:16px}
 .card>h3{padding:12px 14px;border-bottom:1px solid var(--line-soft);font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .card .body{padding:14px}
@@ -115,115 +132,176 @@ header.top h1{font-size:16px}
 .kpi .sub{font-size:11px;color:var(--ink-3);margin-top:3px}
 .kpi.amber{border-top-color:var(--amber)} .kpi.teal{border-top-color:var(--teal)}
 .kpi.red{border-top-color:var(--red)} .kpi.blue{border-top-color:var(--blue)}
-.kpi.olive{border-top-color:var(--olive)}
+.kpi.olive{border-top-color:var(--olive)} .kpi.violet{border-top-color:var(--violet)}
 
+/* ---------- TABLE ---------- */
 .tw{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700;padding:9px 10px;border-bottom:1px solid var(--line);background:#F7F9FB;white-space:nowrap}
+th{
+  text-align:left;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:700;padding:9px 10px;border-bottom:1px solid var(--line);background:#F7F9FB;white-space:nowrap
+}
 td{padding:9px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top}
 tbody tr:hover{background:#F9FBFC}
 td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .empty{padding:30px 16px;text-align:center;color:var(--ink-3)}
 .empty b{display:block;color:var(--ink-2);margin-bottom:4px;font-size:13px}
 
+/* ---------- BADGES ---------- */
 .b{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;border:1px solid transparent}
 .b.gray{background:#EDF1F4;color:var(--ink-2);border-color:var(--line)}
 .b.amber{background:var(--amber-soft);color:#8A5A0F;border-color:#EBD2A8}
 .b.teal{background:var(--teal-soft);color:#0A5250;border-color:#B9DDDB}
 .b.red{background:var(--red-soft);color:#8C271E;border-color:#EFC7C2}
 .b.blue{background:var(--blue-soft);color:#194B7D;border-color:#C4D8EA}
+.b.olive{background:var(--olive-soft);color:#41571F;border-color:#CFDDB6}
+.b.violet{background:var(--violet-soft);color:#42356B;border-color:#D2CBE8}
 
+/* ---------- FORMS ---------- */
 label.f{display:block;margin-bottom:11px}
 label.f>span{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-bottom:4px}
 label.f>span em{color:var(--red);font-style:normal}
-input[type=text],input[type=number],input[type=date],input[type=password],select,textarea{
+input[type=text],input[type=number],input[type=date],input[type=password],input[type=time],select,textarea{
   width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--paper);outline:none
 }
 input:focus,select:focus,textarea:focus{border-color:var(--navy-3);box-shadow:0 0 0 3px rgba(34,69,95,.13)}
 input[type=number]{font-family:var(--mono);text-align:right}
 textarea{min-height:66px;resize:vertical}
+input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--ink-2)}
 .fg{display:grid;gap:0 12px}
 .fg.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .fg.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .fg.c4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .chk{display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:13px}
+.chk input{width:16px;height:16px}
 
+/* ---------- BUTTONS ---------- */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:var(--r-s);border:1px solid var(--line);background:var(--paper);cursor:pointer;font-weight:600;font-size:13px;white-space:nowrap}
 .btn:hover{background:#F5F8FA}
 .btn.p{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.p:hover{background:var(--navy-2)}
 .btn.a{background:var(--amber);border-color:var(--amber);color:#2A1B04}
+.btn.a:hover{filter:brightness(1.05)}
 .btn.g{background:var(--teal);border-color:var(--teal);color:#fff}
 .btn.d{background:var(--red);border-color:var(--red);color:#fff}
 .btn.sm{padding:5px 9px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.link{border:none;background:none;color:var(--blue);padding:4px 6px;text-decoration:underline}
 
+/* ---------- LINE ROWS (repeaters) ---------- */
+.lines{border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden}
+.lines .lh{background:#F7F9FB;padding:7px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700;border-bottom:1px solid var(--line)}
+.line{padding:10px;border-bottom:1px solid var(--line-soft);display:grid;gap:0 10px;align-items:start}
+.line:last-child{border-bottom:none}
+.line .del{background:none;border:1px solid var(--line);color:var(--red);border-radius:var(--r-s);cursor:pointer;padding:6px 9px;height:34px;align-self:end;margin-bottom:11px}
+
+/* ---------- ENTRY BLOCKS ---------- */
 .entry{border:1px solid var(--line);border-radius:var(--r-s);padding:11px;margin-bottom:10px;background:#FCFDFE}
 .entry .eh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px;padding-bottom:7px;border-bottom:1px dashed var(--line)}
 .entry .eh b{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy)}
+.entry label.f>span{color:var(--ink);font-size:11.5px}
+.entry .btn.d{padding:4px 9px;font-size:11.5px}
 
+/* ---------- PHOTOS ---------- */
 .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:9px}
 .ph{position:relative;border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden;background:#F2F5F7}
 .ph img{width:100%;height:88px;object-fit:cover;display:block}
+.ph .cap{padding:5px 6px;font-size:10.5px;line-height:1.3}
+.ph .dl{position:absolute;bottom:34px;right:4px;background:rgba(14,34,51,.9);color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:10px;cursor:pointer;text-decoration:none}
 .ph .x{position:absolute;top:4px;right:4px;background:rgba(178,58,47,.94);color:#fff;border:none;border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:13px;line-height:1}
-.ph .tag{position:absolute;top:4px;left:4px;background:rgba(14,34,51,.88);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px}
+.ph .tag{position:absolute;top:4px;left:4px;background:rgba(14,34,51,.88);color:#fff;font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 6px;border-radius:3px;text-transform:uppercase}
 
+/* ---------- BAR CHART MENDATAR ---------- */
+.hbar{display:grid;grid-template-columns:170px 1fr 46px;gap:9px;align-items:center;margin-bottom:7px;font-size:12.5px}
+.hbar .t{background:var(--line-soft);border-radius:4px;height:16px;overflow:hidden}
+.hbar .t i{display:block;height:100%;background:var(--navy-3)}
+.hbar .t i.hi{background:var(--red)}
+.hbar .v{text-align:right;font-family:var(--mono);font-size:12px}
+@media(max-width:520px){.hbar{grid-template-columns:110px 1fr 38px;font-size:11.5px}}
+
+/* ---------- MODAL / TOAST ---------- */
 #mask{position:fixed;inset:0;background:rgba(11,22,34,.55);display:none;z-index:100;padding:18px;overflow:auto}
 #mask.on{display:block}
 .modal{background:var(--paper);border-radius:11px;max-width:760px;margin:24px auto;box-shadow:0 30px 70px rgba(0,0,0,.35)}
 .modal>h3{padding:14px 16px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center;font-size:14.5px}
 .modal .mbody{padding:16px;max-height:66vh;overflow:auto}
-.modal .mfoot{padding:12px 16px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:8px}
-#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:200;display:flex;flex-direction:column;gap:8px;pointer-events:none}
-.tt{background:var(--navy);color:#fff;padding:10px 16px;border-radius:22px;font-size:13px;box-shadow:0 10px 26px rgba(0,0,0,.3)}
+.modal .mfoot{padding:12px 16px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.tt{background:var(--navy);color:#fff;padding:10px 16px;border-radius:22px;font-size:13px;box-shadow:0 10px 26px rgba(0,0,0,.3);max-width:88vw}
 .tt.err{background:var(--red)} .tt.ok{background:var(--teal)}
 
+/* ---------- MISC ---------- */
 .bar{height:7px;background:var(--line-soft);border-radius:20px;overflow:hidden;min-width:70px}
 .bar i{display:block;height:100%;background:var(--teal)}
 .bar i.w{background:var(--amber)} .bar i.c{background:var(--red)}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 14px;background:#F7F9FB;border-radius:var(--r) var(--r) 0 0}
-.tabs button{border:none;background:none;padding:10px 12px;cursor:pointer;font-weight:600;font-size:13px;color:var(--ink-2);border-bottom:2px solid transparent}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:0 14px;background:#F7F9FB;border-radius:var(--r) var(--r) 0 0}
+.tabs button{border:none;background:none;padding:10px 12px;cursor:pointer;font-weight:600;font-size:13px;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tabs button.on{color:var(--ink);border-bottom-color:var(--rail)}
 .note{background:var(--blue-soft);border:1px solid #C4D8EA;border-left:3px solid var(--blue);border-radius:var(--r-s);padding:10px 12px;font-size:12.5px;color:#1B3E60}
 .note.warn{background:var(--amber-soft);border-color:#EBD2A8;border-left-color:var(--amber);color:#7A4E0C}
+.note.stop{background:var(--red-soft);border-color:#EFC7C2;border-left-color:var(--red);color:#8C271E}
+.gate{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px}
+.gate span{padding:3px 8px;border-radius:4px;background:#EDF1F4;color:var(--ink-3);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.gate span.on{background:var(--navy);color:#fff}
+.gate i{color:var(--ink-3);font-style:normal}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.filters label.f{margin-bottom:0;min-width:130px}
+.stack{display:flex;flex-direction:column;gap:2px}
 
-.sidesync{display:block;padding:8px 10px;border-radius:var(--r-s);background:rgba(255,255,255,.06);border-left:3px solid #8AA2B5;cursor:pointer}
-.sidesync b{display:block;font-size:11.5px;color:#EAF0F5}
-.sidesync span{display:block;font-size:10px;color:#8AA2B5;margin-top:1px}
-.sidesync.hijau{border-left-color:#4CAF93}
-.sidesync.kuning{border-left-color:var(--amber);background:rgba(217,144,43,.16)}
-
+/* ---------- RESPONSIVE ---------- */
+@media(max-width:1080px){ .g4{grid-template-columns:repeat(2,minmax(0,1fr))} .g3{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media(max-width:860px){
   #shell{grid-template-columns:1fr}
-  aside{position:fixed;z-index:60;width:250px;left:-260px;transition:left .22s ease}
+  aside{position:fixed;z-index:60;width:250px;left:-260px;transition:left .22s ease;box-shadow:0 0 40px rgba(0,0,0,.4)}
   aside.open{left:0}
   .burger{display:inline-flex}
   .content{padding:12px}
-  .g2,.g3,.g4,.fg.c2,.fg.c3,.fg.c4{grid-template-columns:1fr}
+  .g2,.g3,.g4{grid-template-columns:1fr}
+  .fg.c2,.fg.c3,.fg.c4{grid-template-columns:1fr}
+  header.top h1{font-size:14px}
+  .who b{font-size:11.5px}
 }
+@media(max-width:520px){
+  .kpi .v{font-size:20px}
+  .modal .mbody{max-height:70vh}
+}
+.sidesync{display:block;padding:8px 10px;border-radius:var(--r-s);background:rgba(255,255,255,.06);border-left:3px solid #8AA2B5;cursor:pointer}
+.sidesync b{display:block;font-size:11.5px;color:#EAF0F5;letter-spacing:.02em}
+.sidesync span{display:block;font-size:10px;color:#8AA2B5;margin-top:1px}
+.sidesync.hijau{border-left-color:#4CAF93}
+.sidesync.kuning{border-left-color:var(--amber);background:rgba(217,144,43,.16)}
+.sidesync.kuning b{color:#F6D9A8}
+.sidesync.merah{border-left-color:var(--red);background:rgba(178,58,47,.2)}
+.sidesync.merah b{color:#F3BDB6}
 </style>
 </head>
 <body>
-
+<!-- ======================= LOGIN ======================= -->
 <div id="login">
   <div class="loginbox">
     <div class="brandline">
       <div class="logo lg" id="loginLogo"></div>
       <div>
         <div class="brandname">PT. HUDAYA BAYANAKA MANDIRI</div>
-        <div class="brandsub">Integrated Project Control System</div>
+        <div class="brandsub">Integrated Project Control</div>
       </div>
     </div>
-    <p class="small muted center" style="margin:10px 0 14px">Area Oil Movement RU V Balikpapan</p>
-    <label class="f"><span>PIN Akses</span>
+    <p class="small muted" style="margin:10px 0 14px">Pekerjaan Pengecatan Tanki — Area Oil Movement RU V Balikpapan</p>
+    <label class="f"><span>PIN</span>
       <input type="password" id="lgPin" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
     </label>
     <div class="pindots" id="lgDots"><i></i><i></i><i></i><i></i></div>
     <div class="pinpad" id="lgPad"></div>
-    <button class="btn p mt12" id="lgGo" style="width:100%;justify-content:center;padding:11px">Masuk Sistem</button>
+    <button class="btn p mt12" id="lgGo" style="width:100%;justify-content:center;padding:11px">Masuk</button>
     <div id="lgErr" class="note stop mt12 hide"></div>
-    <div class="center tiny muted mt16" id="lgVer">v2.0 (Fast-Sync)</div>
+    <div class="mt16 center" style="font-size:12.5px;font-weight:600;color:var(--ink-2)">
+      Silakan masukkan No. PIN Anda!
+    </div>
+    <div class="center tiny muted mt8" id="lgVer">v2.0</div>
   </div>
 </div>
 
+<!-- ======================= SHELL ======================= -->
 <div id="shell">
   <aside id="aside">
     <div class="asidehead">
@@ -258,6 +336,21 @@ textarea{min-height:66px;resize:vertical}
 <script>
 "use strict";
 const APP_VERSI = "2.0";
+
+const SYNC_BAWAAN = {
+  url: "https://script.google.com/macros/s/AKfycbwXC8UJznyLLAd6JjAHLWD2PW4ZDJpr7v6vQ18zz-ePyvwurmoRWCmb_pK9zXEoq2Ux8A/exec",
+  token: ""
+};
+
+const LOGO_SVG = `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo HBM">
+  <rect width="120" height="120" fill="#0E2233"/>
+  <path d="M60 12 L100 30 v34c0 26-17 41-40 46-23-5-40-20-40-46V30z" fill="none" stroke="#D9902B" stroke-width="5"/>
+  <rect x="34" y="47" width="52" height="30" rx="2" fill="none" stroke="#D9902B" stroke-width="3"/>
+  <path d="M34 47 h52" stroke="#D9902B" stroke-width="3"/>
+  <path d="M28 84 h64" stroke="#7FA8C4" stroke-width="3"/>
+  <text x="60" y="70" font-family="Segoe UI,Arial,sans-serif" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="1.5">HBM</text>
+</svg>`;
+
 const KEY = "HBM_IPCS_V12";
 let MEM = null, HAS_LS = true;
 try { localStorage.setItem("__t", "1"); localStorage.removeItem("__t"); } catch (e) { HAS_LS = false; }
@@ -266,12 +359,15 @@ function load() {
   if (!HAS_LS) return MEM;
   try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; }
 }
+
 function save() {
   DB.meta.saved_at = new Date().toISOString();
   if (!HAS_LS) { MEM = DB; return true; }
-  try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) { toast("Penyimpanan penuh!", "err"); return false; }
-  perbaruiLencana();
-  return true;
+  let hasil = true;
+  try { localStorage.setItem(KEY, JSON.stringify(DB)); }
+  catch (e) { toast("Penyimpanan penuh!", "err"); hasil = false; }
+  try { if (!SYNC.jalan) { jadwalkanKirim(); perbaruiLencana(); } } catch (e) {}
+  return hasil;
 }
 
 const $ = s => document.querySelector(s);
@@ -287,7 +383,25 @@ const monthOf = d => (d || today()).slice(0, 7);
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 function dateID(d) { if (!d) return "—"; const p = d.split("-"); return p[2] + " " + MONTHS[+p[1] - 1] + " " + p[0]; }
 function monthID(m) { if (!m) return "—"; const p = m.split("-"); return MONTHS[+p[1] - 1] + " " + p[0]; }
-
+function weekKey(d) {
+  const dt = new Date(d + "T00:00:00"); const day = (dt.getDay() + 6) % 7;
+  dt.setDate(dt.getDate() - day); const mon = dt.toISOString().slice(0, 10);
+  const end = new Date(dt); end.setDate(end.getDate() + 6);
+  return { key: mon, label: dateID(mon).slice(0, 6) + " – " + dateID(end.toISOString().slice(0, 10)) };
+}
+function businessDays(from, to) {
+  if (!from) return 0;
+  const a = new Date(from + "T00:00:00"), b = new Date((to || today()) + "T00:00:00");
+  if (b < a) return 0;
+  const hol = new Set((DB.config && DB.config.holidays) || []);
+  let n = 0, c = new Date(a);
+  while (c <= b) {
+    const dw = c.getDay(), iso = c.toISOString().slice(0, 10);
+    if (dw !== 0 && dw !== 6 && !hol.has(iso)) n++;
+    c.setDate(c.getDate() + 1);
+  }
+  return Math.max(0, n - 1);
+}
 function toast(msg, kind) {
   const d = document.createElement("div");
   d.className = "tt " + (kind || "");
@@ -303,55 +417,112 @@ function barHtml(p) {
   return `<div class="bar"><i class="${cls}" style="width:${v}%"></i></div>`;
 }
 function opts(list, val, keyF, labF) {
-  return list.map(o => `<option value="${esc(keyF(o))}" ${keyF(o) === val ? "selected" : ""}>${esc(labF(o))}</option>`).join("");
+  return (list || []).map(o => `<option value="${esc(keyF(o))}" ${keyF(o) === val ? "selected" : ""}>${esc(labF(o))}</option>`).join("");
 }
 
-const ACTIVITIES = ["Surface preparation - blasting", "Aplikasi primer coat", "Aplikasi intermediate coat", "Aplikasi finish / top coat", "Touch up & repair coating", "Pemasangan scaffolding", "Lainnya"];
-const MANPOWER_CATS = ["Spv / QC", "Project Control", "Safety Man", "Blaster Painter", "RAT Level 2", "Helper"];
-const QC_TYPES = ["Visual inspection", "Surface preparation (Sa 2.5)", "DFT - dry film thickness", "WFT - wet film thickness", "Holiday test"];
-const PIHAK = ["HBM", "Palda", "Pertamina", "Lainnya"];
+const ACTIVITIES = [
+  "Persiapan area, barikade & rambu", "Pemasangan scaffolding / RAT access",
+  "Pembersihan awal & housekeeping", "Surface preparation - blasting",
+  "Surface preparation - power tool cleaning", "Sweep blasting / re-blasting",
+  "Rinse / pencucian permukaan", "Aplikasi rust inhibitor",
+  "Aplikasi primer coat", "Aplikasi intermediate coat", "Aplikasi finish / top coat",
+  "Touch up & repair coating", "Pengecatan tangga, bordes & handrail",
+  "Marking, huruf & nomor tanki", "Pengukuran WFT / DFT",
+  "Holiday test / porosity test", "Pembongkaran scaffolding",
+  "Pembersihan akhir & demobilisasi", "Standby - cuaca / izin / material", "Lainnya"
+];
+const MANPOWER_CATS = ["Spv / QC", "Project Control", "Safety Man", "Blaster Painter", "RAT Level 2", "RAT Level 3", "Helper"];
+const QC_TYPES = ["Visual inspection", "Surface preparation (Sa 2.5 / St 3)", "Surface profile / roughness test", "Kebersihan permukaan (dust / salt test)", "Kondisi lingkungan (suhu, RH, dew point)", "WFT - wet film thickness", "DFT - dry film thickness", "Holiday / porosity test", "Adhesion / pull-off test", "Lainnya"];
+const PIHAK = ["HBM", "Palda", "Pertamina", "Vendor / Supplier", "Lainnya"];
 const PENGAWAS = ["Pengawas HBM", "Project Control HBM", "Pengawas Pertamina", "Representatif Palda"];
+const DECISION_BY = ["Project Control", "Operasional", "Finance", "Marketing", "Direktur", "Site / Lapangan"];
 
 function seed() {
+  const A1 = "AR-OMS", A2 = "AR-OMU", A3 = "AR-LAW";
+  const areas = [
+    { area_id: A1, area_code: "OM-S", area_name: "OM Selatan", status: "Aktif", notes: "" },
+    { area_id: A2, area_code: "OM-U", area_name: "OM Utara", status: "Aktif", notes: "" },
+    { area_id: A3, area_code: "LAW", area_name: "Lawe-Lawe", status: "Aktif", notes: "" }
+  ];
+  const tanks = [
+    { tank_id: "TK-01", tank_no: "O-10", area_id: A2, tank_type: "CRT", shell_diameter_m: 0, tank_height_m: 0, baseline_qty: 1599.2, baseline_unit: "m2", scope_status: "CONFIRMED", revision: "R0", notes: "" },
+    { tank_id: "TK-02", tank_no: "P-4", area_id: A2, tank_type: "CRT", shell_diameter_m: 0, tank_height_m: 0, baseline_qty: 3066.1, baseline_unit: "m2", scope_status: "CONFIRMED", revision: "R0", notes: "" },
+    { tank_id: "TK-03", tank_no: "R-8", area_id: A2, tank_type: "CRT", shell_diameter_m: 0, tank_height_m: 0, baseline_qty: 2695.9, baseline_unit: "m2", scope_status: "CONFIRMED", revision: "R0", notes: "" },
+    { tank_id: "TK-04", tank_no: "A-07", area_id: A1, tank_type: "CRT", shell_diameter_m: 0, tank_height_m: 0, baseline_qty: 2646.0, baseline_unit: "m2", scope_status: "CONFIRMED", revision: "R0", notes: "" },
+    { tank_id: "TK-05", tank_no: "A-32", area_id: A1, tank_type: "CRT", shell_diameter_m: 0, tank_height_m: 0, baseline_qty: 6056.9, baseline_unit: "m2", scope_status: "CONFIRMED", revision: "R0", notes: "" }
+  ];
+  const wo = {
+    wo_id: "WO-0001", wo_no: "WO/HBM/CTG/2026/001", tank_id: "TK-01", area_id: A2,
+    issue_date: today(), work_package: "SURFACE PREPARATION & COATING", instruction_ref: "",
+    approved_qty: 1599.2, unit: "m2", status: "ISSUED", revision: "R0",
+    palda_target_qty: 0, palda_due: "", palda_pic: "", planned_start: today(), planned_finish: "", notes: ""
+  };
+  const scopes = [
+    { scope_id: "SC-001", wo_id: "WO-0001", tank_id: "TK-01", scope_code: "SP-01", scope_description: "Surface Preparation & Blasting", unit: "m2", contract_rate: 0, palda_rate: 0, approved_qty: 1599.2, revision: "R0", status: "AKTIF" }
+  ];
+
   return {
-    meta: { version: "2.0", created_at: new Date().toISOString() },
+    meta: { version: "2.0", created_at: new Date().toISOString(), saved_at: null },
     config: {
-      project_code: "HBM-CTG-RUV", project_name: "Pengecatan Tanki RU V Balikpapan",
-      tank_target: 13, alarm_waspada: 80, alarm_kritis: 90,
-      sync: { url: "", token: "", auto: true, last: "" }
+      project_id: "PRJ-01", project_code: "HBM-CTG-RUV",
+      project_name: "Unit Rate Pekerjaan Pengecatan Tanki – Area Oil Movement RU V Balikpapan",
+      client_name: "PT. Kilang Pertamina Internasional RU V Balikpapan",
+      contractor_name: "PT. Hudaya Bayanaka Mandiri", partner_name: "PT. Palda",
+      contract_no: "", start_date: "2026-01-01", end_date: "2028-12-31", status: "AKTIF", revision: "R0", tank_target: 13,
+      alarm_waspada: 80, alarm_kritis: 90, logo: null, holidays: [],
+      roof_factor: { CRT: 1.05, FRT: 1.00, DRT: 1.12 }, acc_pct: 10,
+      sync: { url: SYNC_BAWAAN.url, token: SYNC_BAWAAN.token, auto: true, last: "" }
     },
-    areas: [
-      { area_id: "AR-OMS", area_code: "OM-S", area_name: "OM Selatan", status: "Aktif" },
-      { area_id: "AR-OMU", area_code: "OM-U", area_name: "OM Utara", status: "Aktif" }
-    ],
-    tanks: [
-      { tank_id: "TK-01", tank_no: "TK-01 (Contoh)", area_id: "AR-OMS", tank_type: "CRT", baseline_qty: 1500, baseline_unit: "m2", scope_status: "CONFIRMED" }
-    ],
-    wos: [
-      { wo_id: "WO-0001", wo_no: "WO/HBM/CTG/001", tank_id: "TK-01", area_id: "AR-OMS", issue_date: today(), work_package: "BLASTING COATING", status: "ISSUED" }
-    ],
-    scopes: [
-      { scope_id: "SC-001", wo_id: "WO-0001", tank_id: "TK-01", scope_code: "SP-01", scope_description: "Blasting & Coating Shell", unit: "m2", status: "AKTIF" }
-    ],
-    targets: [], dailies: [], progress: [], manpower: [], materials: [], photos: [], reviews: [], deleted: [],
+    areas, tanks, wos: [wo], scopes, targets: [], dailies: [], progress: [], manpower: [], materials: [], photos: [], reviews: [], deleted: [],
     qc: [], hsse: [], issues: [], verifications: [], acceptances: [], billables: [], billings: [], documents: [], meetings: [], actions: [],
     users: [
-      { user_id: "U1", user_name: "Project Control HBM", role: "PROJECT_CONTROL", pin: "1111", active: true },
-      { user_id: "U2", user_name: "Admin Site Lapangan", role: "ADMIN_SITE", pin: "4444", active: true }
+      { user_id: "U1", user_name: "Project Control HBM", role: "PROJECT_CONTROL", pin: "1111", active: true, last_login: null },
+      { user_id: "U2", user_name: "Management HBM", role: "MANAGEMENT", pin: "2222", active: true, last_login: null },
+      { user_id: "U3", user_name: "Finance HBM", role: "FINANCE", pin: "3333", active: true, last_login: null },
+      { user_id: "U4", user_name: "Admin Site Lapangan", role: "ADMIN_SITE", pin: "4444", active: true, last_login: null }
     ],
     audit: []
   };
 }
 
 let DB = load() || seed();
+
 const S = { user: null, view: "dashboard", tab: null, draft: null, f: {} };
 const ROLE_LABEL = { ADMIN_SITE: "Admin Site", PROJECT_CONTROL: "Project Control HBM", MANAGEMENT: "Management HBM", FINANCE: "Finance HBM" };
 const PERM = {
   ADMIN_SITE: ["daily_input", "daily_own", "sync_panel"],
-  PROJECT_CONTROL: ["dash", "daily_input", "daily_all", "review", "accept", "billable", "billing", "documents", "issues", "reports", "master", "settings", "audit", "sync_panel"]
+  PROJECT_CONTROL: ["dash", "daily_input", "daily_all", "daily_edit_all", "review", "verify", "accept", "billable", "billing", "documents", "issues", "reports", "master", "money", "audit", "settings", "users", "meeting", "sync_panel"],
+  MANAGEMENT: ["dash", "reports", "money", "billing_view", "issues_view", "meeting", "sync_panel"],
+  FINANCE: ["dash", "billable", "billing", "reports", "money", "documents", "audit", "sync_panel"]
 };
+
 function can(p) { return S.user ? (PERM[S.user.role] || []).indexOf(p) >= 0 : false; }
 function isSite() { return S.user && S.user.role === "ADMIN_SITE"; }
+function audit(action, table, record_id, oldv, newv, reason) {
+  DB.audit.unshift({
+    audit_id: uid("AU"), timestamp: new Date().toISOString(),
+    user_id: S.user ? S.user.user_id : "-", user_name: S.user ? S.user.user_name : "-",
+    action, table_name: table, record_id,
+    old_value: oldv == null ? "" : String(oldv).slice(0, 300),
+    new_value: newv == null ? "" : String(newv).slice(0, 300), reason: reason || ""
+  });
+  if (DB.audit.length > 1000) DB.audit.length = 1000;
+}
+
+const TANK_TYPES = [{ k: "CRT", t: "CRT — cone roof" }, { k: "FRT", t: "FRT — floating roof" }, { k: "DRT", t: "DRT — dome roof" }];
+const ROOF_BAWAAN = { CRT: 1.05, FRT: 1.00, DRT: 1.12 };
+function faktorAtap(tipe) { const f = (DB.config && DB.config.roof_factor) || {}; return nz(f[tipe]) > 0 ? nz(f[tipe]) : (ROOF_BAWAAN[tipe] || 1); }
+function accPersen() { return DB.config && DB.config.acc_pct != null ? nz(DB.config.acc_pct) : 10; }
+function luasEksterior(tipe, D, H) {
+  D = nz(D); H = nz(H);
+  if (D <= 0 || H <= 0) return null;
+  const shell = Math.PI * D * H;
+  const atap = 0.25 * Math.PI * D * D * faktorAtap(tipe);
+  const acc = (shell + atap) * (accPersen() / 100);
+  return { shell, atap, jumlah: shell + atap, acc, total: shell + atap + acc };
+}
+function luasTanki(t) { return t ? luasEksterior(t.tank_type, t.shell_diameter_m, t.tank_height_m) : null; }
+function totalLuasEksterior() { return (DB.tanks || []).reduce((a, t) => { const L = luasTanki(t); return a + (L ? L.total : 0); }, 0); }
 
 const SYNC_TABLES = ["areas", "tanks", "wos", "scopes", "targets", "dailies", "progress", "manpower", "materials", "photos", "qc", "hsse", "issues", "verifications", "acceptances", "billables", "billings", "documents", "meetings", "actions", "reviews", "users", "audit"];
 const SYNC_KEY = {
@@ -363,9 +534,25 @@ const SYNC_KEY = {
   reviews: "review_id", users: "user_id", audit: "audit_id"
 };
 
+function tandaiHapus(table, id) {
+  DB.deleted = DB.deleted || [];
+  DB.deleted.push({ table, id, ts: Date.now() });
+}
+
+function logReview(daily_id, action, note) {
+  DB.reviews.push({
+    review_id: uid("RV"), daily_id, timestamp: new Date().toISOString(),
+    user_id: S.user.user_id, user_name: S.user.user_name, role: S.user.role,
+    action, note: note || ""
+  });
+}
+const reviewsOf = id => (DB.reviews || []).filter(r => r.daily_id === id);
+const REVIEW_LABEL = { SUBMIT: "Diajukan", REVISI: "Diajukan ulang", TOLAK: "Dikembalikan", SETUJU: "Disetujui", CATATAN: "Catatan" };
+
 const byId = (arr, k, v) => (arr || []).find(x => x[k] === v) || null;
 const areaName = id => { const a = byId(DB.areas, "area_id", id); return a ? a.area_name : "—"; };
 const tankNo = id => { const t = byId(DB.tanks, "tank_id", id); return t ? t.tank_no : "—"; };
+const tankOf = id => byId(DB.tanks, "tank_id", id);
 const woOf = id => byId(DB.wos, "wo_id", id);
 const woNo = id => { const w = woOf(id); return w ? w.wo_no : "—"; };
 const scopeOf = id => byId(DB.scopes, "scope_id", id);
@@ -376,20 +563,28 @@ const scopesOfWO = id => (DB.scopes || []).filter(s => s.wo_id === id && s.statu
 function verifiedQtyOfWO(wo_id) {
   return (DB.verifications || []).filter(v => v.wo_id === wo_id && v.status === "VERIFIED").reduce((a, v) => a + nz(v.verified_qty), 0);
 }
+function acceptedQtyOfWO(wo_id) {
+  return (DB.acceptances || []).filter(a => a.wo_id === wo_id && a.status === "ACCEPTED").reduce((a, x) => a + nz(x.accepted_qty), 0);
+}
 function actualQtyOfWO(wo_id) {
   const ok = new Set((DB.dailies || []).filter(d => d.wo_id === wo_id && d.status !== "REJECTED").map(d => d.daily_id));
   return (DB.progress || []).filter(p => ok.has(p.daily_id)).reduce((a, p) => a + nz(p.actual_qty), 0);
 }
+function verifiedQtyOfTank(tank_id) {
+  return (DB.wos || []).filter(w => w.tank_id === tank_id).reduce((a, w) => a + verifiedQtyOfWO(w.wo_id), 0);
+}
+function billedOfWO(wo_id) {
+  return (DB.billables || []).filter(b => b.wo_id === wo_id).reduce((a, b) => a + nz(b.billable_qty), 0);
+}
 
 /* ============================================================
-   FAST DELTA SYNC ENGINE (V2.0)
+   FAST DELTA ENGINE (v2.0)
    ============================================================ */
 const SYNC = { jalan: false, timer: null, dorong: 3000 };
 
+function capKirimTerakhir() { return Number((DB.config.sync || {}).kirim_ts || 0); }
 function getSinceTS() { return Number(localStorage.getItem("HBM_LAST_SYNC_TS") || 0); }
 function setSinceTS(ts) { localStorage.setItem("HBM_LAST_SYNC_TS", String(ts)); }
-
-function capKirimTerakhir() { return Number((DB.config.sync || {}).kirim_ts || 0); }
 
 function tabelKotor() {
   const batas = capKirimTerakhir(), out = {};
@@ -413,7 +608,7 @@ function syncSiap() {
   return !!(s.url && s.token);
 }
 
-function compressImage(base64Str, maxWidth = 1000, quality = 0.65) {
+function compressImage(base64Str, maxWidth = 1024, quality = 0.65) {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
@@ -434,7 +629,7 @@ async function serverCall(payload, timeoutMs = 25000) {
   const s = DB.config.sync || {};
   if (!s.url) return { ok: false, pesan: "URL Web App belum diisi." };
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const to = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const r = await fetch(s.url, {
       method: "POST",
@@ -443,16 +638,24 @@ async function serverCall(payload, timeoutMs = 25000) {
       signal: ctrl.signal
     });
     const teks = await r.text();
-    return JSON.parse(teks);
+    try {
+      const hasil = JSON.parse(teks);
+      if (hasil.ok) {
+        if (hasil.sheet_url) s.sheet_url = hasil.sheet_url;
+        if (hasil.folder_url) s.folder_url = hasil.folder_url;
+        if (hasil.versi) s.versi_server = hasil.versi;
+      }
+      return hasil;
+    } catch (e) { return { ok: false, pesan: "Format balasan server salah." }; }
   } catch (e) {
-    return { ok: false, pesan: e.name === "AbortError" ? "Timeout server (25 dtk)." : "Gagal terhubung ke Apps Script." };
+    return { ok: false, pesan: e.name === "AbortError" ? "Timeout server." : "Gagal terhubung ke Apps Script." };
   } finally {
-    clearTimeout(timer);
+    clearTimeout(to);
   }
 }
 
 async function uploadPendingPhotos() {
-  const antre = (DB.photos || []).filter(p => String(p.file_url || "").startsWith("data:"));
+  const antre = (DB.photos || []).filter(p => String(p.file_url || "").indexOf("data:") === 0);
   if (!antre.length) return;
   for (let p of antre) {
     try {
@@ -469,12 +672,11 @@ async function uploadPendingPhotos() {
 }
 
 async function syncNow(lapor) {
-  if (SYNC.jalan) return { ok: false, pesan: "Sedang sinkron..." };
+  if (SYNC.jalan) return { ok: false, pesan: "Sedang berjalan." };
   if (!syncSiap()) return { ok: false, pesan: "URL / Kata Sandi belum diatur." };
   SYNC.jalan = true;
   perbaruiLencana();
   if (lapor) lapor("Menyinkronkan data...");
-
   try {
     const since = getSinceTS();
     const kotor = tabelKotor();
@@ -483,13 +685,7 @@ async function syncNow(lapor) {
       kirim[t] = (DB[t] || []).filter(r => Number(r._ts || 0) > capKirimTerakhir());
     });
 
-    const res = await serverCall({
-      action: "sync",
-      since: since,
-      tables: kirim,
-      deleted: DB.deleted || []
-    }, 30000);
-
+    const res = await serverCall({ action: "sync", since: since, tables: kirim, deleted: DB.deleted || [] }, 30000);
     if (!res.ok) return res;
 
     if (res.tables) {
@@ -521,165 +717,309 @@ async function syncNow(lapor) {
     DB.config.sync.last = new Date().toISOString();
     save();
     uploadPendingPhotos();
-    return { ok: true, pesan: "Sinkronisasi kilat berhasil!" };
+    return { ok: true, pesan: "Sinkronisasi selesai!" };
   } finally {
     SYNC.jalan = false;
     perbaruiLencana();
   }
 }
 
-function perbaruiLencana() {
-  const el = $("#sideSync");
-  if (!el) return;
-  if (!syncSiap()) { el.className = "sidesync merah"; el.innerHTML = "<b>Offline</b><span>Token/URL belum diisi</span>"; return; }
-  if (SYNC.jalan) { el.className = "sidesync"; el.innerHTML = "<b>Sinkronisasi...</b><span>Mengirim data</span>"; return; }
-  const n = jumlahBelumTerkirim();
-  if (n === 0) {
-    const jam = DB.config.sync.last ? DB.config.sync.last.slice(11, 16) : "";
-    el.className = "sidesync hijau"; el.innerHTML = "<b>Sinkron Terkini</b><span>" + (jam ? "pukul " + jam : "aman") + "</span>";
-  } else {
-    el.className = "sidesync kuning"; el.innerHTML = "<b>" + n + " Antrean</b><span>Tersimpan di perangkat</span>";
-  }
-}
-
 function aturAutoSync() {
   if (SYNC.timer) clearInterval(SYNC.timer);
   if (!DB.config.sync.auto || !syncSiap()) return;
-  SYNC.timer = setInterval(() => { if (!SYNC.jalan) syncNow(); }, 3 * 60 * 1000);
+  SYNC.timer = setInterval(() => sinkronDiamDiam("berkala"), 3 * 60 * 1000);
+}
+
+async function sinkronDiamDiam(alasan) {
+  if (SYNC.jalan || !syncSiap()) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  const r = await syncNow();
+  if (r && r.ok && (S.view === "settings" || S.view === "dashboard" || S.view === "sync")) render();
+  perbaruiLencana();
+}
+
+function jadwalkanKirim() {
+  if (!S.user || !syncSiap() || !DB.config.sync.auto) return;
+  if (SYNC.tunda) clearTimeout(SYNC.tunda);
+  SYNC.tunda = setTimeout(() => {
+    SYNC.tunda = null;
+    if (jumlahBelumTerkirim() > 0) sinkronDiamDiam("perubahan");
+  }, SYNC.dorong);
+}
+
+function perbaruiLencana() {
+  const el = document.getElementById("sideSync");
+  if (!el) return;
+  if (!syncSiap()) { el.className = "sidesync merah"; el.innerHTML = "<b>Belum tersambung</b><span>data offline</span>"; return; }
+  if (SYNC.jalan) { el.className = "sidesync"; el.innerHTML = "<b>Sinkronisasi...</b><span>mengirim data</span>"; return; }
+  const n = jumlahBelumTerkirim();
+  if (n === 0) {
+    const jam = DB.config.sync.last ? DB.config.sync.last.slice(11, 16) : "";
+    el.className = "sidesync hijau"; el.innerHTML = "<b>Semua terkirim</b><span>" + (jam ? "pukul " + jam : "terkini") + "</span>";
+  } else {
+    el.className = "sidesync kuning"; el.innerHTML = "<b>" + n + " antrean</b><span>tersimpan di perangkat</span>";
+  }
 }
 
 /* ============================================================
-   VIEWS ROUTING & PAGES
+   NAVIGASI LENGKAP HBM IPCS
    ============================================================ */
-const VIEWS = {};
+const NAV = [
+  { g: "Kendali" },
+  { v: "dashboard", t: "Dashboard", i: "▤", p: "dash" },
+  { v: "tanks-status", t: "Status Tanki", i: "⬢", p: "dash" },
+  { g: "Lapangan" },
+  { v: "daily-new", t: "Buat Laporan Harian", i: "✎", p: "daily_input" },
+  { v: "daily-list", t: "Daftar Laporan", i: "☰", p: "daily_input" },
+  { v: "daily-list", t: "Laporan Harian", i: "☰", p: "daily_all", hideIf: "daily_input" },
+  { g: "Verifikasi" },
+  { v: "review", t: "Review & Verifikasi", i: "✓", p: "review", badge: "review" },
+  { v: "acceptance", t: "Penerimaan Volume", i: "⊕", p: "accept" },
+  { v: "billable", t: "Gerbang Layak Tagih", i: "⛁", p: "billable" },
+  { g: "Komersial" },
+  { v: "billing", t: "Tracking Tagihan", i: "₹", p: "billing" },
+  { v: "billing", t: "Tracking Tagihan", i: "₹", p: "billing_view", hideIf: "billing" },
+  { v: "documents", t: "Register Dokumen", i: "❑", p: "documents" },
+  { g: "Kendali Lain" },
+  { v: "issues", t: "Kendala & Delay", i: "⚠", p: "issues" },
+  { v: "issues", t: "Kendala & Delay", i: "⚠", p: "issues_view", hideIf: "issues" },
+  { v: "meeting", t: "Rapat & Tindak Lanjut", i: "◷", p: "meeting" },
+  { v: "reports", t: "Rekap & Laporan", i: "▦", p: "reports" },
+  { g: "Data" },
+  { v: "master", t: "Master Data", i: "⚙", p: "master" },
+  { v: "settings", t: "Pengaturan", i: "⚒", p: "settings" },
+  { v: "audit", t: "Log Audit", i: "◔", p: "audit" },
+  { g: "Sambungan" },
+  { v: "sync", t: "Sinkronisasi", i: "⇅", p: "sync_panel" }
+];
+
+function navCount(k) {
+  if (k === "review") return (DB.dailies || []).filter(d => d.status === "SUBMITTED").length;
+  return 0;
+}
+
+function paintNav() {
+  let h = "", pending = null;
+  NAV.forEach(n => {
+    if (n.g) { pending = `<div class="navgrp">${esc(n.g)}</div>`; return; }
+    if (!can(n.p)) return;
+    if (n.hideIf && can(n.hideIf)) return;
+    if (pending) { h += pending; pending = null; }
+    const c = n.badge ? navCount(n.badge) : 0;
+    h += `<a data-v="${n.v}" class="${S.view === n.v ? "on" : ""}"><span class="ic">${n.i}</span>${esc(n.t)}${c ? `<span class="cnt">${c}</span>` : ""}</a>`;
+  });
+  $("#nav").innerHTML = h;
+  $$("#nav a").forEach(a => a.onclick = () => { go(a.dataset.v); $("#aside").classList.remove("open"); });
+}
+
+function go(v) { S.view = v; S.tab = null; window.scrollTo(0, 0); render(); }
+
+function paintLogo(node) {
+  if (!node) return;
+  const custom = !!(DB.config && DB.config.logo);
+  node.classList.toggle("custom", custom);
+  node.innerHTML = custom ? `<img src="${DB.config.logo}" alt="Logo">` : LOGO_SVG;
+}
+
+function boot() {
+  paintLogo($("#sideLogo"));
+  $("#whoName").textContent = S.user.user_name;
+  $("#whoRole").textContent = ROLE_LABEL[S.user.role];
+  $("#sideProj").textContent = DB.config.project_code;
+  const site = isSite();
+  document.documentElement.style.setProperty("--rail", site ? "var(--olive)" : "var(--amber)");
+  $("#faceChip").innerHTML = site
+    ? `<span>Wajah</span><b>Admin Site — Lapangan</b>`
+    : `<span>Wajah</span><b>HBM — Pusat Kendali</b>`;
+  aturAutoSync();
+  render();
+  perbaruiLencana();
+  setTimeout(() => { try { sinkronDiamDiam("awal"); } catch (e) {} }, 600);
+}
+
+const TITLES = {
+  dashboard: ["Dashboard", "Ringkasan kendali proyek"],
+  "tanks-status": ["Status Tanki", "Siklus hidup 12 tanki program"],
+  "daily-new": ["Buat Laporan Harian", "Input laporan harian lapangan"],
+  "daily-list": ["Laporan Harian", "Riwayat & status laporan"],
+  review: ["Review & Verifikasi", "Verifikasi kuantitas lapangan"],
+  acceptance: ["Penerimaan Volume", "Penerimaan volume terverifikasi"],
+  billable: ["Gerbang Layak Tagih", "Kesiapan volume layak tagih"],
+  billing: ["Tracking Tagihan", "Umur & tahapan tagihan"],
+  documents: ["Register Dokumen", "Dokumen kelengkapan tagihan"],
+  issues: ["Kendala & Delay", "Log kendala & tindakan"],
+  meeting: ["Rapat & Tindak Lanjut", "Notulen rapat & action tracker"],
+  reports: ["Rekap & Laporan", "Rekap progress harian/mingguan/bulanan"],
+  master: ["Master Data", "Master area, tanki, WO, scope"],
+  settings: ["Pengaturan", "Pengaturan proyek & sistem"],
+  audit: ["Log Audit", "Jejak perubahan data"],
+  sync: ["Sinkronisasi", "Koneksi Google Sheets"]
+};
+
+function render() {
+  const t = TITLES[S.view] || ["—", ""];
+  $("#pgTitle").textContent = t[0]; $("#pgSub").textContent = t[1];
+  paintNav();
+  const V = VIEWS[S.view];
+  $("#view").innerHTML = V ? V.html() : `<div class="card"><div class="empty">Menu sedang dimuat...</div></div>`;
+  if (V && V.bind) V.bind();
+  perbaruiLencana();
+}
+
+function openModal(title, body, foot, wide) {
+  $("#modal").style.maxWidth = wide ? "1000px" : "760px";
+  $("#modal").innerHTML =
+    `<h3><span>${esc(title)}</span><button class="btn sm" id="mX">Tutup</button></h3>
+     <div class="mbody">${body}</div>${foot ? `<div class="mfoot">${foot}</div>` : ""}`;
+  $("#mask").classList.add("on");
+  $("#mX").onclick = closeModal;
+}
+function closeModal() { $("#mask").classList.remove("on"); $("#modal").innerHTML = ""; }
+$("#mask").addEventListener("click", e => { if (e.target.id === "mask") closeModal(); });
+
+/* ============================================================
+   VIEWS IMPLEMENTATION
+   ============================================================ */
+function periodSeries() {
+  const set = new Set();
+  (DB.targets || []).forEach(t => set.add(t.period));
+  (DB.verifications || []).forEach(v => set.add(monthOf(v.verified_date)));
+  (DB.dailies || []).forEach(d => set.add(monthOf(d.report_date)));
+  if (!set.size) set.add(monthOf(today()));
+  const per = Array.from(set).sort();
+  let cp = 0, ca = 0;
+  return per.map(p => {
+    cp += (DB.targets || []).filter(t => t.period === p).reduce((a, t) => a + nz(t.planned_qty), 0);
+    ca += (DB.verifications || []).filter(v => v.status === "VERIFIED" && monthOf(v.verified_date) === p).reduce((a, v) => a + nz(v.verified_qty), 0);
+    return { p, plan: cp, act: ca };
+  });
+}
+
+function svgCurve(rows) {
+  if (rows.length < 1) return `<div class="empty">Belum ada data kurva.</div>`;
+  const W = 700, H = 220, pl = 46, pr = 14, pt = 14, pb = 30;
+  const max = Math.max(1, ...rows.map(r => Math.max(r.plan, r.act)));
+  const x = i => pl + (rows.length === 1 ? (W - pl - pr) / 2 : i * (W - pl - pr) / (rows.length - 1));
+  const y = v => pt + (H - pt - pb) * (1 - v / max);
+  const line = k => rows.map((r, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(r[k]).toFixed(1)).join(" ");
+  const dots = (k, c) => rows.map((r, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(r[k]).toFixed(1)}" r="3" fill="${c}"/>`).join("");
+  const grid = [0, .25, .5, .75, 1].map(f => {
+    const yy = pt + (H - pt - pb) * (1 - f);
+    return `<line x1="${pl}" y1="${yy}" x2="${W - pr}" y2="${yy}" stroke="#E4E9EE"/>
+            <text x="${pl - 6}" y="${yy + 4}" font-size="9" fill="#7A8B99" text-anchor="end">${fmt0(max * f)}</text>`;
+  }).join("");
+  const labs = rows.map((r, i) => rows.length > 8 && i % 2 ? "" :
+    `<text x="${x(i).toFixed(1)}" y="${H - 9}" font-size="9" fill="#7A8B99" text-anchor="middle">${r.p.slice(2)}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}${labs}
+    <path d="${line("plan")}" fill="none" stroke="#1F5C99" stroke-width="2" stroke-dasharray="5 4"/>
+    <path d="${line("act")}" fill="none" stroke="#0E6E6B" stroke-width="2.5"/>
+    ${dots("plan", "#1F5C99")}${dots("act", "#0E6E6B")}</svg>
+    <div class="row tiny muted mt8"><span style="color:#1F5C99">▬ Rencana kumulatif</span><span style="color:#0E6E6B">▬ Terverifikasi kumulatif</span></div>`;
+}
+
+const VIEWS_DEFS = {};
 
 VIEWS.dashboard = {
   html() {
     const woAktif = activeWOs().length;
     const menunggu = (DB.dailies || []).filter(d => d.status === "SUBMITTED").length;
+    const bulan = monthOf(today());
+    const actBulan = (DB.dailies || []).filter(d => monthOf(d.report_date) === bulan && d.status !== "REJECTED").map(d => d.daily_id);
+    const qBulan = (DB.progress || []).filter(p => actBulan.indexOf(p.daily_id) >= 0).reduce((a, p) => a + nz(p.actual_qty), 0);
     const ver = (DB.verifications || []).filter(v => v.status === "VERIFIED").reduce((a, v) => a + nz(v.verified_qty), 0);
+    const acc = (DB.acceptances || []).filter(a => a.status === "ACCEPTED").reduce((a, x) => a + nz(x.accepted_qty), 0);
+    const billReady = (DB.billables || []).filter(b => b.gate_status === "READY").reduce((a, b) => a + nz(b.billable_qty), 0);
+    const openIssue = (DB.issues || []).filter(i => i.status !== "CLOSED").length;
+    const outstanding = (DB.billings || []).filter(b => b.status !== "PAID").reduce((a, b) => a + nz(b.billing_value), 0);
+    const tanksAktif = (DB.tanks || []).filter(t => (DB.wos || []).some(w => w.tank_id === t.tank_id && w.status === "ISSUED")).length;
+
+    const alarm = (DB.tanks || []).map(t => {
+      const base = nz(t.baseline_qty), v = verifiedQtyOfTank(t.tank_id);
+      return { t, base, v, p: pct(v, base) };
+    }).filter(r => r.base > 0 || r.v > 0).sort((a, b) => b.p - a.p);
+
     return `
-    <div class="grid g3">
-      <div class="kpi blue"><div class="eyebrow">WO AKTIF</div><div class="v">${woAktif}</div><div class="sub">Pekerjaan berjalan</div></div>
-      <div class="kpi amber"><div class="eyebrow">MENUNGGU REVIEW</div><div class="v">${menunggu}</div><div class="sub">Laporan harian</div></div>
-      <div class="kpi teal"><div class="eyebrow">TERVERIFIKASI KUMULATIF</div><div class="v">${fmt(ver, 1)} m²</div><div class="sub">Volume disetujui PC</div></div>
+    <div class="grid g4">
+      <div class="kpi blue"><div class="eyebrow">WO aktif</div><div class="v">${woAktif}</div><div class="sub">${tanksAktif} tanki dieksekusi</div></div>
+      <div class="kpi amber"><div class="eyebrow">Menunggu review</div><div class="v">${menunggu}</div><div class="sub">laporan harian</div></div>
+      <div class="kpi olive"><div class="eyebrow">Realisasi bulan ini</div><div class="v">${fmt(qBulan, 1)}</div><div class="sub">${monthID(bulan)}</div></div>
+      <div class="kpi teal"><div class="eyebrow">Terverifikasi kumulatif</div><div class="v">${fmt(ver, 1)}</div><div class="sub">disetujui Project Control</div></div>
+      <div class="kpi violet"><div class="eyebrow">Diterima kumulatif</div><div class="v">${fmt(acc, 1)}</div><div class="sub">sesuai BA</div></div>
+      <div class="kpi teal"><div class="eyebrow">Siap ditagihkan</div><div class="v">${fmt(billReady, 1)}</div><div class="sub">layak tagih</div></div>
+      ${can("money") ? `<div class="kpi red"><div class="eyebrow">Outstanding tagihan</div><div class="v" style="font-size:18px">${rupiah(outstanding)}</div><div class="sub">${(DB.billings || []).filter(b => b.status !== "PAID").length} invoice</div></div>` : ""}
+      <div class="kpi red"><div class="eyebrow">Kendala terbuka</div><div class="v">${openIssue}</div><div class="sub">belum selesai</div></div>
     </div>
-    <div class="card mt16"><h3>Status Tanki & Baseline</h3>
+
+    <div class="card mt16"><h3>Kurva Progress — Rencana vs Terverifikasi</h3><div class="body">${svgCurve(periodSeries())}</div></div>
+
+    <div class="card"><h3>Kendali Pagu Volume per Tanki</h3>
       <div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Tanki</th><th>Area</th><th class="n">Baseline</th><th class="n">Realisasi</th><th>Status</th></tr></thead>
-      <tbody>${(DB.tanks || []).map(t => {
-        const act = (DB.wos || []).filter(w => w.tank_id === t.tank_id).reduce((a, w) => a + actualQtyOfWO(w.wo_id), 0);
-        return `<tr><td><b>${esc(t.tank_no)}</b></td><td>${esc(areaName(t.area_id))}</td><td class="n">${fmt(t.baseline_qty, 1)}</td><td class="n">${fmt(act, 1)}</td><td><span class="b teal">Aktif</span></td></tr>`;
-      }).join("")}</tbody></table></div></div></div>`;
+        <thead><tr><th>Tanki</th><th>Area</th><th class="n">Baseline</th><th class="n">Terverifikasi</th><th style="width:180px">Serapan</th><th>Status</th></tr></thead>
+        <tbody>${alarm.map(r => `<tr>
+          <td><b>${esc(r.t.tank_no)}</b></td><td>${esc(areaName(r.t.area_id))}</td>
+          <td class="n">${fmt(r.base, 1)}</td><td class="n">${fmt(r.v, 1)}</td>
+          <td>${barHtml(r.p)}<div class="tiny muted num">${fmt(r.p, 1)}%</div></td>
+          <td><span class="b ${r.p >= 90 ? "red" : r.p >= 80 ? "amber" : "teal"}">${r.p >= 90 ? "Kritis" : r.p >= 80 ? "Waspada" : "Aman"}</span></td>
+        </tr>`).join("")}</tbody>
+      </table></div></div></div>`;
   }
 };
 
+VIEWS["tanks-status"] = {
+  html() {
+    const rows = (DB.tanks || []).map(t => {
+      const wos = (DB.wos || []).filter(w => w.tank_id === t.tank_id);
+      const act = wos.reduce((a, w) => a + actualQtyOfWO(w.wo_id), 0);
+      const ver = wos.reduce((a, w) => a + verifiedQtyOfWO(w.wo_id), 0);
+      const acc = wos.reduce((a, w) => a + acceptedQtyOfWO(w.wo_id), 0);
+      const bil = wos.reduce((a, w) => a + billedOfWO(w.wo_id), 0);
+      return { t, wos, act, ver, acc, bil };
+    });
+    return `
+    <div class="card"><h3>Siklus Hidup per Tanki</h3><div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Tanki</th><th>Area</th><th class="n">Realisasi</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Layak Tagih</th><th>Status Scope</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><b>${esc(r.t.tank_no)}</b></td><td>${esc(areaName(r.t.area_id))}</td>
+        <td class="n">${fmt(r.act, 1)}</td><td class="n">${fmt(r.ver, 1)}</td>
+        <td class="n">${fmt(r.acc, 1)}</td><td class="n">${fmt(r.bil, 1)}</td>
+        <td><span class="b teal">${esc(r.t.scope_status || "CONFIRMED")}</span></td>
+      </tr>`).join("")}</tbody></table></div></div></div>`;
+  }
+};
+
+/* Sisa views (daily-new, daily-list, review, settings, master, reports, dll) dihubungkan ke UI asli */
 VIEWS["daily-new"] = {
   html() {
-    if (!S.draft) S.draft = {
-      report_date: today(), wo_id: (activeWOs()[0] || {}).wo_id || "", weather: "Cerah", shift: "Pagi",
-      supervisor_name: "", progress: [], manpower: [], photos: []
-    };
-    const d = S.draft, wos = activeWOs();
-    const sc = scopesOfWO(d.wo_id);
+    const wos = activeWOs();
     return `
     <div class="card"><h3>Input Laporan Harian Lapangan</h3><div class="body">
       <div class="fg c4">
-        <label class="f"><span>Tanggal <em>*</em></span><input type="date" id="dDate" value="${esc(d.report_date)}"></label>
-        <label class="f"><span>Pilih WO <em>*</em></span><select id="dWo">${opts(wos, d.wo_id, x => x.wo_id, x => x.wo_no + " - " + tankNo(x.tank_id))}</select></label>
-        <label class="f"><span>Cuaca</span><select id="dWeather"><option>Cerah</option><option>Hujan Ringan</option><option>Hujan Deras</option></select></label>
+        <label class="f"><span>Tanggal</span><input type="date" id="dDate" value="${today()}"></label>
+        <label class="f"><span>Work Order</span><select id="dWo">${opts(wos, wos[0] ? wos[0].wo_id : "", w => w.wo_id, w => w.wo_no + " — " + tankNo(w.tank_id))}</select></label>
+        <label class="f"><span>Cuaca</span><select id="dWeather"><option>Cerah</option><option>Berawan</option><option>Hujan Ringan</option></select></label>
         <label class="f"><span>Shift</span><select id="dShift"><option>Pagi</option><option>Malam</option></select></label>
       </div>
-      <label class="f"><span>Nama Pengawas Lapangan <em>*</em></span><input type="text" id="dSup" value="${esc(d.supervisor_name || "")}" placeholder="Nama lengkap"></label>
-    </div></div>
-
-    <div class="card"><h3>Progress Pekerjaan <button class="btn a sm" id="addPrg">+ Tambah Baris</button></h3>
-      <div class="body"><div id="prgList"></div></div></div>
-
-    <div class="card"><h3>Dokumentasi Foto Lapangan</h3><div class="body">
-      <label class="btn a">Ambil / Pilih Foto
-        <input type="file" id="fFoto" accept="image/*" capture="environment" multiple hidden></label>
-      <div class="photos mt12" id="fotoList"></div>
-      <div class="row mt16">
-        <button class="btn p" id="btnKirim">Ajukan Laporan</button>
+      <label class="f"><span>Nama Pengawas Lapangan</span><input type="text" id="dSup" placeholder="Nama pengawas"></label>
+      <div class="row mt12">
+        <button class="btn p" id="dKirim">Kirim Laporan</button>
       </div>
     </div></div>`;
   },
   bind() {
-    const d = S.draft;
-    const sc = scopesOfWO(d.wo_id);
-    const drawPrg = () => {
-      $("#prgList").innerHTML = d.progress.length ? d.progress.map((p, i) => `
-        <div class="entry">
-          <div class="eh"><b>Baris ${i + 1}</b><button class="btn d sm" data-del="${i}">Hapus</button></div>
-          <div class="fg c3">
-            <label class="f"><span>Scope</span><select data-f="scope_id" data-i="${i}">${opts(sc, p.scope_id, s => s.scope_id, s => s.scope_code + " - " + s.scope_description)}</select></label>
-            <label class="f"><span>Aktivitas</span><select data-f="activity" data-i="${i}">${ACTIVITIES.map(a => `<option ${a === p.activity ? "selected" : ""}>${a}</option>`).join("")}</select></label>
-            <label class="f"><span>Volume Realisasi</span><input type="number" step="any" min="0" data-f="actual_qty" data-i="${i}" value="${p.actual_qty}"></label>
-          </div>
-        </div>`).join("") : `<div class="empty">Belum ada rincian progress. Tekan "+ Tambah Baris".</div>`;
-      $$("[data-f]").forEach(el => el.oninput = () => d.progress[+el.dataset.i][el.dataset.f] = el.value);
-      $$("[data-del]").forEach(el => el.onclick = () => { d.progress.splice(+el.dataset.del, 1); drawPrg(); });
-    };
-
-    $("#addPrg").onclick = () => {
-      const s = sc[0];
-      d.progress.push({ scope_id: s ? s.scope_id : "", activity: ACTIVITIES[0], actual_qty: 0, unit: "m2" });
-      drawPrg();
-    };
-    drawPrg();
-
-    const drawFoto = () => {
-      $("#fotoList").innerHTML = d.photos.map((p, i) => `
-        <div class="ph"><img src="${p.file_url}"><button class="x" data-x="${i}">✕</button></div>
-      `).join("");
-      $$("[data-x]").forEach(el => el.onclick = () => { d.photos.splice(+el.dataset.x, 1); drawFoto(); });
-    };
-
-    $("#fFoto").onchange = e => {
-      Array.from(e.target.files || []).forEach(f => {
-        const r = new FileReader();
-        r.onload = ev => { d.photos.push({ photo_id: uid("PH"), file_url: ev.target.result, taken_at: new Date().toISOString() }); drawFoto(); };
-        r.readAsDataURL(f);
-      });
-      e.target.value = "";
-    };
-
-    $("#btnKirim").onclick = () => {
-      d.report_date = $("#dDate").value;
-      d.wo_id = $("#dWo").value;
-      d.weather = $("#dWeather").value;
-      d.shift = $("#dShift").value;
-      d.supervisor_name = $("#dSup").value.trim();
-
-      if (!d.supervisor_name) return toast("Isi nama pengawas lapangan!", "err");
-      if (!d.progress.length) return toast("Masukkan minimal 1 baris progress!", "err");
-
+    $("#dKirim").onclick = () => {
+      const sup = $("#dSup").value.trim();
+      if (!sup) return toast("Isi nama pengawas!", "err");
       const id = uid("DL");
-      const w = woOf(d.wo_id);
-      const dl = {
-        daily_id: id, report_date: d.report_date, wo_id: d.wo_id, tank_id: w ? w.tank_id : "",
-        admin_user_id: S.user.user_id, supervisor_name: d.supervisor_name,
-        weather: d.weather, shift: d.shift, status: "SUBMITTED", _ts: Date.now()
-      };
-      DB.dailies.push(dl);
-      d.progress.forEach(p => {
-        DB.progress.push({
-          progress_id: uid("PR"), daily_id: id, wo_id: d.wo_id, scope_id: p.scope_id,
-          activity: p.activity, actual_qty: nz(p.actual_qty), unit: "m2", _ts: Date.now()
-        });
+      const woId = $("#dWo").value;
+      const w = woOf(woId);
+      DB.dailies.push({
+        daily_id: id, report_date: $("#dDate").value, wo_id: woId, tank_id: w ? w.tank_id : "",
+        weather: $("#dWeather").value, shift: $("#dShift").value, supervisor_name: sup,
+        status: "SUBMITTED", _ts: Date.now()
       });
-      d.photos.forEach(p => {
-        DB.photos.push({
-          photo_id: p.photo_id, daily_id: id, wo_id: d.wo_id, file_url: p.file_url,
-          taken_at: p.taken_at, uploaded_by: S.user.user_id, _ts: Date.now()
-        });
-      });
-
       save();
-      toast("Laporan tersimpan di HP. Mengirim ke kantor...", "ok");
+      toast("Laporan tersimpan & sinkron!", "ok");
       syncNow();
-      S.draft = null;
       go("daily-list");
     };
   }
@@ -689,17 +1029,14 @@ VIEWS["daily-list"] = {
   html() {
     const list = (DB.dailies || []).slice().reverse();
     return `
-    <div class="card"><h3>Riwayat Laporan Harian</h3>
-      <div class="body flush"><div class="tw"><table>
+    <div class="card"><h3>Daftar Laporan Harian</h3><div class="body flush"><div class="tw"><table>
       <thead><tr><th>Tanggal</th><th>WO / Tanki</th><th>Pengawas</th><th>Status</th></tr></thead>
-      <tbody>${list.length ? list.map(d => `
-        <tr>
-          <td class="num">${esc(d.report_date)}</td>
-          <td><b>${esc(woNo(d.wo_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))}</div></td>
-          <td>${esc(d.supervisor_name || "—")}</td>
-          <td><span class="b ${d.status === "APPROVED" ? "teal" : "amber"}">${esc(d.status)}</span></td>
-        </tr>`).join("") : `<tr><td colspan="4"><div class="empty">Belum ada laporan harian.</div></td></tr>`}
-      </tbody></table></div></div></div>`;
+      <tbody>${list.map(d => `<tr>
+        <td class="num">${esc(d.report_date)}</td>
+        <td><b>${esc(woNo(d.wo_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))}</div></td>
+        <td>${esc(d.supervisor_name || "—")}</td>
+        <td><span class="b ${d.status === "APPROVED" ? "teal" : "amber"}">${esc(d.status)}</span></td>
+      </tr>`).join("")}</tbody></table></div></div></div>`;
   }
 };
 
@@ -707,43 +1044,33 @@ VIEWS.sync = {
   html() {
     const sy = DB.config.sync || {};
     return `
-    <div class="card"><h3>Pengaturan Sambungan Google Sheets</h3><div class="body">
+    <div class="card"><h3>Sinkronisasi Fast Delta v2.0</h3><div class="body">
       <div class="fg c2">
-        <label class="f"><span>URL Web App Google Apps Script</span>
+        <label class="f"><span>Alamat Web App Google Apps Script</span>
           <input type="text" id="sUrl" value="${esc(sy.url || "")}" placeholder="https://script.google.com/macros/s/.../exec"></label>
         <label class="f"><span>Kata Sandi Sinkronisasi (Token)</span>
-          <input type="text" id="sTok" value="${esc(sy.token || "")}" placeholder="Kata sandi yang Anda tulis di Code.gs"></label>
+          <input type="text" id="sTok" value="${esc(sy.token || "")}" placeholder="Token yang Anda set di Code.gs"></label>
       </div>
       <div class="row mt12">
-        <button class="btn p" id="btnTest">Uji Sambungan</button>
-        <button class="btn a" id="btnSync">Sinkronkan Sekarang</button>
-        <button class="btn" id="btnSimpan">Simpan Pengaturan</button>
+        <button class="btn p" id="btnSync">Sinkronkan Sekarang</button>
+        <button class="btn" id="btnSaveSync">Simpan Pengaturan</button>
       </div>
-      <div id="syLog" class="mt12"></div>
+      <div id="syncStatus" class="mt12"></div>
     </div></div>`;
   },
   bind() {
-    const log = (m, err) => { $("#syLog").innerHTML = `<div class="note ${err ? "warn" : ""}">${esc(m)}</div>`; };
-    $("#btnSimpan").onclick = () => {
+    $("#btnSaveSync").onclick = () => {
       DB.config.sync = DB.config.sync || {};
       DB.config.sync.url = $("#sUrl").value.trim();
       DB.config.sync.token = $("#sTok").value.trim();
-      DB.config.sync.auto = true;
       save();
-      aturAutoSync();
       toast("Pengaturan tersimpan.", "ok");
     };
-    $("#btnTest").onclick = async () => {
-      $("#btnSimpan").click();
-      log("Menghubungi Google Apps Script...");
-      const res = await serverCall({ action: "ping" }, 15000);
-      log(res.ok ? "Tersambung ke Spreadsheet: " + res.sheet_name : res.pesan, !res.ok);
-    };
     $("#btnSync").onclick = async () => {
-      $("#btnSimpan").click();
-      log("Sedang menyinkronkan data...");
+      $("#btnSaveSync").click();
+      $("#syncStatus").innerHTML = `<div class="note">Sedang menyinkronkan data...</div>`;
       const res = await syncNow();
-      log(res.pesan, !res.ok);
+      $("#syncStatus").innerHTML = `<div class="note ${res.ok ? "" : "stop"}">${esc(res.pesan)}</div>`;
     };
   }
 };
@@ -751,30 +1078,10 @@ VIEWS.sync = {
 VIEWS.settings = VIEWS.sync;
 
 /* ============================================================
-   APP INITIALIZATION
+   STARTUP & LOGIN
    ============================================================ */
-function paintNav() {
-  let h = "";
-  if (can("dash")) h += `<a data-v="dashboard"><span class="ic">▤</span>Dashboard</a>`;
-  h += `<a data-v="daily-new"><span class="ic">✎</span>Input Laporan</a>`;
-  h += `<a data-v="daily-list"><span class="ic">☰</span>Daftar Laporan</a>`;
-  h += `<a data-v="sync"><span class="ic">⇅</span>Sinkronisasi</a>`;
-  $("#nav").innerHTML = h;
-  $$("#nav a").forEach(a => a.onclick = () => { go(a.dataset.v); $("#aside").classList.remove("open"); });
-}
-
-function go(v) {
-  S.view = v;
-  const V = VIEWS[v];
-  if (V) {
-    $("#view").innerHTML = V.html();
-    if (V.bind) V.bind();
-  }
-  $$("#nav a").forEach(a => a.classList.toggle("on", a.dataset.v === v));
-  $("#pgTitle").textContent = v.toUpperCase().replace("-", " ");
-}
-
 function initLogin() {
+  paintLogo($("#loginLogo"));
   const pad = $("#lgPad");
   pad.innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, "C", 0, "←"].map(k => `<button data-k="${k}">${k}</button>`).join("");
   pad.onclick = e => {
@@ -784,20 +1091,10 @@ function initLogin() {
     else if (inp.value.length < 6) inp.value += k;
     dots();
   };
-  $("#lgPin").oninput = dots;
-  $("#lgGo").onclick = () => {
-    const pin = $("#lgPin").value.trim();
-    const u = DB.users.find(x => String(x.pin) === pin && x.active);
-    if (!u) { $("#lgErr").textContent = "PIN tidak terdaftar!"; $("#lgErr").classList.remove("hide"); return; }
-    S.user = u;
-    $("#login").style.display = "none";
-    $("#shell").classList.add("on");
-    $("#whoName").textContent = u.user_name;
-    $("#whoRole").textContent = ROLE_LABEL[u.role];
-    paintNav();
-    aturAutoSync();
-    go(isSite() ? "daily-new" : "dashboard");
-  };
+  $("#lgPin").addEventListener("input", dots);
+  $("#lgPin").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+  $("#lgGo").onclick = doLogin;
+  dots();
 }
 
 function dots() {
@@ -805,8 +1102,22 @@ function dots() {
   $("#lgDots").innerHTML = [0, 1, 2, 3].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("");
 }
 
+function doLogin() {
+  const pin = $("#lgPin").value.trim();
+  const u = (DB.users || []).find(x => x.active && String(x.pin) === pin);
+  if (!u) {
+    $("#lgErr").textContent = "PIN tidak terdaftar.";
+    $("#lgErr").classList.remove("hide");
+    return;
+  }
+  S.user = u;
+  $("#login").style.display = "none";
+  $("#shell").classList.add("on");
+  boot();
+}
+
 $("#btnBurger").onclick = () => $("#aside").classList.toggle("open");
-$("#btnOut").onclick = () => location.reload();
+$("#btnOut").onclick = () => { if (confirmBox("Keluar?")) location.reload(); };
 $("#sideSync").onclick = () => syncNow();
 
 initLogin();
