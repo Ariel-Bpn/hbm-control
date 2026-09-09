@@ -535,8 +535,9 @@ function seed() {
       client_name: "PT. Kilang Pertamina Internasional RU V Balikpapan",
       contractor_name: "PT. Hudaya Bayanaka Mandiri",
       partner_name: "PT. Palda", contract_no: "", start_date: "2026-01-01", end_date: "2028-12-31",
-      status: "AKTIF", revision: "R0", tank_target: 12,
+      status: "AKTIF", revision: "R0", tank_target: 13,
       alarm_waspada: 80, alarm_kritis: 90, logo: null, holidays: [],
+      roof_factor: { CRT: 1.05, FRT: 1.00, DRT: 1.12 }, acc_pct: 10,
       sync: {
         url: SYNC_BAWAAN.url || "", token: SYNC_BAWAAN.token || "",
         auto: !!SYNC_BAWAAN.url, last: ""
@@ -574,7 +575,7 @@ function pasangSyncBawaan() {
 /* Naik versi tanpa menghapus data yang sudah ada */
 function migrate() {
   if (!DB.meta || !DB.dailies) { DB = seed(); return; }
-  if (DB.meta.version === "1.4") return;
+  if (DB.meta.version === "1.5") return;
   DB.reviews = DB.reviews || [];
   DB.deleted = DB.deleted || [];
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
@@ -588,7 +589,17 @@ function migrate() {
   DB.issues.forEach(i => { i.owner_side = i.owner_side || ""; });
   DB.meetings.forEach(m => { m.points = m.points || []; m.decision_by = m.decision_by || ""; });
   DB.actions.forEach(a => { a.decision_by = a.decision_by || ""; a.closed_by = a.closed_by || ""; a.closed_date = a.closed_date || ""; });
-  DB.meta.version = "1.4";
+  /* Tipe atap DRT (dome) menyusul belakangan, beserta faktor atap dan allowance
+     perlengkapan yang dipakai di lembar perhitungan luas eksterior. */
+  const rf = DB.config.roof_factor || {};
+  DB.config.roof_factor = {
+    CRT: nz(rf.CRT) > 0 ? nz(rf.CRT) : 1.05,
+    FRT: nz(rf.FRT) > 0 ? nz(rf.FRT) : 1.00,
+    DRT: nz(rf.DRT) > 0 ? nz(rf.DRT) : 1.12
+  };
+  if (DB.config.acc_pct == null) DB.config.acc_pct = 10;
+  if (nz(DB.config.tank_target) < 13) DB.config.tank_target = 13;
+  DB.meta.version = "1.5";
   save();
 }
 
@@ -625,12 +636,12 @@ const ROLE_LABEL = {
   MANAGEMENT: "Management HBM", FINANCE: "Finance HBM"
 };
 const PERM = {
-  ADMIN_SITE: ["daily_input", "daily_own"],
+  ADMIN_SITE: ["daily_input", "daily_own", "sync_panel"],
   PROJECT_CONTROL: ["dash", "daily_input", "daily_all", "daily_edit_all", "review", "verify", "accept",
     "billable", "billing", "documents", "issues", "reports", "master", "money", "audit",
     "settings", "users", "meeting"],
-  MANAGEMENT: ["dash", "reports", "money", "billing_view", "issues_view", "meeting"],
-  FINANCE: ["dash", "billable", "billing", "reports", "money", "documents", "audit"]
+  MANAGEMENT: ["dash", "reports", "money", "billing_view", "issues_view", "meeting", "sync_panel"],
+  FINANCE: ["dash", "billable", "billing", "reports", "money", "documents", "audit", "sync_panel"]
 };
 function can(p) { return S.user ? (PERM[S.user.role] || []).indexOf(p) >= 0 : false; }
 function isSite() { return S.user && S.user.role === "ADMIN_SITE"; }
@@ -673,6 +684,48 @@ function audit(action, table, record_id, oldv, newv, reason) {
     new_value: newv == null ? "" : String(newv).slice(0, 300), reason: reason || ""
   });
   if (DB.audit.length > 1500) DB.audit.length = 1500;
+}
+
+/* ============================================================
+   LUAS PENGECATAN EKSTERIOR TANKI
+   Mengikuti lembar "Perhitungan Luas Pengecatan Tangki — Basis Eksterior".
+
+     Shell luar    = pi x D x H
+     Atap          = 1/4 x pi x D^2 x faktor atap
+     Perlengkapan  = (shell + atap) x allowance persen
+     TOTAL         = shell + atap + perlengkapan
+
+   Faktor atap bawaan: CRT (cone) 1,05 · FRT (floating) 1,00 · DRT (dome) 1,12.
+   Perlengkapan mencakup handrail, tangga, pipa FW, foam chamber, water drencher.
+   ============================================================ */
+const TANK_TYPES = [
+  { k: "CRT", t: "CRT — cone roof" },
+  { k: "FRT", t: "FRT — floating roof" },
+  { k: "DRT", t: "DRT — dome roof" }
+];
+const ROOF_BAWAAN = { CRT: 1.05, FRT: 1.00, DRT: 1.12 };
+
+function faktorAtap(tipe) {
+  const f = (DB.config && DB.config.roof_factor) || {};
+  const v = nz(f[tipe]);
+  return v > 0 ? v : (ROOF_BAWAAN[tipe] || 1);
+}
+function accPersen() {
+  const v = DB.config && DB.config.acc_pct;
+  return v == null ? 10 : nz(v);
+}
+/* Mengembalikan rincian luas, atau null bila diameter/tinggi belum diisi. */
+function luasEksterior(tipe, D, H) {
+  D = nz(D); H = nz(H);
+  if (D <= 0 || H <= 0) return null;
+  const shell = Math.PI * D * H;
+  const atap = 0.25 * Math.PI * D * D * faktorAtap(tipe);
+  const acc = (shell + atap) * (accPersen() / 100);
+  return { shell: shell, atap: atap, jumlah: shell + atap, acc: acc, total: shell + atap + acc };
+}
+function luasTanki(t) { return t ? luasEksterior(t.tank_type, t.shell_diameter_m, t.tank_height_m) : null; }
+function totalLuasEksterior() {
+  return DB.tanks.reduce((a, t) => { const L = luasTanki(t); return a + (L ? L.total : 0); }, 0);
 }
 
 /* ---------- SINKRONISASI: daftar tabel & penanda hapus ---------- */
@@ -869,7 +922,9 @@ const NAV = [
   { g: "Data" },
   { v: "master", t: "Master Data", i: "⚙", p: "master" },
   { v: "settings", t: "Pengaturan", i: "⚒", p: "settings" },
-  { v: "audit", t: "Log Audit", i: "◔", p: "audit" }
+  { v: "audit", t: "Log Audit", i: "◔", p: "audit" },
+  { g: "Sambungan" },
+  { v: "sync", t: "Sinkronisasi", i: "⇅", p: "sync_panel" }
 ];
 function navCount(k) {
   if (k === "review") return DB.dailies.filter(d => d.status === "SUBMITTED").length;
@@ -919,7 +974,8 @@ const TITLES = {
   reports: ["Rekap & Laporan", "Harian, mingguan, bulanan"],
   master: ["Master Data", "Area, tanki, WO, scope, target"],
   settings: ["Pengaturan", "Proyek, pengguna, kalender, cadangan"],
-  audit: ["Log Audit", "Jejak perubahan data penting"]
+  audit: ["Log Audit", "Jejak perubahan data penting"],
+  sync: ["Sinkronisasi", "Menyatukan data perangkat ini dengan kantor"]
 };
 function render() {
   const t = TITLES[S.view] || ["—", ""];
@@ -2758,15 +2814,29 @@ VIEWS.master = {
       <div class="row"><span class="small muted grow">Tank ID hanya boleh berasal dari master ini. ${DB.tanks.length} dari target ${DB.config.tank_target} tanki.</span>
         <button class="btn a sm" id="mNew">+ Tanki</button></div>
       <div class="note warn mt12">Nomor tanki berawalan CONTOH masih placeholder. Ganti dengan nomor resmi begitu instruksi Pertamina terbit.</div>
+      <div class="note mt12">Kolom <b>Luas eksterior</b> dihitung sendiri dari tipe atap, diameter, dan tinggi, memakai rumus yang sama
+        dengan lembar Excel: shell + atap (&times; faktor) + allowance perlengkapan ${fmt(accPersen(), 1)}%.
+        Faktor atap dapat diubah di Pengaturan &rsaquo; Proyek.</div>
       <div class="tw mt12"><table><thead><tr><th>Nomor</th><th>Area</th><th>Tipe</th><th class="n">Ø / Tinggi</th>
+        <th class="n">Luas eksterior</th><th class="n">% bobot</th>
         <th class="n">Baseline</th><th>Status scope</th><th>Rev</th><th></th></tr></thead>
-      <tbody>${DB.tanks.map(t => `<tr><td><b>${esc(t.tank_no)}</b><div class="tiny muted">${esc(t.tank_id)}</div></td>
-        <td>${esc(areaName(t.area_id))}</td><td>${esc(t.tank_type)}</td>
+      <tbody>${DB.tanks.map(t => {
+      const L = luasTanki(t), tot = totalLuasEksterior();
+      const beda = L && nz(t.baseline_qty) > 0 && Math.abs(nz(t.baseline_qty) - L.total) > 0.5;
+      return `<tr><td><b>${esc(t.tank_no)}</b><div class="tiny muted">${esc(t.tank_id)}</div></td>
+        <td>${esc(areaName(t.area_id))}</td><td>${esc(t.tank_type)}<div class="tiny muted">&times;${fmt(faktorAtap(t.tank_type), 2)}</div></td>
         <td class="n tiny">${fmt(t.shell_diameter_m, 1)} / ${fmt(t.tank_height_m, 1)}</td>
-        <td class="n">${fmt(t.baseline_qty, 1)} ${esc(t.baseline_unit || "")}</td>
+        <td class="n">${L ? fmt(L.total, 1) : `<span class="muted tiny">belum ada Ø/H</span>`}</td>
+        <td class="n tiny">${L && tot ? fmt(L.total / tot * 100, 1) + "%" : "—"}</td>
+        <td class="n">${fmt(t.baseline_qty, 1)} ${esc(t.baseline_unit || "")}${beda ? `<div class="tiny" style="color:var(--amber)">beda dari hitungan</div>` : ""}</td>
         <td><span class="b ${t.scope_status === "CONFIRMED" ? "teal" : "amber"}">${esc(t.scope_status)}</span></td>
         <td class="tiny">${esc(t.revision)}</td>
-        <td class="right"><button class="btn sm" data-ed="${t.tank_id}">Ubah</button></td></tr>`).join("")}</tbody></table></div>`;
+        <td class="right"><button class="btn sm" data-ed="${t.tank_id}">Ubah</button></td></tr>`;
+    }).join("")}</tbody>
+      <tfoot><tr><th colspan="4" class="right">TOTAL EKSTERIOR — ${DB.tanks.length} tanki</th>
+        <th class="n">${fmt(totalLuasEksterior(), 1)}</th><th class="n tiny">100,0%</th>
+        <th class="n">${fmt(DB.tanks.reduce((a, t) => a + nz(t.baseline_qty), 0), 1)}</th>
+        <th colspan="3"></th></tr></tfoot></table></div>`;
 
     if (tab === "wo") body = `
       <div class="row"><span class="small muted grow">WO diterbitkan dari pusat kendali HBM. WO lama tidak dihapus — gunakan revisi atau WO tambahan.</span>
@@ -2851,7 +2921,8 @@ function masterModal(tab, id) {
     body = `<div class="fg c3">
       <label class="f"><span>Nomor tanki <em>*</em></span><input type="text" id="xNo" value="${esc(t.tank_no)}"></label>
       <label class="f"><span>Area <em>*</em></span><select id="xArea">${opts(DB.areas, t.area_id, a => a.area_id, a => a.area_name)}</select></label>
-      <label class="f"><span>Tipe</span><select id="xType"><option ${t.tank_type === "CRT" ? "selected" : ""}>CRT</option><option ${t.tank_type === "FRT" ? "selected" : ""}>FRT</option></select></label>
+      <label class="f"><span>Tipe atap</span><select id="xType">${TANK_TYPES.map(x =>
+        `<option value="${x.k}" ${t.tank_type === x.k ? "selected" : ""}>${esc(x.t)}</option>`).join("")}</select></label>
       <label class="f"><span>Diameter (m)</span><input type="number" step="any" id="xD" value="${t.shell_diameter_m}"></label>
       <label class="f"><span>Tinggi (m)</span><input type="number" step="any" id="xH" value="${t.tank_height_m}"></label>
       <label class="f"><span>Baseline volume</span><input type="number" step="any" id="xQ" value="${t.baseline_qty}"></label>
@@ -2861,7 +2932,8 @@ function masterModal(tab, id) {
         <option value="CONFIRMED" ${t.scope_status === "CONFIRMED" ? "selected" : ""}>Confirmed</option>
         <option value="REFERENCE" ${t.scope_status === "REFERENCE" ? "selected" : ""}>Reference</option></select></label>
       <label class="f"><span>Revisi</span><input type="text" id="xRev" value="${esc(t.revision)}"></label></div>
-      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(t.notes || "")}"></label>`;
+      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(t.notes || "")}"></label>
+      <div id="xLuas" class="mt12"></div>`;
     onSave = () => {
       Object.assign(t, {
         tank_no: $("#xNo").value, area_id: $("#xArea").value, tank_type: $("#xType").value,
@@ -2976,6 +3048,36 @@ function masterModal(tab, id) {
 
   openModal(title, body, `<button class="btn p" id="xSave">Simpan</button>`);
   $("#xSave").onclick = () => { if (onSave() !== false) { save(); closeModal(); render(); } };
+
+  /* Rincian luas eksterior dihitung langsung saat tipe, diameter, atau tinggi
+     diubah, supaya angkanya bisa dibandingkan dengan lembar Excel sebelum disimpan. */
+  if (tab === "tank") {
+    const gambarLuas = () => {
+      const kotak = $("#xLuas"); if (!kotak) return;
+      const tipe = $("#xType").value, D = nz($("#xD").value), H = nz($("#xH").value);
+      const L = luasEksterior(tipe, D, H);
+      if (!L) {
+        kotak.innerHTML = `<div class="note">Isi diameter dan tinggi untuk melihat luas pengecatan eksterior.</div>`;
+        return;
+      }
+      kotak.innerHTML = `<div class="note"><b>Luas pengecatan eksterior</b> — faktor atap ${tipe} = ${fmt(faktorAtap(tipe), 2)},
+        allowance perlengkapan ${fmt(accPersen(), 1)}%
+        <div class="mt8" style="font-family:var(--mono);font-size:12px;line-height:1.9">
+          Shell luar &nbsp;= &pi; &times; ${fmt(D, 2)} &times; ${fmt(H, 2)} = <b>${fmt(L.shell, 1)}</b> m&sup2;<br>
+          Atap &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= &frac14; &pi; &times; ${fmt(D, 2)}&sup2; &times; ${fmt(faktorAtap(tipe), 2)} = <b>${fmt(L.atap, 1)}</b> m&sup2;<br>
+          Perlengkapan = ${fmt(L.jumlah, 1)} &times; ${fmt(accPersen(), 1)}% = <b>${fmt(L.acc, 1)}</b> m&sup2;<br>
+          <span style="font-size:13px">TOTAL &nbsp;&nbsp;&nbsp;&nbsp;= <b>${fmt(L.total, 1)}</b> m&sup2;</span>
+        </div>
+        <button class="btn sm mt8" id="xPakai">Pakai ${fmt(L.total, 1)} m&sup2; sebagai baseline</button></div>`;
+      $("#xPakai").onclick = () => {
+        $("#xQ").value = L.total.toFixed(1);
+        $("#xU").value = "m2";
+        toast("Baseline diisi dari perhitungan luas eksterior.", "ok");
+      };
+    };
+    ["xType", "xD", "xH"].forEach(i => { const e = $("#" + i); if (e) { e.oninput = gambarLuas; e.onchange = gambarLuas; } });
+    gambarLuas();
+  }
 }
 
 /* ============================================================
@@ -3001,6 +3103,15 @@ VIEWS.settings = {
         <label class="f"><span>Revisi baseline</span><input type="text" id="cRev" value="${esc(c.revision)}"></label>
         <label class="f"><span>Ambang waspada (%)</span><input type="number" id="cW" value="${c.alarm_waspada}"></label>
         <label class="f"><span>Ambang kritis (%)</span><input type="number" id="cK" value="${c.alarm_kritis}"></label>
+      </div>
+      <h4 class="mt16">Perhitungan luas pengecatan eksterior</h4>
+      <p class="small muted">Dipakai untuk menghitung luas tiap tanki di Master Data. Ubah hanya bila basis perhitungan
+        pada lembar Excel ikut berubah.</p>
+      <div class="fg c4 mt8">
+        <label class="f"><span>Faktor atap CRT (cone)</span><input type="number" step="any" id="cFC" value="${faktorAtap("CRT")}"></label>
+        <label class="f"><span>Faktor atap FRT (floating)</span><input type="number" step="any" id="cFF" value="${faktorAtap("FRT")}"></label>
+        <label class="f"><span>Faktor atap DRT (dome)</span><input type="number" step="any" id="cFD" value="${faktorAtap("DRT")}"></label>
+        <label class="f"><span>Allowance perlengkapan (%)</span><input type="number" step="any" id="cACC" value="${accPersen()}"></label>
       </div>
       <h4 class="mt16">Logo HBM</h4>
       <div class="row mt8" style="align-items:flex-start">
@@ -3115,7 +3226,9 @@ VIEWS.settings = {
           project_code: $("#cCode").value, contract_no: $("#cCon").value, project_name: $("#cName").value,
           client_name: $("#cClient").value, contractor_name: $("#cCtr").value, partner_name: $("#cPart").value,
           start_date: $("#cS").value, end_date: $("#cE").value, tank_target: nz($("#cTk").value),
-          revision: $("#cRev").value, alarm_waspada: nz($("#cW").value), alarm_kritis: nz($("#cK").value)
+          revision: $("#cRev").value, alarm_waspada: nz($("#cW").value), alarm_kritis: nz($("#cK").value),
+          roof_factor: { CRT: nz($("#cFC").value), FRT: nz($("#cFF").value), DRT: nz($("#cFD").value) },
+          acc_pct: nz($("#cACC").value)
         });
         audit("UPDATE", "26_SYSTEM_CONFIG", "config", "", c.project_code);
         save(); toast("Pengaturan tersimpan.", "ok"); boot();
@@ -3309,13 +3422,88 @@ VIEWS.audit = {
 /* ============================================================
    PENEGAKAN HAK AKSES — bukan sekadar menyembunyikan menu
    ============================================================ */
+/* ============================================================
+   VIEW: SINKRONISASI (panel ringkas)
+   Untuk peran selain Project Control. Isinya hanya yang diperlukan
+   supaya data perangkat ini menyatu dengan kantor: kata sandi,
+   tombol sinkron, dan pemeriksaan. Tidak ada pengaturan proyek,
+   daftar pengguna, maupun PIN di sini.
+   ============================================================ */
+VIEWS.sync = {
+  html() {
+    const sy = DB.config.sync || {};
+    const jml = SYNC_TABLES.reduce((a, t) => a + (DB[t] || []).length, 0);
+    const antre = DB.photos.filter(f => String(f.file_url || "").indexOf("data:") === 0).length;
+    const siap = syncSiap();
+    return `<div class="card"><div class="body">
+      <div class="note">Data yang Anda isi tersimpan lebih dulu di perangkat ini, lalu dikirim ke kantor saat
+        tombol <b>Sinkronkan sekarang</b> ditekan. Selama kata sandi di bawah belum diisi, isian Anda
+        <b>tidak akan pernah sampai</b> ke kantor.</div>
+
+      <div class="fg c2 mt16">
+        <label class="f"><span>Kata sandi sinkronisasi</span>
+          <input type="text" id="spTok" value="${esc(sy.token || "")}" placeholder="minta ke Project Control HBM"></label>
+        <div class="f"><span class="small muted">Alamat kantor</span>
+          <div class="tiny muted" style="word-break:break-all;line-height:1.5;padding-top:6px">${esc(sy.url || "belum tertanam di berkas aplikasi")}</div></div>
+      </div>
+      <div class="chk"><input type="checkbox" id="spAuto" ${sy.auto ? "checked" : ""}>
+        <label for="spAuto">Sinkronkan sendiri setiap 5 menit selama aplikasi terbuka</label></div>
+
+      <div class="row mt12">
+        <button class="btn p" id="spGo">Sinkronkan sekarang</button>
+        <button class="btn" id="spPeriksa">Periksa sinkron</button>
+        <button class="btn" id="spSave">Simpan kata sandi</button>
+      </div>
+      <div id="spMsg" class="mt12"></div>
+
+      <div class="grid g4 mt16">
+        <div class="kpi"><div class="eyebrow">Baris data di perangkat ini</div><div class="v">${fmt0(jml)}</div><div class="sub">siap dikirim</div></div>
+        <div class="kpi ${antre ? "amber" : ""}"><div class="eyebrow">Foto belum diunggah</div><div class="v">${antre}</div><div class="sub">masih di perangkat ini</div></div>
+        <div class="kpi teal"><div class="eyebrow">Sinkron terakhir</div><div class="v" style="font-size:15px">${sy.last ? esc(sy.last.slice(0, 16).replace("T", " ")) : "belum pernah"}</div><div class="sub">waktu perangkat</div></div>
+        <div class="kpi ${siap ? "teal" : "red"}"><div class="eyebrow">Status</div><div class="v" style="font-size:15px">${siap ? "Tersambung" : "Belum diatur"}</div><div class="sub">${navigator.onLine ? "perangkat online" : "perangkat offline"}</div></div>
+      </div>
+
+      <div class="note warn mt16"><b>Kebiasaan harian.</b> Tekan Sinkronkan sekali sebelum mulai bekerja, dan
+        sekali lagi setelah laporan selesai diisi. Bila terasa ada yang tidak cocok dengan kantor, tekan
+        <b>Periksa sinkron</b> lalu <b>Salin hasil</b> dan kirimkan ke Project Control.</div>
+    </div></div>`;
+  },
+  bind() {
+    const c = DB.config;
+    const kabar = (m, jenis) => { $("#spMsg").innerHTML = `<div class="note ${jenis || ""}">${esc(m)}</div>`; };
+    const ambil = () => {
+      c.sync = c.sync || {};
+      c.sync.token = $("#spTok").value.trim();
+      c.sync.auto = $("#spAuto").checked;
+      if (!c.sync.url && SYNC_BAWAAN.url) c.sync.url = SYNC_BAWAAN.url;
+    };
+    const sibuk = t => { ["spGo", "spPeriksa", "spSave"].forEach(i => { if ($("#" + i)) $("#" + i).disabled = t; }); };
+
+    $("#spSave").onclick = () => {
+      ambil(); save(); aturAutoSync();
+      audit("UPDATE", "26_SYSTEM_CONFIG", "sync", "", c.sync.token ? "kata sandi diisi" : "kata sandi dikosongkan");
+      render(); kabar("Kata sandi tersimpan di perangkat ini.", "");
+    };
+    $("#spPeriksa").onclick = () => { ambil(); save(); bukaPeriksaSinkron(); };
+    $("#spGo").onclick = async () => {
+      ambil(); save();
+      if (!syncSiap()) return kabar("Isi kata sandi sinkronisasi lebih dulu. Mintalah kepada Project Control HBM.", "stop");
+      sibuk(true);
+      const r = await syncNow(m => kabar(m));
+      sibuk(false);
+      if (r.ok) { toast("Sinkronisasi selesai.", "ok"); render(); kabar(r.pesan, ""); }
+      else kabar(r.pesan, "stop");
+    };
+  }
+};
+
 const GUARD = {
   dashboard: ["dash"], "tanks-status": ["dash"],
   "daily-new": ["daily_input"], "daily-list": ["daily_input", "daily_all"],
   review: ["review"], acceptance: ["accept"], billable: ["billable"],
   billing: ["billing", "billing_view"], documents: ["documents"],
   issues: ["issues", "issues_view"], meeting: ["meeting"], reports: ["reports"],
-  master: ["master"], settings: ["settings"], audit: ["audit"]
+  master: ["master"], settings: ["settings"], audit: ["audit"], sync: ["sync_panel"]
 };
 Object.keys(GUARD).forEach(k => {
   const v = VIEWS[k]; if (!v) return;
