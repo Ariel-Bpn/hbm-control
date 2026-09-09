@@ -289,7 +289,15 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
 .ujirow b{font-size:13px;display:block;color:var(--ink)}
 .ujiket{font-size:12px;color:var(--ink-2);line-height:1.55;margin-top:2px;word-break:break-word}
 .ujibar{height:3px;background:var(--line-soft);border-radius:3px;overflow:hidden;margin:0 0 10px}
-.ujibar i{display:block;height:100%;background:var(--amber);width:0;transition:width .3s}
+.ujibar i{display:block;height:100%;background:var(--amber);width:0;transition:width .3s}.sidesync{display:block;padding:8px 10px;border-radius:var(--r-s);background:rgba(255,255,255,.06);border-left:3px solid #8AA2B5;cursor:pointer}
+.sidesync b{display:block;font-size:11.5px;color:#EAF0F5;letter-spacing:.02em}
+.sidesync span{display:block;font-size:10px;color:#8AA2B5;margin-top:1px}
+.sidesync.hijau{border-left-color:#4CAF93}
+.sidesync.kuning{border-left-color:var(--amber);background:rgba(217,144,43,.16)}
+.sidesync.kuning b{color:#F6D9A8}
+.sidesync.merah{border-left-color:var(--red);background:rgba(178,58,47,.2)}
+.sidesync.merah b{color:#F3BDB6}
+
 </style>
 </head>
 <body>
@@ -332,7 +340,8 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
     <div class="facechip" id="faceChip"></div>
     <nav id="nav"></nav>
     <div class="asidefoot">
-      <div id="sideProj">—</div>
+      <div class="sidesync" id="sideSync"><b>—</b><span>status sinkron</span></div>
+      <div id="sideProj" class="mt8">—</div>
       <button class="btn sm mt8" id="btnOut" style="width:100%;justify-content:center">Keluar</button>
     </div>
   </aside>
@@ -367,7 +376,10 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "1.5";
+const APP_VERSI = "1.6";
+/* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
+   perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
+const CODEGS_VERSI = "1.5";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -403,8 +415,11 @@ function save() {
   try { tandaiPerubahan(); } catch (e) { /* daftar tabel belum siap saat migrasi awal */ }
   DB.meta.saved_at = new Date().toISOString();
   if (!HAS_LS) { MEM = DB; return true; }
-  try { localStorage.setItem(KEY, JSON.stringify(DB)); return true; }
-  catch (e) { toast("Penyimpanan penuh. Kurangi foto atau unduh cadangan lalu bersihkan data lama.", "err"); return false; }
+  let hasil = true;
+  try { localStorage.setItem(KEY, JSON.stringify(DB)); }
+  catch (e) { toast("Penyimpanan penuh. Kurangi foto atau unduh cadangan lalu bersihkan data lama.", "err"); hasil = false; }
+  try { if (!SYNC.jalan) { jadwalkanKirim(); perbaruiLencana(); } } catch (e) { /* belum siap saat migrasi awal */ }
+  return hasil;
 }
 
 /* ---------- HELPERS ---------- */
@@ -976,7 +991,12 @@ function boot() {
     ? `<span>Wajah</span><b>Admin Site — Input Lapangan</b>`
     : `<span>Wajah</span><b>HBM — Pusat Kendali</b>`;
   try { aturAutoSync(); } catch (e) { }
+  try { pasangPemicuSinkron(); } catch (e) { }
   render();
+  try { perbaruiLencana(); } catch (e) { }
+  /* Tarik data begitu masuk, supaya yang dilihat pengguna adalah keadaan
+     kantor terbaru, bukan salinan kemarin yang ada di perangkatnya. */
+  setTimeout(() => { try { sinkronDiamDiam("baru masuk"); } catch (e) { } }, 600);
 }
 const TITLES = {
   dashboard: ["Dashboard", "Ringkasan kendali proyek"],
@@ -1003,6 +1023,9 @@ function render() {
   const V = VIEWS[S.view];
   $("#view").innerHTML = V ? V.html() : `<div class="card"><div class="empty">Menu belum tersedia.</div></div>`;
   if (V && V.bind) V.bind();
+  try { perbaruiLencana(); } catch (e) { }
+  const lb = $("#sideSync");
+  if (lb) lb.onclick = () => { if (!SYNC.jalan) sinkronDiamDiam("ditekan pengguna"); };
 }
 
 /* ---------- MODAL ---------- */
@@ -2345,7 +2368,38 @@ VIEWS.reports = {
    Aplikasi tetap bekerja penuh tanpa internet. Sinkronisasi hanya
    menyatukan data antar perangkat lewat Google Apps Script.
    ============================================================ */
-const SYNC = { jalan: false, timer: null, pesan: "", terakhirGagal: "" };
+const SYNC = { jalan: false, timer: null, pesan: "", terakhirGagal: "", tunda: null, dorong: 15000 };
+
+/* ============================================================
+   BELUM TERKIRIM
+   Setiap baris yang diubah diberi penanda waktu oleh tandaiPerubahan().
+   Baris yang penanda waktunya lebih baru daripada kiriman terakhir berarti
+   masih mengendap di perangkat ini saja. Angka inilah yang dipakai untuk
+   lencana di sidebar, untuk menjadwalkan kiriman otomatis, dan untuk
+   menahan pengguna sebelum menutup aplikasi.
+   ============================================================ */
+function capKirimTerakhir() { return Number((DB.config.sync || {}).kirim_ts || 0); }
+
+/* Tabel mana saja yang punya perubahan belum terkirim, beserta jumlah barisnya. */
+function tabelKotor() {
+  const batas = capKirimTerakhir(), out = {};
+  SYNC_TABLES.forEach(t => {
+    let n = 0;
+    (DB[t] || []).forEach(r => { if (Number(r._ts || 0) > batas) n++; });
+    if (n) out[t] = n;
+  });
+  (DB.deleted || []).forEach(d => { if (d && d.table && out[d.table] == null) out[d.table] = 0; });
+  return out;
+}
+function jumlahBelumTerkirim() {
+  const k = tabelKotor();
+  let n = 0;
+  Object.keys(k).forEach(t => n += k[t]);
+  return n + (DB.deleted || []).length + antreFoto();
+}
+function antreFoto() {
+  return (DB.photos || []).filter(f => String(f.file_url || "").indexOf("data:") === 0).length;
+}
 
 function syncSiap() {
   const s = DB.config.sync || {};
@@ -2414,7 +2468,7 @@ async function unggahFoto(lapor) {
   return { ok: true, jumlah: antre.length };
 }
 
-async function syncNow(lapor) {
+async function syncNow(lapor, opsi) {
   if (SYNC.jalan) return { ok: false, pesan: "Sinkronisasi sedang berjalan." };
   if (!syncSiap()) return { ok: false, pesan: "Alamat Web App dan kata sandi belum diisi." };
   SYNC.jalan = true;
@@ -2427,8 +2481,15 @@ async function syncNow(lapor) {
     if (!foto.ok) return foto;
 
     kabar("Mengirim dan menggabungkan data…");
+    /* Kiriman berkala hanya membawa tabel yang benar-benar berubah. Server
+       hanya menulis ulang lembar yang dikirim, jadi sinkron sering tidak
+       membebani kuota Apps Script. Tombol Sinkronkan sekarang tetap
+       mengirim semuanya, sebagai penyeragam kalau ada yang terlewat. */
+    const capKirim = Date.now();
+    const kotor = tabelKotor();
+    const daftar = (opsi && opsi.hanyaKotor) ? Object.keys(kotor) : SYNC_TABLES;
     const kirim = {};
-    SYNC_TABLES.forEach(t => {
+    daftar.forEach(t => {
       kirim[t] = (DB[t] || []).map(r => {
         const o = Object.assign({}, r);
         if (t === "meetings") { o.points_json = JSON.stringify(r.points || []); delete o.points; }
@@ -2444,7 +2505,9 @@ async function syncNow(lapor) {
     bangunSidik();
     DB.deleted = [];
     DB.config.sync.last = new Date().toISOString();
+    DB.config.sync.kirim_ts = capKirim;
     save();
+    perbaruiLencana();
     const jml = SYNC_TABLES.reduce((a, t) => a + (DB[t] || []).length, 0);
     return { ok: true, pesan: "Selesai. " + jml + " baris tersimpan bersama" + (foto.jumlah ? ", " + foto.jumlah + " foto diunggah" : "") + ".", ringkas: r.ringkas };
   } finally {
@@ -2477,12 +2540,113 @@ function terapkanServer(tables) {
 function aturAutoSync() {
   if (SYNC.timer) { clearInterval(SYNC.timer); SYNC.timer = null; }
   if (!DB.config.sync.auto || !syncSiap()) return;
-  SYNC.timer = setInterval(async () => {
-    if (SYNC.jalan || !navigator.onLine) return;
-    const r = await syncNow();
-    if (r.ok) { SYNC.terakhirGagal = ""; if (S.view === "settings" || S.view === "dashboard") render(); }
-    else SYNC.terakhirGagal = r.pesan;
-  }, 5 * 60 * 1000);
+  SYNC.timer = setInterval(() => sinkronDiamDiam("berkala"), 5 * 60 * 1000);
+}
+
+/* Sinkron yang berjalan sendiri, tanpa mengganggu layar. Kiriman berkala yang
+   tidak membawa perubahan apa pun tetap berguna: server membalas dengan
+   seluruh data terbaru, jadi perubahan orang lain ikut turun ke sini. */
+async function sinkronDiamDiam(alasan) {
+  if (SYNC.jalan || !syncSiap()) return { ok: false, pesan: "Belum siap." };
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, pesan: "Perangkat luring." };
+  const r = await syncNow(null, { hanyaKotor: true });
+  if (r.ok) {
+    SYNC.terakhirGagal = "";
+    SYNC.alasanTerakhir = alasan || "";
+    if (S.view === "settings" || S.view === "dashboard" || S.view === "sync") render();
+  } else {
+    SYNC.terakhirGagal = r.pesan;
+  }
+  perbaruiLencana();
+  return r;
+}
+
+/* Perubahan apa pun menjadwalkan kiriman beberapa detik kemudian. Kalau
+   pengguna masih mengetik, jadwalnya diundur lagi, sehingga satu sesi
+   pengisian hanya menghasilkan satu kiriman. */
+function jadwalkanKirim() {
+  if (!S.user || !syncSiap() || !DB.config.sync.auto) return;
+  if (SYNC.tunda) clearTimeout(SYNC.tunda);
+  SYNC.tunda = setTimeout(() => {
+    SYNC.tunda = null;
+    if (jumlahBelumTerkirim() > 0) sinkronDiamDiam("perubahan");
+  }, SYNC.dorong);
+}
+
+/* Kiriman penyelamat saat aplikasi ditutup atau tab ditinggalkan. Memakai
+   fetch keepalive supaya kiriman tetap jalan meski halaman sudah ditutup. */
+function kirimSaatTutup() {
+  if (!syncSiap() || jumlahBelumTerkirim() === 0) return false;
+  const kotor = tabelKotor(), kirim = {};
+  Object.keys(kotor).forEach(t => {
+    kirim[t] = (DB[t] || []).map(r => {
+      const o = Object.assign({}, r);
+      if (t === "meetings") { o.points_json = JSON.stringify(r.points || []); delete o.points; }
+      if (t === "photos") { delete o.file_url_data; if (String(o.file_url || "").indexOf("data:") === 0) o.file_url = ""; }
+      return o;
+    });
+  });
+  const badan = JSON.stringify({
+    token: DB.config.sync.token, action: "push", tables: kirim, deleted: DB.deleted || []
+  });
+  if (badan.length > 60000) return false;              /* terlalu besar untuk kiriman kilat */
+  try {
+    fetch(DB.config.sync.url, {
+      method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: badan, keepalive: true, redirect: "follow"
+    });
+    return true;
+  } catch (e) {
+    try { return navigator.sendBeacon(DB.config.sync.url, new Blob([badan], { type: "text/plain;charset=utf-8" })); }
+    catch (e2) { return false; }
+  }
+}
+
+/* Lencana di sidebar: berapa perubahan yang masih mengendap di perangkat ini. */
+function perbaruiLencana() {
+  const kotak = typeof document !== "undefined" ? document.getElementById("sideSync") : null;
+  if (!kotak) return;
+  if (!syncSiap()) {
+    kotak.className = "sidesync merah";
+    kotak.innerHTML = `<b>Belum tersambung</b><span>data hanya di perangkat ini</span>`;
+    return;
+  }
+  const n = jumlahBelumTerkirim();
+  if (SYNC.jalan) { kotak.className = "sidesync"; kotak.innerHTML = `<b>Mengirim…</b><span>sedang menyatukan data</span>`; return; }
+  if (n === 0) {
+    const jam = DB.config.sync.last ? DB.config.sync.last.slice(11, 16) : "";
+    kotak.className = "sidesync hijau";
+    kotak.innerHTML = `<b>Semua terkirim</b><span>${jam ? "terakhir " + esc(jam) : "siap"}</span>`;
+  } else {
+    kotak.className = "sidesync kuning";
+    kotak.innerHTML = `<b>${n} belum terkirim</b><span>tersimpan di perangkat ini</span>`;
+  }
+}
+
+/* Pemicu-pemicu yang membuat data tidak pernah lama mengendap di perangkat. */
+function pasangPemicuSinkron() {
+  if (typeof window === "undefined" || SYNC.pemicuTerpasang) return;
+  SYNC.pemicuTerpasang = true;
+
+  /* berpindah tab atau mengunci layar HP */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { if (!kirimSaatTutup()) sinkronDiamDiam("pindah tab"); }
+    else sinkronDiamDiam("kembali ke layar");
+  });
+
+  /* menutup aplikasi */
+  window.addEventListener("pagehide", () => { kirimSaatTutup(); });
+  window.addEventListener("beforeunload", e => {
+    if (!S.user || jumlahBelumTerkirim() === 0) return;
+    kirimSaatTutup();
+    e.preventDefault();
+    e.returnValue = "";
+    return "";
+  });
+
+  /* internet kembali menyala */
+  window.addEventListener("online", () => sinkronDiamDiam("internet kembali"));
+  window.addEventListener("offline", () => perbaruiLencana());
 }
 /* ============================================================
    VIEW: MASTER DATA
@@ -2661,17 +2825,17 @@ async function periksaSinkron(T) {
     T("Alamat Spreadsheet", "info", png.sheet_url);
   else
     T("Alamat Spreadsheet tidak dilaporkan", "peringatan", "Code.gs yang terpasang belum mengirimkan alamat Spreadsheet. Unggah Code.gs v" +
-      APP_VERSI + " lalu terapkan ulang, supaya alamatnya selalu terlihat di layar Sinkronisasi.");
+      CODEGS_VERSI + " lalu terapkan ulang, supaya alamatnya selalu terlihat di layar Sinkronisasi.");
 
   const versiServer = String(png.versi || "");
   if (!versiServer)
     T("Versi Code.gs tidak diketahui", "peringatan", "Code.gs yang terpasang belum melaporkan versinya, jadi kemungkinan besar lebih lama dari aplikasi ini (v" +
       APP_VERSI + "). Unggah Code.gs terbaru lalu terapkan ulang.");
-  else if (versiServer !== APP_VERSI)
-    T("Versi Code.gs berbeda", "peringatan", "Aplikasi v" + APP_VERSI + ", Code.gs v" + versiServer +
-      ". Sebaiknya keduanya sama supaya perilakunya bisa ditebak.");
+  else if (versiServer !== CODEGS_VERSI)
+    T("Versi Code.gs berbeda", "peringatan", "Aplikasi v" + APP_VERSI + " membutuhkan Code.gs v" + CODEGS_VERSI +
+      ", yang terpasang v" + versiServer + ". Unggah Code.gs yang sesuai lalu terapkan ulang.");
   else
-    T("Versi Code.gs cocok", "ok", "Aplikasi dan server sama-sama v" + APP_VERSI + ".");
+    T("Versi Code.gs cocok", "ok", "Aplikasi v" + APP_VERSI + " dengan Code.gs v" + CODEGS_VERSI + ", sesuai.");
 
   /* --- 5. tarik seluruh data ---------------------------------- */
   const tarik = await serverCall({ action: "pull" }, 120000);
@@ -2770,6 +2934,16 @@ async function periksaSinkron(T) {
     T("Foto menunggu diunggah", "peringatan", antre + " foto masih tersimpan di perangkat ini dan belum ada di Drive. Foto terkirim saat Sinkronkan sekarang ditekan.");
   else
     T("Tidak ada foto tertahan", "ok", "Semua foto sudah berada di Drive.");
+
+  const belum = jumlahBelumTerkirim();
+  if (belum)
+    T("Ada perubahan yang belum terkirim", "peringatan", belum + " perubahan masih mengendap di perangkat ini. Kiriman otomatis akan menjalankannya sendiri; tekan Sinkronkan sekarang bila ingin segera.");
+  else
+    T("Tidak ada yang mengendap di perangkat ini", "ok", "Semua perubahan sudah sampai ke Spreadsheet.");
+
+  T("Kiriman otomatis", DB.config.sync.auto ? "ok" : "peringatan", DB.config.sync.auto
+    ? "Menyala: mengirim sendiri " + Math.round(SYNC.dorong / 1000) + " detik sesudah ada perubahan, saat berpindah tab, saat aplikasi ditutup, saat internet kembali, dan tiap 5 menit."
+    : "Mati. Data hanya terkirim bila tombol Sinkronkan ditekan, sehingga mudah tertinggal di perangkat ini.");
 
   const tunda = (DB.deleted || []).length;
   if (tunda)
