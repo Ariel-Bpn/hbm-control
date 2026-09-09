@@ -367,7 +367,7 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "1.4";
+const APP_VERSI = "1.5";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -483,7 +483,22 @@ const UNIT_KEPUTUSAN = ["Direktur", "Operasional", "Finance", "Marketing",
   "Project Control", "Site / Lapangan"];
 
 /* ---------- SEED ---------- */
+/* Menandai seluruh baris bawaan sebagai data pabrik: penanda waktu 1,
+   yaitu tanggal paling tua yang mungkin, sehingga tidak pernah menimpa
+   data asli di kantor saat perangkat baru pertama kali sinkron. */
+const TS_BAWAAN = 1;
+function tuakanBawaan(db) {
+  Object.keys(db).forEach(k => {
+    if (k === "deleted" || !Array.isArray(db[k])) return;
+    db[k].forEach(r => { if (r && typeof r === "object" && r._ts == null) r._ts = TS_BAWAAN; });
+  });
+  return db;
+}
+
 function seed() {
+  return tuakanBawaan(bangunBawaan());
+}
+function bangunBawaan() {
   const A1 = "AR-OMS", A2 = "AR-OMU", A3 = "AR-LAW";
   const areas = [
     { area_id: A1, area_code: "OM-S", area_name: "OM Selatan", status: "Aktif", notes: "" },
@@ -754,11 +769,15 @@ function sidikBaris(r) {
    di server versi terbarulah yang menang. Baris yang tidak disentuh tidak ikut berubah. */
 function tandaiPerubahan() {
   SYNC_TABLES.forEach(t => {
+    const belumAda = !SIG[t];
     const arr = DB[t] || [], cache = SIG[t] || (SIG[t] = {}), ada = {};
     arr.forEach(r => {
       const k = r[SYNC_KEY[t]]; if (!k) return;
       ada[k] = 1;
       const s = sidikBaris(r);
+      /* Saat sidik pertama kali dibangun, isi yang ada belum tentu perubahan —
+         cukup dicatat apa adanya tanpa memperbarui penanda waktu. */
+      if (belumAda) { cache[k] = s; return; }
       if (cache[k] !== s) { r._ts = Date.now(); cache[k] = s; }
     });
     Object.keys(cache).forEach(k => { if (!ada[k]) delete cache[k]; });
@@ -2339,6 +2358,21 @@ function stempelSemua() {
   SYNC_TABLES.forEach(t => (DB[t] || []).forEach(syncStamp));
 }
 
+/* Alamat Spreadsheet dan folder foto dilaporkan server pada setiap balasan.
+   Dicatat di perangkat supaya selalu bisa dilihat di layar Sinkronisasi —
+   tanpa itu, alamatnya hanya sempat muncul sesaat setelah tombol
+   "Siapkan lembar di Spreadsheet" ditekan, dan gampang keliru dengan
+   Spreadsheet lain yang kebetulan namanya mirip. */
+function catatAlamatServer(r) {
+  if (!r || !r.ok) return;
+  const sy = DB.config.sync = DB.config.sync || {};
+  let berubah = false;
+  if (r.sheet_url && sy.sheet_url !== r.sheet_url) { sy.sheet_url = r.sheet_url; berubah = true; }
+  if (r.folder_url && sy.folder_url !== r.folder_url) { sy.folder_url = r.folder_url; berubah = true; }
+  if (r.versi && sy.versi_server !== r.versi) { sy.versi_server = r.versi; berubah = true; }
+  if (berubah) { try { save(); } catch (e) { /* penyimpanan penuh, tidak menghalangi sinkron */ } }
+}
+
 async function serverCall(payload, timeoutMs) {
   const s = DB.config.sync;
   const ctrl = new AbortController();
@@ -2352,7 +2386,11 @@ async function serverCall(payload, timeoutMs) {
       signal: ctrl.signal
     });
     const teks = await r.text();
-    try { return JSON.parse(teks); }
+    try {
+      const hasil = JSON.parse(teks);
+      catatAlamatServer(hasil);
+      return hasil;
+    }
     catch (e) { return { ok: false, pesan: "Balasan server tidak dikenali. Pastikan Web App dipasang untuk 'Anyone'." }; }
   } catch (e) {
     return { ok: false, pesan: e.name === "AbortError" ? "Server tidak menjawab (waktu habis)." : "Tidak dapat menghubungi server. Periksa internet dan alamat Web App." };
@@ -2450,6 +2488,27 @@ function aturAutoSync() {
    VIEW: MASTER DATA
    ============================================================ */
 
+/* Kotak alamat Spreadsheet & folder foto, ditampilkan tetap di layar
+   Sinkronisasi. Alamat diisi sendiri oleh server pada sinkron mana pun. */
+function kotakAlamatServer(sy) {
+  sy = sy || {};
+  if (!sy.sheet_url)
+    return `<div class="note mt12">Alamat Spreadsheet belum diketahui perangkat ini. Tekan <b>Uji koneksi</b>
+      atau <b>Sinkronkan sekarang</b> sekali, lalu alamatnya muncul di sini dan tersimpan.</div>`;
+  return `<div class="note mt12">
+    <b>Tempat data ini benar-benar tersimpan</b>
+    <div class="tiny muted mt8">Hanya berkas inilah yang diisi Code.gs. Spreadsheet lain yang namanya mirip
+      tidak akan pernah terisi, berapa kali pun Sinkronkan ditekan.</div>
+    <div class="row mt8" style="align-items:center">
+      <a class="btn sm" href="${esc(sy.sheet_url)}" target="_blank" rel="noopener">Buka Spreadsheet</a>
+      ${sy.folder_url ? `<a class="btn sm" href="${esc(sy.folder_url)}" target="_blank" rel="noopener">Buka folder foto</a>` : ""}
+      <button class="btn sm" id="syCopyUrl">Salin alamat</button>
+      ${sy.versi_server ? `<span class="tiny muted">Code.gs v${esc(sy.versi_server)}</span>` : ""}
+    </div>
+    <div class="tiny mt8" style="font-family:var(--mono);word-break:break-all;color:var(--ink-2)">${esc(sy.sheet_url)}</div>
+  </div>`;
+}
+
 /* ============================================================
    PEMERIKSAAN SINKRON
    Menguji perjalanan data ke Google Sheets langkah demi langkah,
@@ -2463,7 +2522,7 @@ function aturAutoSync() {
 const UJI = { hasil: [], jalan: false };
 const UJI_IKON = { ok: "\u2713", gagal: "\u2717", peringatan: "!", info: "\u00b7" };
 const UJI_WARNA = { ok: "var(--teal)", gagal: "var(--red)", peringatan: "var(--amber)", info: "var(--ink-3)" };
-const UJI_TOTAL_LANGKAH = 21;
+const UJI_TOTAL_LANGKAH = 23;
 
 function modeJalan() {
   if (typeof location === "undefined") return "TIDAK DIKENAL";
@@ -2501,6 +2560,21 @@ function bukaPeriksaSinkron() {
   $("#ujiTutup").onclick = closeModal;
   $("#ujiSalin").onclick = salinHasilUji;
   $("#ujiGo").onclick = jalankanUjiSinkron;
+}
+
+/* Menyalin teks ke papan klip, dengan cara cadangan untuk peramban lama. */
+function salinTeks(teks, kabar) {
+  if (!teks) return toast("Belum ada alamat untuk disalin.", "err");
+  const manual = () => {
+    const ta = document.createElement("textarea");
+    ta.value = teks; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* peramban lama */ }
+    ta.remove();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(teks).then(() => toast(kabar, "ok"), () => { manual(); toast(kabar, "ok"); });
+  else { manual(); toast(kabar, "ok"); }
 }
 
 function salinHasilUji() {
@@ -2583,6 +2657,11 @@ async function periksaSinkron(T) {
     return T("Pemeriksaan berhenti", "info", "Langkah berikutnya membutuhkan sambungan ke server.");
   }
   T("Menghubungi server (ping)", "ok", "Server menjawab. Spreadsheet: " + (png.sheet || "-"));
+  if (png.sheet_url)
+    T("Alamat Spreadsheet", "info", png.sheet_url);
+  else
+    T("Alamat Spreadsheet tidak dilaporkan", "peringatan", "Code.gs yang terpasang belum mengirimkan alamat Spreadsheet. Unggah Code.gs v" +
+      APP_VERSI + " lalu terapkan ulang, supaya alamatnya selalu terlihat di layar Sinkronisasi.");
 
   const versiServer = String(png.versi || "");
   if (!versiServer)
@@ -2651,6 +2730,40 @@ async function periksaSinkron(T) {
   if (ganda.length)
     T("Ada nomor ganda di perangkat ini", "peringatan", ganda.slice(0, 5).join(", ") +
       (ganda.length > 5 ? " dan " + (ganda.length - 5) + " lagi" : "") + ". Baris bernomor sama akan saling menimpa saat digabung.");
+
+  /* Baris bawaan pabrik yang belum pernah disentuh, dan baris yang isinya
+     berbeda dengan server. Dua hal inilah yang paling sering membuat data
+     antar perangkat tampak berbeda. */
+  let bawaan = 0, bedaIsi = [], kalah = 0;
+  SYNC_TABLES.forEach(t => {
+    const kunci = SYNC_KEY[t];
+    const petaSrv = {};
+    (srv[t] || []).forEach(r => { if (r[kunci]) petaSrv[String(r[kunci])] = r; });
+    (DB[t] || []).forEach(r => {
+      if (Number(r._ts || 0) === 1) bawaan++;
+      const lawan = petaSrv[String(r[kunci] || "")];
+      if (!lawan) return;
+      const bandingkan = x => {
+        let o = "";
+        Object.keys(x).sort().forEach(k => { if (k !== "_ts") o += k + "=" + String(x[k] == null ? "" : x[k]) + ";"; });
+        return o;
+      };
+      if (bandingkan(r) !== bandingkan(lawan)) {
+        bedaIsi.push(t);
+        if (Number(r._ts || 0) < Number(lawan._ts || 0)) kalah++;
+      }
+    });
+  });
+  if (bawaan)
+    T("Masih ada data contoh bawaan", "info", bawaan + " baris masih persis seperti bawaan aplikasi dan bertanda waktu paling tua, jadi tidak akan menimpa data kantor. Baris ini hilang sendiri begitu data asli masuk.");
+  if (bedaIsi.length) {
+    const hitung = {};
+    bedaIsi.forEach(t => hitung[t] = (hitung[t] || 0) + 1);
+    T("Ada baris yang isinya berbeda dengan server", "peringatan",
+      Object.keys(hitung).map(t => t + ": " + hitung[t]).join(" \u00b7 ") + ". " +
+      (kalah ? kalah + " di antaranya lebih tua daripada di server, jadi akan diganti oleh data server saat Sinkronkan ditekan."
+        : "Semuanya lebih baru daripada di server, jadi punya perangkat ini yang akan dipakai."));
+  }
 
   const antre = (DB.photos || []).filter(f => String(f.file_url || "").indexOf("data:") === 0).length;
   if (antre)
@@ -3174,6 +3287,7 @@ VIEWS.settings = {
         <button class="btn" id="sySave">Simpan pengaturan</button>
       </div>
       <div id="syMsg" class="mt12"></div>
+      ${kotakAlamatServer(sy)}
       <div class="grid g4 mt16">
         <div class="kpi"><div class="eyebrow">Baris data lokal</div><div class="v">${fmt0(jml)}</div><div class="sub">siap dikirim</div></div>
         <div class="kpi ${antre ? "amber" : ""}"><div class="eyebrow">Foto belum diunggah</div><div class="v">${antre}</div><div class="sub">masih di perangkat ini</div></div>
@@ -3312,6 +3426,7 @@ VIEWS.settings = {
         kabar("Pengaturan sinkronisasi tersimpan.", "");
       };
       $("#syPeriksa").onclick = () => { ambilIsian(); save(); bukaPeriksaSinkron(); };
+      if ($("#syCopyUrl")) $("#syCopyUrl").onclick = () => salinTeks((c.sync || {}).sheet_url || "", "Alamat Spreadsheet disalin.");
       $("#syTest").onclick = async () => {
         ambilIsian(); save();
         if (!syncSiap()) return kabar("Isi alamat Web App dan kata sandinya lebih dulu.", "stop");
