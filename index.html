@@ -283,6 +283,13 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
   .kpi .v{font-size:20px}
   .modal .mbody{max-height:70vh}
 }
+.ujirow{display:flex;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
+.ujirow:last-child{border-bottom:0}
+.ujiik{flex:0 0 18px;text-align:center;font-weight:800;font-size:14px;line-height:1.45}
+.ujirow b{font-size:13px;display:block;color:var(--ink)}
+.ujiket{font-size:12px;color:var(--ink-2);line-height:1.55;margin-top:2px;word-break:break-word}
+.ujibar{height:3px;background:var(--line-soft);border-radius:3px;overflow:hidden;margin:0 0 10px}
+.ujibar i{display:block;height:100%;background:var(--amber);width:0;transition:width .3s}
 </style>
 </head>
 <body>
@@ -308,6 +315,7 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
     <div class="mt16 center" style="font-size:12.5px;font-weight:600;color:var(--ink-2)">
       Silakan masukkan No. PIN Anda!
     </div>
+    <div class="center tiny muted mt8" id="lgVer">v1.4</div>
   </div>
 </div>
 
@@ -318,7 +326,7 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
       <div class="logo sm" id="sideLogo"></div>
       <div>
         <div class="brandname">HBM IPCS</div>
-        <div class="brandsub">v1.3</div>
+        <div class="brandsub" id="appVer">v1.4</div>
       </div>
     </div>
     <div class="facechip" id="faceChip"></div>
@@ -359,6 +367,12 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
+const APP_VERSI = "1.4";
+try {
+  if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
+  if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
+} catch (e) { /* tampilan versi tidak wajib */ }
+
 const SYNC_BAWAAN = {
   url: "https://script.google.com/macros/s/AKfycbwXC8UJznyLLAd6JjAHLWD2PW4ZDJpr7v6vQ18zz-ePyvwurmoRWCmb_pK9zXEoq2Ux8A/exec",
   token: ""
@@ -2379,6 +2393,354 @@ function aturAutoSync() {
 /* ============================================================
    VIEW: MASTER DATA
    ============================================================ */
+
+/* ============================================================
+   PEMERIKSAAN SINKRON
+   Menguji perjalanan data ke Google Sheets langkah demi langkah,
+   supaya jelas bagian mana yang bermasalah: aplikasi, jaringan,
+   atau Code.gs di Spreadsheet.
+
+   Pemeriksaan ini TIDAK menyentuh data asli. Yang dikirim hanya
+   satu baris uji pada tabel actions, yang dibaca kembali lalu
+   dihapus. Data lokal tidak ditimpa oleh hasil pemeriksaan.
+   ============================================================ */
+const UJI = { hasil: [], jalan: false };
+const UJI_IKON = { ok: "\u2713", gagal: "\u2717", peringatan: "!", info: "\u00b7" };
+const UJI_WARNA = { ok: "var(--teal)", gagal: "var(--red)", peringatan: "var(--amber)", info: "var(--ink-3)" };
+const UJI_TOTAL_LANGKAH = 21;
+
+function modeJalan() {
+  if (typeof location === "undefined") return "TIDAK DIKENAL";
+  if (location.protocol === "file:") return "BERKAS LOKAL";
+  if (/script\.google(usercontent)?\.com$/.test(location.hostname || "")) return "APPS SCRIPT";
+  return "WEB";
+}
+
+function ujiTulis(judul, status, ket) {
+  UJI.hasil.push({ judul: judul, status: status, ket: ket || "" });
+  const kotak = typeof document !== "undefined" && document.getElementById ? document.getElementById("ujiIsi") : null;
+  if (!kotak) return;
+  const d = document.createElement("div");
+  d.className = "ujirow";
+  d.innerHTML = '<span class="ujiik" style="color:' + (UJI_WARNA[status] || UJI_WARNA.info) + '">' +
+    (UJI_IKON[status] || UJI_IKON.info) + '</span><div><b>' + esc(judul) + '</b>' +
+    (ket ? '<div class="ujiket">' + esc(ket) + '</div>' : '') + '</div>';
+  kotak.appendChild(d);
+  const bar = document.getElementById("ujiBar");
+  if (bar) bar.style.width = Math.min(100, Math.round(UJI.hasil.length / UJI_TOTAL_LANGKAH * 100)) + "%";
+  const mb = document.querySelector("#modal .mbody");
+  if (mb) mb.scrollTop = mb.scrollHeight;
+}
+
+function bukaPeriksaSinkron() {
+  UJI.hasil = [];
+  openModal("Pemeriksaan sinkron",
+    '<div class="tiny muted" style="margin:-6px 0 12px">Menguji kirim dan terima ke Google Sheets</div>' +
+    '<div class="ujibar"><i id="ujiBar"></i></div>' +
+    '<div id="ujiIsi"><div class="note">Tekan <b>Mulai periksa</b>. Pemeriksaan mengirim satu catatan uji ke Spreadsheet, ' +
+    'membacanya kembali, lalu menghapusnya lagi. Data asli tidak tersentuh dan data di perangkat ini tidak ditimpa.</div></div>',
+    '<button class="btn" id="ujiTutup">Tutup</button>' +
+    '<button class="btn" id="ujiSalin">Salin hasil</button>' +
+    '<button class="btn p" id="ujiGo">Mulai periksa</button>');
+  $("#ujiTutup").onclick = closeModal;
+  $("#ujiSalin").onclick = salinHasilUji;
+  $("#ujiGo").onclick = jalankanUjiSinkron;
+}
+
+function salinHasilUji() {
+  if (!UJI.hasil.length) return toast("Belum ada hasil untuk disalin.", "err");
+  const tanda = { ok: "[ OK ]", gagal: "[GAGAL]", peringatan: "[ ! ]", info: "[  - ]" };
+  const teks = ["PEMERIKSAAN SINKRON — HBM IPCS v" + APP_VERSI,
+    "Waktu   : " + new Date().toLocaleString("id-ID"),
+    "Pengguna: " + ((S.user && S.user.user_name) || "-"), ""]
+    .concat(UJI.hasil.map(h => (tanda[h.status] || tanda.info) + " " + h.judul + (h.ket ? "\n         " + h.ket : "")))
+    .join("\n");
+  const manual = () => {
+    const ta = document.createElement("textarea");
+    ta.value = teks; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* peramban lama */ }
+    ta.remove();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(teks).then(() => toast("Hasil disalin.", "ok"), () => { manual(); toast("Hasil disalin.", "ok"); });
+  } else { manual(); toast("Hasil disalin.", "ok"); }
+}
+
+async function jalankanUjiSinkron() {
+  if (UJI.jalan) return;
+  UJI.jalan = true; UJI.hasil = [];
+  SYNC.jalan = true;                       /* tahan sinkron otomatis selama pemeriksaan */
+  const tombol = $("#ujiGo");
+  if (tombol) { tombol.disabled = true; tombol.textContent = "Memeriksa\u2026"; }
+  const kotak = $("#ujiIsi"); if (kotak) kotak.innerHTML = "";
+  const bar = $("#ujiBar"); if (bar) bar.style.width = "0";
+  try {
+    await periksaSinkron(ujiTulis);
+  } catch (e) {
+    ujiTulis("Pemeriksaan berhenti", "gagal", "Kesalahan tak terduga: " + ((e && e.message) ? e.message : String(e)));
+  } finally {
+    UJI.jalan = false; SYNC.jalan = false;
+    if ($("#ujiBar")) $("#ujiBar").style.width = "100%";
+    if ($("#ujiGo")) { $("#ujiGo").disabled = false; $("#ujiGo").textContent = "Periksa lagi"; }
+  }
+}
+
+/* Inti pemeriksaan. Dipisah dari tampilan supaya bisa diuji sendiri. */
+async function periksaSinkron(T) {
+  const sy = (DB.config && DB.config.sync) || {};
+
+  /* --- 1. jati diri perangkat --------------------------------- */
+  T("Versi aplikasi", "info", "v" + APP_VERSI + " \u00b7 mode " + modeJalan());
+  if (typeof navigator !== "undefined" && navigator && navigator.onLine === false)
+    T("Perangkat sedang luring", "gagal", "Tidak ada internet. Sambungkan dulu, lalu periksa lagi.");
+
+  /* --- 2. alamat Web App -------------------------------------- */
+  const url = String(sy.url || "").trim();
+  if (!url) {
+    T("Alamat Web App", "gagal", "Belum diisi. Isi kolom Alamat Web App lalu tekan Simpan pengaturan.");
+    return T("Pemeriksaan berhenti", "info", "Sisa pemeriksaan tidak dapat dijalankan tanpa alamat server.");
+  }
+  T("Alamat server", "info", url.length > 70 ? url.slice(0, 70) + "\u2026" : url);
+  if (/\/dev\s*$/.test(url))
+    T("Bentuk alamat Web App", "gagal", "Alamat berakhiran /dev hanya bisa dibuka oleh pemilik skrip. HP Admin Site akan selalu gagal. Pakai alamat penerapan yang berakhiran /exec.");
+  else if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(url))
+    T("Bentuk alamat Web App", "peringatan", "Bentuknya tidak seperti alamat Web App Apps Script yang biasa. Seharusnya https://script.google.com/macros/s/\u2026/exec");
+  else
+    T("Bentuk alamat Web App", "ok", "Berakhiran /exec.");
+
+  /* --- 3. kata sandi ------------------------------------------ */
+  if (!String(sy.token || "").trim()) {
+    T("Kata sandi sinkronisasi", "gagal", "Masih kosong, jadi perangkat ini belum pernah menyatu dengan Spreadsheet. Buka Code.gs, salin isi TOKEN, tempel di kolom Kata sandi sinkronisasi, lalu tekan Simpan pengaturan.");
+    return T("Pemeriksaan berhenti", "info", "Server akan menolak setiap kiriman selama kata sandi kosong.");
+  }
+  T("Kata sandi sinkronisasi", "ok", "Terisi di perangkat ini.");
+
+  /* --- 4. ping ------------------------------------------------- */
+  const png = await serverCall({ action: "ping" }, 30000);
+  if (!png || !png.ok) {
+    const pesan = (png && png.pesan) || "Server tidak menjawab.";
+    T("Menghubungi server (ping)", "gagal", pesan);
+    T("Saran", "info", /sandi|token/i.test(pesan)
+      ? "Kata sandi di aplikasi berbeda dengan TOKEN di Code.gs. Samakan persis, termasuk huruf besar-kecilnya."
+      : "Periksa internet, lalu pastikan Web App masih diterapkan dengan akses \"Anyone\" dan alamatnya sesuai penerapan terakhir. Setiap kali Code.gs diubah, penerapan harus diperbarui.");
+    return T("Pemeriksaan berhenti", "info", "Langkah berikutnya membutuhkan sambungan ke server.");
+  }
+  T("Menghubungi server (ping)", "ok", "Server menjawab. Spreadsheet: " + (png.sheet || "-"));
+
+  const versiServer = String(png.versi || "");
+  if (!versiServer)
+    T("Versi Code.gs tidak diketahui", "peringatan", "Code.gs yang terpasang belum melaporkan versinya, jadi kemungkinan besar lebih lama dari aplikasi ini (v" +
+      APP_VERSI + "). Unggah Code.gs terbaru lalu terapkan ulang.");
+  else if (versiServer !== APP_VERSI)
+    T("Versi Code.gs berbeda", "peringatan", "Aplikasi v" + APP_VERSI + ", Code.gs v" + versiServer +
+      ". Sebaiknya keduanya sama supaya perilakunya bisa ditebak.");
+  else
+    T("Versi Code.gs cocok", "ok", "Aplikasi dan server sama-sama v" + APP_VERSI + ".");
+
+  /* --- 5. tarik seluruh data ---------------------------------- */
+  const tarik = await serverCall({ action: "pull" }, 120000);
+  if (!tarik || !tarik.ok || !tarik.tables) {
+    T("Mengambil data dari Spreadsheet", "gagal", (tarik && tarik.pesan) || "Server tidak mengirimkan data.");
+    return T("Pemeriksaan berhenti", "info", "Perbandingan data tidak dapat dilakukan.");
+  }
+  const srv = tarik.tables;
+
+  const takDikenal = SYNC_TABLES.filter(t => !Array.isArray(srv[t]));
+  if (takDikenal.length)
+    T("Code.gs di server sudah ketinggalan", "gagal", "Server tidak mengenal tabel: " + takDikenal.join(", ") +
+      ". Data tabel itu tidak akan pernah tersimpan. Unggah Code.gs terbaru ke Apps Script, jalankan penerapan ulang, lalu periksa lagi.");
+  else
+    T("Daftar tabel server cocok", "ok", SYNC_TABLES.length + " tabel dikenali server, sama dengan aplikasi ini.");
+
+  const isi = SYNC_TABLES.filter(t => (srv[t] || []).length).map(t => t + ": " + srv[t].length);
+  T("Mengambil data dari Spreadsheet", "ok", isi.length ? isi.join(" \u00b7 ") : "Semua lembar masih kosong.");
+
+  /* --- 6. bandingkan perangkat ini dengan server -------------- */
+  const beda = []; let totalLokal = 0, totalServer = 0;
+  SYNC_TABLES.forEach(t => {
+    const kunci = SYNC_KEY[t];
+    const idLokal = (DB[t] || []).map(r => String(r[kunci] || "")).filter(Boolean);
+    const idServer = (srv[t] || []).map(r => String(r[kunci] || "")).filter(Boolean);
+    totalLokal += idLokal.length; totalServer += idServer.length;
+    const setL = new Set(idLokal), setS = new Set(idServer);
+    let hanyaL = 0, hanyaS = 0;
+    setL.forEach(k => { if (!setS.has(k)) hanyaL++; });
+    setS.forEach(k => { if (!setL.has(k)) hanyaS++; });
+    if (hanyaL || hanyaS) beda.push(t + " (" +
+      (hanyaL ? hanyaL + " hanya di sini" : "") + (hanyaL && hanyaS ? ", " : "") +
+      (hanyaS ? hanyaS + " hanya di server" : "") + ")");
+  });
+  if (!beda.length)
+    T("Jumlah baris sama", "ok", "Server dan perangkat ini sudah sama: " + totalLokal + " baris.");
+  else
+    T("Ada baris yang belum menyatu", "peringatan", "Perangkat ini " + totalLokal + " baris, server " +
+      totalServer + " baris. " + beda.join(" \u00b7 ") + ". Tekan Sinkronkan sekarang untuk menyatukannya.");
+
+  /* --- 7. mutu data di perangkat ini --------------------------- */
+  let tanpaTs = 0; const ganda = [];
+  SYNC_TABLES.forEach(t => {
+    const kunci = SYNC_KEY[t], hitung = {};
+    (DB[t] || []).forEach(r => {
+      if (!r._ts) tanpaTs++;
+      const id = String(r[kunci] || ""); if (!id) return;
+      hitung[id] = (hitung[id] || 0) + 1;
+    });
+    Object.keys(hitung).forEach(id => { if (hitung[id] > 1) ganda.push(t + "/" + id); });
+  });
+  if (tanpaTs)
+    T("Sebagian baris belum berpenanda waktu", "info", tanpaTs + " baris. Penandanya dipasang otomatis begitu Sinkronkan sekarang ditekan.");
+  else
+    T("Semua baris berpenanda waktu", "ok", "Penilaian mana yang lebih baru dapat dilakukan dengan benar.");
+  if (ganda.length)
+    T("Ada nomor ganda di perangkat ini", "peringatan", ganda.slice(0, 5).join(", ") +
+      (ganda.length > 5 ? " dan " + (ganda.length - 5) + " lagi" : "") + ". Baris bernomor sama akan saling menimpa saat digabung.");
+
+  const antre = (DB.photos || []).filter(f => String(f.file_url || "").indexOf("data:") === 0).length;
+  if (antre)
+    T("Foto menunggu diunggah", "peringatan", antre + " foto masih tersimpan di perangkat ini dan belum ada di Drive. Foto terkirim saat Sinkronkan sekarang ditekan.");
+  else
+    T("Tidak ada foto tertahan", "ok", "Semua foto sudah berada di Drive.");
+
+  const tunda = (DB.deleted || []).length;
+  if (tunda)
+    T("Penghapusan menunggu dikirim", "info", tunda + " baris yang Anda hapus belum disampaikan ke server, jadi masih terlihat di perangkat lain sampai Sinkronkan ditekan.");
+
+  /* --- 8. kirim catatan uji ----------------------------------- */
+  /* Nomor uji harus benar-benar unik: nomor yang pernah dihapus akan ditolak
+     server, jadi tidak boleh terulang meski dua pemeriksaan berdekatan. */
+  const idUji = "UJI-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const capUji = new Date().toISOString();
+  const tsUji = Date.now();
+  const barisUji = {
+    action_id: idUji, action: "CATATAN UJI SINKRON \u2014 dihapus otomatis", owner: "SISTEM",
+    decision_by: "", due_date: today(), status: "UJI", closed_by: "", closed_date: "",
+    remarks: capUji, _ts: tsUji
+  };
+  const kirim = await serverCall({ action: "push", tables: { actions: [barisUji] }, deleted: [] }, 120000);
+  if (!kirim || !kirim.ok) {
+    T("Mengirim catatan uji", "gagal", (kirim && kirim.pesan) || "Server menolak kiriman.");
+    return T("Pemeriksaan berhenti", "info", "Kiriman dari perangkat ini tidak diterima server.");
+  }
+  T("Mengirim catatan uji", "ok", "ID " + idUji);
+
+  const balik = ((kirim.tables && kirim.tables.actions) || []).filter(r => String(r.action_id) === idUji)[0];
+  if (!balik) {
+    T("Catatan uji TIDAK kembali", "gagal", "Server menerima kiriman tetapi tidak menyimpannya. Masalahnya di Code.gs / Spreadsheet, bukan di aplikasi ini.");
+  } else {
+    T("Catatan uji kembali dari server", "ok", "Kirim dan terima berjalan normal.");
+
+    const tsSama = String(balik._ts || "") === String(tsUji);
+    if (tsSama)
+      T("Penanda waktu ikut tersimpan", "ok", "Perubahan dari perangkat lain dapat dinilai mana yang lebih baru.");
+    else
+      T("Penanda waktu hilang saat disimpan", "gagal", "Kolom _ts tidak kembali utuh (dikirim " + tsUji +
+        ", kembali \"" + String(balik._ts || "") + "\"). Akibatnya perubahan pada baris lama tidak menyebar ke perangkat lain \u2014 data akan tampak berbeda-beda.");
+
+    const capUtuh = String(balik.remarks || "") === capUji;
+    if (capUtuh)
+      T("Tanggal-dan-jam bertahan utuh", "ok", "Google Sheets tidak memangkas kolom berisi waktu.");
+    else
+      T("Tanggal-dan-jam dipangkas Spreadsheet", "peringatan", "Dikirim \"" + capUji + "\", kembali \"" +
+        String(balik.remarks || "") + "\". Jam pengajuan laporan dan jam foto bisa hilang sebagian.");
+  }
+
+  /* --- 9. periksa jam pada data yang sudah ada ---------------- */
+  const KOLOM_WAKTU = { dailies: "submitted_at", photos: "taken_at", reviews: "timestamp", audit: "timestamp" };
+  let potong = 0, contoh = "";
+  Object.keys(KOLOM_WAKTU).forEach(t => {
+    const kol = KOLOM_WAKTU[t];
+    (srv[t] || []).forEach(r => {
+      const v = String(r[kol] == null ? "" : r[kol]);
+      if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) { potong++; if (!contoh) contoh = t + "." + kol + " = " + v; }
+    });
+  });
+  if (potong)
+    T("Ada jam yang sudah terpangkas di Spreadsheet", "peringatan", potong + " baris hanya menyimpan tanggal tanpa jam (contoh " +
+      contoh + "). Isinya tidak hilang, tetapi jamnya tidak dapat dipulihkan.");
+  else
+    T("Jam pada data lama masih utuh", "ok", "Tidak ditemukan kolom waktu yang terpangkas.");
+
+  /* --- 10. hapus catatan uji ---------------------------------- */
+  const buang = await serverCall({
+    action: "push", tables: { actions: [] },
+    deleted: [{ table: "actions", id: idUji, ts: Date.now() }]
+  }, 120000);
+  if (!buang || !buang.ok) {
+    T("Mengirim perintah hapus", "gagal", (buang && buang.pesan) || "Server menolak perintah hapus.");
+    T("Sisa catatan uji", "peringatan", "Baris " + idUji + " masih tertinggal di lembar actions. Hapus manual bila mengganggu.");
+  } else {
+    const masih = ((buang.tables && buang.tables.actions) || []).some(r => String(r.action_id) === idUji);
+    if (masih) {
+      T("Perintah hapus TIDAK dijalankan", "gagal", "Baris uji masih ada di Spreadsheet. Inilah sebabnya data yang Anda hapus bisa hidup lagi di perangkat lain. Perlu perbaikan di Code.gs.");
+    } else {
+      T("Perintah hapus dijalankan", "ok", "Penghapusan menyebar dengan benar.");
+
+      /* Uji terpenting untuk keluhan \"data beda-beda\": apakah server MENGINGAT
+         penghapusan? Bila tidak, HP yang salinannya masih lama akan mengirim
+         balik baris yang sudah dihapus, dan baris itu hidup lagi. */
+      const balikLagi = await serverCall({ action: "push", tables: { actions: [barisUji] }, deleted: [] }, 120000);
+      if (!balikLagi || !balikLagi.ok) {
+        T("Menguji penghapusan diingat", "peringatan", (balikLagi && balikLagi.pesan) || "Server tidak menjawab pada percobaan ini.");
+      } else {
+        const hidup = ((balikLagi.tables && balikLagi.tables.actions) || []).some(r => String(r.action_id) === idUji);
+        if (hidup) {
+          T("Baris terhapus bisa hidup lagi", "gagal", "Server tidak mengingat penghapusan. Perangkat yang belum sempat menarik data akan mengembalikan baris yang sudah Anda hapus, sehingga isi laptop dan HP tidak pernah sama. Perlu Code.gs v1.4 yang menyimpan catatan penghapusan.");
+          await serverCall({ action: "push", tables: { actions: [] }, deleted: [{ table: "actions", id: idUji, ts: Date.now() }] }, 120000);
+        } else {
+          T("Penghapusan diingat server", "ok", "Baris yang sudah dihapus ditolak masuk lagi" +
+            (balikLagi.nisan ? " (" + balikLagi.nisan + " catatan penghapusan tersimpan)" : "") +
+            ". Laptop dan HP akan tetap sama isinya.");
+        }
+      }
+    }
+  }
+
+  /* --- 11. pengguna & PIN ------------------------------------- */
+  const aktif = v => (v === true || v === 1 || v === "TRUE" || v === "true" || v === "1");
+  /* Gambaran gabungan: keadaan pengguna sesudah Sinkronkan ditekan. */
+  const petaUser = {};
+  (srv.users || []).forEach(u => { if (u.user_id) petaUser[u.user_id] = u; });
+  (DB.users || []).forEach(u => { if (u.user_id) petaUser[u.user_id] = u; });
+  const semuaUser = Object.keys(petaUser).map(k => petaUser[k]);
+
+  const pcServer = (srv.users || []).filter(u => u.role === "PROJECT_CONTROL" && aktif(u.active)).length;
+  const pcGabung = semuaUser.filter(u => u.role === "PROJECT_CONTROL" && aktif(u.active)).length;
+  if (pcServer)
+    T("Akun Project Control ada di server", "ok", pcServer + " akun aktif.");
+  else if (pcGabung)
+    T("Akun Project Control belum sampai ke server", "peringatan", "Akun itu baru ada di perangkat ini. Tekan Sinkronkan sekarang, supaya Anda tetap bisa masuk dari perangkat lain.");
+  else
+    T("Tidak ada Project Control aktif", "gagal", "Tidak ada akun berperan Project Control yang aktif, baik di server maupun di perangkat ini.");
+
+  const petaPin = {}; const pinKembar = [];
+  semuaUser.forEach(u => {
+    const k = String(u.pin == null ? "" : u.pin); if (!k) return;
+    (petaPin[k] = petaPin[k] || []).push(u.user_name || u.user_id);
+  });
+  Object.keys(petaPin).forEach(k => { if (petaPin[k].length > 1) pinKembar.push(petaPin[k].join(" & ")); });
+  if (pinKembar.length)
+    T("Ada PIN yang dipakai lebih dari satu orang", "gagal", pinKembar.join(" \u00b7 ") +
+      ". Layar masuk mengenali orang dari PIN saja, jadi yang kedua tidak akan pernah bisa masuk. Ganti salah satunya di Pengaturan \u203a Pengguna.");
+  else
+    T("Setiap PIN unik", "ok", semuaUser.length + " pengguna, tidak ada PIN kembar.");
+
+  const nolDepan = semuaUser.filter(u => /^0/.test(String(u.pin == null ? "" : u.pin))).length;
+  if (nolDepan)
+    T("Ada PIN berawalan angka nol", "peringatan", nolDepan + " PIN. Google Sheets membuang nol di depan, sehingga PIN seperti 0123 berubah menjadi 123 setelah sinkron dan pemiliknya tidak bisa masuk lagi. Ganti dengan PIN yang tidak diawali nol.");
+
+  /* --- 12. besar data ----------------------------------------- */
+  let besar = 0;
+  try { besar = JSON.stringify(DB).length; } catch (e) { besar = 0; }
+  const mb = besar / 1048576;
+  if (mb > 6)
+    T("Besar data perangkat ini", "peringatan", mb.toFixed(2) + " MB \u2014 mendekati batas kiriman Apps Script. Sinkronkan agar foto pindah ke Drive, lalu unduh cadangan dan bersihkan data lama.");
+  else
+    T("Besar data perangkat ini", "ok", mb.toFixed(2) + " MB, masih jauh dari batas kiriman.");
+
+  T("Pemeriksaan selesai", "info", "Tekan \"Salin hasil\" bila perlu dikirimkan untuk ditindaklanjuti.");
+}
+
 VIEWS.master = {
   html() {
     const tab = S.tab || "tank";
@@ -2697,6 +3059,7 @@ VIEWS.settings = {
         <button class="btn" id="syTest">Uji koneksi</button>
         <button class="btn" id="sySetup">Siapkan lembar di Spreadsheet</button>
         <button class="btn p" id="syGo">Sinkronkan sekarang</button>
+        <button class="btn" id="syPeriksa">Periksa sinkron</button>
         <button class="btn" id="sySave">Simpan pengaturan</button>
       </div>
       <div id="syMsg" class="mt12"></div>
@@ -2828,13 +3191,14 @@ VIEWS.settings = {
         c.sync.token = $("#syTok").value.trim();
         c.sync.auto = $("#syAuto").checked;
       };
-      const sibuk = t => { ["syTest", "sySetup", "syGo", "sySave"].forEach(i => { if ($("#" + i)) $("#" + i).disabled = t; }); };
+      const sibuk = t => { ["syTest", "sySetup", "syGo", "syPeriksa", "sySave"].forEach(i => { if ($("#" + i)) $("#" + i).disabled = t; }); };
 
       $("#sySave").onclick = () => {
         ambilIsian(); save(); aturAutoSync();
         audit("UPDATE", "26_SYSTEM_CONFIG", "sync", "", c.sync.url ? "diatur" : "dikosongkan");
         kabar("Pengaturan sinkronisasi tersimpan.", "");
       };
+      $("#syPeriksa").onclick = () => { ambilIsian(); save(); bukaPeriksaSinkron(); };
       $("#syTest").onclick = async () => {
         ambilIsian(); save();
         if (!syncSiap()) return kabar("Isi alamat Web App dan kata sandinya lebih dulu.", "stop");
