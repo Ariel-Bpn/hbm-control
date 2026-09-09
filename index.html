@@ -297,6 +297,9 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
 .sidesync.kuning b{color:#F6D9A8}
 .sidesync.merah{border-left-color:var(--red);background:rgba(178,58,47,.2)}
 .sidesync.merah b{color:#F3BDB6}
+.btn.danger{border-color:var(--red);color:var(--red);background:var(--red-soft)}
+.btn.danger:hover{background:var(--red);color:#fff}
+.mfoot .btn.danger{margin-right:auto}
 
 </style>
 </head>
@@ -376,7 +379,7 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "1.6";
+const APP_VERSI = "1.7";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
 const CODEGS_VERSI = "1.5";
@@ -728,6 +731,48 @@ function audit(action, table, record_id, oldv, newv, reason) {
    Faktor atap bawaan: CRT (cone) 1,05 · FRT (floating) 1,00 · DRT (dome) 1,12.
    Perlengkapan mencakup handrail, tangga, pipa FW, foam chamber, water drencher.
    ============================================================ */
+/* Pilihan siap pakai untuk kolom yang selama ini diketik bebas. Semuanya
+   tetap bisa diketik sendiri — daftar ini hanya menawarkan yang lazim,
+   supaya penulisannya seragam antar orang dan antar bulan. */
+const PAKET_KERJA = [
+  "PERSIAPAN / MOBILISASI",
+  "SURFACE PREPARATION",
+  "RINSE & RUST INHIBITOR",
+  "PAINTING / COATING",
+  "SUPPORT / TANGGA / BORDES",
+  "HOUSEKEEPING / TKDN CLOSURE",
+  "FULL PACKAGE (persiapan s/d coating)"
+];
+const REF_INSTRUKSI = [
+  "SPK Pertamina",
+  "Surat Instruksi Kerja",
+  "Nota Dinas",
+  "Notulen Rapat Mingguan",
+  "Email PIC Pertamina",
+  "Instruksi Lisan (dikonfirmasi tertulis)"
+];
+const SUMBER_TARGET = [
+  "Monthly Schedule",
+  "Master Schedule Kontrak",
+  "Rencana Kerja Mingguan",
+  "Revisi Schedule",
+  "Instruksi Pertamina",
+  "Hasil Rapat Mingguan",
+  "Perhitungan Internal HBM"
+];
+
+/* Membuat daftar pilihan untuk sebuah kolom ketik. Isinya gabungan daftar
+   bawaan dengan nilai yang sudah pernah dipakai, supaya istilah yang sudah
+   terlanjur dipakai di lapangan ikut tertawarkan. */
+function daftarPilihan(idDaftar, bawaan, terpakai) {
+  const semua = [];
+  (bawaan || []).concat(terpakai || []).forEach(v => {
+    const t = String(v == null ? "" : v).trim();
+    if (t && semua.indexOf(t) < 0) semua.push(t);
+  });
+  return `<datalist id="${idDaftar}">${semua.map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
+}
+
 const TANK_TYPES = [
   { k: "CRT", t: "CRT — cone roof" },
   { k: "FRT", t: "FRT — floating roof" },
@@ -2546,8 +2591,19 @@ function aturAutoSync() {
 /* Sinkron yang berjalan sendiri, tanpa mengganggu layar. Kiriman berkala yang
    tidak membawa perubahan apa pun tetap berguna: server membalas dengan
    seluruh data terbaru, jadi perubahan orang lain ikut turun ke sini. */
+/* Apakah ada jendela isian yang sedang terbuka. */
+function modalTerbuka() {
+  const m = typeof document !== "undefined" ? document.getElementById("mask") : null;
+  return !!(m && m.classList.contains("on"));
+}
+
 async function sinkronDiamDiam(alasan) {
   if (SYNC.jalan || !syncSiap()) return { ok: false, pesan: "Belum siap." };
+  /* Selama jendela isian terbuka, seluruh baris tidak boleh diganti oleh data
+     dari server: jendela itu memegang acuan ke baris yang sedang diubah, dan
+     kalau barisnya diganti objek baru, isian yang ditekan Simpan akan hilang
+     tanpa pesan apa pun. Kiriman ditunda sampai jendelanya ditutup. */
+  if (modalTerbuka()) { jadwalkanKirim(); return { ok: false, pesan: "Ditunda, ada jendela isian terbuka." }; }
   if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, pesan: "Perangkat luring." };
   const r = await syncNow(null, { hanyaKotor: true });
   if (r.ok) {
@@ -3126,7 +3182,7 @@ VIEWS.master = {
         <th colspan="3"></th></tr></tfoot></table></div>`;
 
     if (tab === "wo") body = `
-      <div class="row"><span class="small muted grow">WO diterbitkan dari pusat kendali HBM. WO lama tidak dihapus — gunakan revisi atau WO tambahan.</span>
+      <div class="row"><span class="small muted grow">WO diterbitkan dari pusat kendali HBM. Hanya WO berstatus <b>ISSUED</b> yang bisa dipakai membuat laporan harian — WO berstatus DRAFT belum terbaca di layar lapangan.</span>
         <button class="btn a sm" id="mNew">+ Work Order</button></div>
       <div class="tw mt12"><table><thead><tr><th>Nomor WO</th><th>Tanki / Area</th><th>Paket</th><th>Terbit</th>
         <th class="n">Approved</th><th>Penugasan Palda</th><th>Status</th><th></th></tr></thead>
@@ -3181,6 +3237,69 @@ VIEWS.master = {
     $$("[data-ed]").forEach(b => b.onclick = () => masterModal(tab, b.dataset.ed));
   }
 };
+/* Baris mana yang harus diisi saat Simpan ditekan. Kalau sinkron sempat
+   berjalan sementara jendela terbuka, seluruh baris diganti objek baru dan
+   acuan yang dipegang jendela menjadi yatim — isian akan hilang diam-diam.
+   Karena itu barisnya dicari ulang berdasarkan nomornya saat menyimpan. */
+function sasaranSimpan(arr, kunci, id, cadangan) {
+  if (!id) return cadangan;
+  const baris = byId(arr, kunci, id);
+  if (baris) return baris;
+  toast("Baris ini sudah tidak ada — mungkin dihapus dari perangkat lain. Tutup jendela ini lalu periksa kembali.", "err");
+  return null;
+}
+
+/* Peta tabel master, dipakai tombol Hapus. */
+const MASTER_TABEL = {
+  area:   { arr: () => DB.areas,   kunci: "area_id",   tabel: "areas",   log: "02_AREA_MASTER",  nama: "area",  label: r => r.area_name },
+  tank:   { arr: () => DB.tanks,   kunci: "tank_id",   tabel: "tanks",   log: "03_TANK_MASTER",  nama: "tanki", label: r => r.tank_no },
+  wo:     { arr: () => DB.wos,     kunci: "wo_id",     tabel: "wos",     log: "04_WORK_ORDER",   nama: "work order", label: r => r.wo_no },
+  scope:  { arr: () => DB.scopes,  kunci: "scope_id",  tabel: "scopes",  log: "05_SCOPE_MASTER", nama: "scope", label: r => r.scope_code },
+  target: { arr: () => DB.targets, kunci: "target_id", tabel: "targets", log: "06_TARGET_PLAN",  nama: "target", label: r => r.period }
+};
+
+/* Alasan sebuah baris master tidak boleh dihapus. Baris yang sudah dipakai
+   di tempat lain tidak dihapus, supaya tidak ada laporan atau tagihan yang
+   menggantung tanpa induk. */
+function alasanTakBolehHapus(tab, id) {
+  const pakai = [];
+  const hitung = (arr, kolom, nama) => {
+    const n = (arr || []).filter(r => r[kolom] === id).length;
+    if (n) pakai.push(n + " " + nama);
+  };
+  if (tab === "area") hitung(DB.tanks, "area_id", "tanki");
+  if (tab === "tank") { hitung(DB.wos, "tank_id", "work order"); hitung(DB.dailies, "tank_id", "laporan harian"); }
+  if (tab === "wo") {
+    hitung(DB.scopes, "wo_id", "scope"); hitung(DB.dailies, "wo_id", "laporan harian");
+    hitung(DB.targets, "wo_id", "target"); hitung(DB.verifications, "wo_id", "verifikasi");
+    hitung(DB.billables, "wo_id", "baris layak tagih"); hitung(DB.billings, "wo_id", "tagihan");
+  }
+  if (tab === "scope") { hitung(DB.progress, "scope_id", "baris progress"); hitung(DB.verifications, "scope_id", "verifikasi"); }
+  return pakai.length ? pakai.join(", ") : "";
+}
+
+function hapusMaster(tab, id) {
+  const M = MASTER_TABEL[tab]; if (!M) return;
+  const baris = byId(M.arr(), M.kunci, id);
+  if (!baris) return toast("Baris sudah tidak ada.", "err");
+
+  const alasan = alasanTakBolehHapus(tab, id);
+  if (alasan) return toast("Tidak bisa dihapus: masih dipakai oleh " + alasan + ". Ubah atau hapus itu dulu.", "err");
+
+  if (!confirmBox("Hapus " + M.nama + " \"" + (M.label(baris) || id) + "\" ?\n\n" +
+    "Penghapusan ini juga berlaku di Spreadsheet dan di perangkat lain begitu tersinkron, dan tidak bisa dibatalkan.")) return;
+
+  tandaiHapus(M.tabel, id);
+  const arr = M.arr();
+  const i = arr.findIndex(r => r[M.kunci] === id);
+  if (i >= 0) arr.splice(i, 1);
+  audit("DELETE", M.log, id, M.label(baris) || "", "");
+  save();
+  closeModal();
+  render();
+  toast(M.nama.charAt(0).toUpperCase() + M.nama.slice(1) + " dihapus.", "ok");
+}
+
 function masterModal(tab, id) {
   let body = "", title = "", onSave = null;
 
@@ -3193,9 +3312,10 @@ function masterModal(tab, id) {
       <label class="f"><span>Status</span><select id="xSt"><option ${a.status === "Aktif" ? "selected" : ""}>Aktif</option><option ${a.status !== "Aktif" ? "selected" : ""}>Nonaktif</option></select></label>
       <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(a.notes)}"></label></div>`;
     onSave = () => {
-      Object.assign(a, { area_code: $("#xCode").value, area_name: $("#xName").value, status: $("#xSt").value, notes: $("#xNote").value });
-      if (!a.area_code || !a.area_name) return toast("Kode dan nama area wajib diisi.", "err");
-      if (!id) DB.areas.push(a); audit(id ? "UPDATE" : "CREATE", "02_AREA_MASTER", a.area_id, "", a.area_name); return true;
+      const rec = sasaranSimpan(DB.areas, "area_id", id, a); if (!rec) return false;
+      Object.assign(rec, { area_code: $("#xCode").value, area_name: $("#xName").value, status: $("#xSt").value, notes: $("#xNote").value });
+      if (!rec.area_code || !rec.area_name) return toast("Kode dan nama area wajib diisi.", "err");
+      if (!id) DB.areas.push(rec); audit(id ? "UPDATE" : "CREATE", "02_AREA_MASTER", rec.area_id, "", rec.area_name); return true;
     };
   }
 
@@ -3222,14 +3342,15 @@ function masterModal(tab, id) {
       <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(t.notes || "")}"></label>
       <div id="xLuas" class="mt12"></div>`;
     onSave = () => {
-      Object.assign(t, {
+      const rec = sasaranSimpan(DB.tanks, "tank_id", id, t); if (!rec) return false;
+      Object.assign(rec, {
         tank_no: $("#xNo").value, area_id: $("#xArea").value, tank_type: $("#xType").value,
         shell_diameter_m: nz($("#xD").value), tank_height_m: nz($("#xH").value),
         baseline_qty: nz($("#xQ").value), baseline_unit: $("#xU").value,
         scope_status: $("#xSs").value, revision: $("#xRev").value, notes: $("#xNote").value
       });
-      if (!t.tank_no) return toast("Nomor tanki wajib diisi.", "err");
-      if (!id) DB.tanks.push(t); audit(id ? "UPDATE" : "CREATE", "03_TANK_MASTER", t.tank_id, "", t.tank_no); return true;
+      if (!rec.tank_no) return toast("Nomor tanki wajib diisi.", "err");
+      if (!id) DB.tanks.push(rec); audit(id ? "UPDATE" : "CREATE", "03_TANK_MASTER", rec.tank_id, "", rec.tank_no); return true;
     };
   }
 
@@ -3245,8 +3366,8 @@ function masterModal(tab, id) {
       <label class="f"><span>Nomor WO <em>*</em></span><input type="text" id="xNo" value="${esc(w.wo_no)}"></label>
       <label class="f"><span>Tanki <em>*</em></span><select id="xTank">${opts(DB.tanks, w.tank_id, t => t.tank_id, t => t.tank_no + " — " + areaName(t.area_id))}</select></label>
       <label class="f"><span>Tanggal terbit</span><input type="date" id="xDt" value="${esc(w.issue_date)}"></label>
-      <label class="f"><span>Paket pekerjaan <em>*</em></span><input type="text" id="xWp" value="${esc(w.work_package)}" placeholder="Surface preparation / Coating"></label>
-      <label class="f"><span>Referensi instruksi</span><input type="text" id="xRef" value="${esc(w.instruction_ref)}"></label>
+      <label class="f"><span>Paket pekerjaan <em>*</em></span><input type="text" id="xWp" list="dlPaket" autocomplete="off" value="${esc(w.work_package)}" placeholder="pilih atau ketik sendiri"></label>
+      <label class="f"><span>Referensi instruksi</span><input type="text" id="xRef" list="dlRef" autocomplete="off" value="${esc(w.instruction_ref)}" placeholder="pilih atau ketik sendiri"></label>
       <label class="f"><span>Status</span><select id="xSt">${opts(["DRAFT", "ISSUED", "CLOSED", "CANCELLED"].map(x => ({ x })), w.status, o => o.x, o => o.x)}</select></label>
       <label class="f"><span>Volume disetujui</span><input type="number" step="any" id="xQ" value="${w.approved_qty}"></label>
       <label class="f"><span>Satuan</span><input type="text" id="xU" value="${esc(w.unit)}"></label>
@@ -3260,10 +3381,13 @@ function masterModal(tab, id) {
       <label class="f"><span>Batas waktu</span><input type="date" id="xPd" value="${esc(w.palda_due)}"></label>
       <label class="f"><span>PIC pelaksana</span><input type="text" id="xPp" value="${esc(w.palda_pic)}"></label>
     </div>
-    <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(w.notes || "")}"></label>`;
+    <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(w.notes || "")}"></label>
+    ${daftarPilihan("dlPaket", PAKET_KERJA, DB.wos.map(x => x.work_package).concat(DB.scopes.map(x => x.scope_description)))}
+    ${daftarPilihan("dlRef", REF_INSTRUKSI, DB.wos.map(x => x.instruction_ref).concat(DB.documents.map(x => x.document_no)))}`;
     onSave = () => {
       const t = tankOf($("#xTank").value);
-      Object.assign(w, {
+      const rec = sasaranSimpan(DB.wos, "wo_id", id, w); if (!rec) return false;
+      Object.assign(rec, {
         wo_no: $("#xNo").value, tank_id: $("#xTank").value, area_id: t ? t.area_id : "",
         issue_date: $("#xDt").value, work_package: $("#xWp").value, instruction_ref: $("#xRef").value,
         status: $("#xSt").value, approved_qty: nz($("#xQ").value), unit: $("#xU").value, revision: $("#xRev").value,
@@ -3271,10 +3395,13 @@ function masterModal(tab, id) {
         palda_target_qty: nz($("#xPq").value), palda_due: $("#xPd").value, palda_pic: $("#xPp").value,
         notes: $("#xNote").value
       });
-      if (!w.wo_no) return toast("Nomor WO wajib diisi.", "err");
-      if (!w.work_package) return toast("Paket pekerjaan wajib diisi.", "err");
-      if (DB.wos.some(x => x.wo_id !== w.wo_id && x.wo_no === w.wo_no)) return toast("Nomor WO sudah dipakai.", "err");
-      if (!id) DB.wos.push(w); audit(id ? "UPDATE" : "CREATE", "04_WORK_ORDER", w.wo_id, "", w.wo_no + " " + w.status); return true;
+      if (!rec.wo_no) return toast("Nomor WO wajib diisi.", "err");
+      if (!rec.work_package) return toast("Paket pekerjaan wajib diisi.", "err");
+      if (DB.wos.some(x => x.wo_id !== rec.wo_id && x.wo_no === rec.wo_no)) return toast("Nomor WO sudah dipakai.", "err");
+      if (!id) DB.wos.push(rec);
+      audit(id ? "UPDATE" : "CREATE", "04_WORK_ORDER", rec.wo_id, "", rec.wo_no + " " + rec.status);
+      if (rec.status !== "ISSUED") toast("WO tersimpan berstatus " + rec.status + ". Laporan harian hanya bisa dibuat untuk WO berstatus ISSUED.", "err");
+      return true;
     };
   }
 
@@ -3299,14 +3426,15 @@ function masterModal(tab, id) {
       <div class="note">Data komersial internal. Tidak pernah ditampilkan pada wajah Admin Site.</div>` : ""}`;
     onSave = () => {
       const w = woOf($("#xWo").value);
-      Object.assign(s, {
+      const rec = sasaranSimpan(DB.scopes, "scope_id", id, s); if (!rec) return false;
+      Object.assign(rec, {
         wo_id: $("#xWo").value, tank_id: w ? w.tank_id : "", scope_code: $("#xCode").value,
         scope_description: $("#xDesc").value, unit: $("#xU").value, approved_qty: nz($("#xQ").value),
         revision: $("#xRev").value, status: $("#xSt").value
       });
-      if (can("money")) { s.contract_rate = nz($("#xR1").value); s.palda_rate = nz($("#xR2").value); }
-      if (!s.scope_code || !s.scope_description) return toast("Kode dan uraian scope wajib diisi.", "err");
-      if (!id) DB.scopes.push(s); audit(id ? "UPDATE" : "CREATE", "05_SCOPE_MASTER", s.scope_id, "", s.scope_code); return true;
+      if (can("money")) { rec.contract_rate = nz($("#xR1").value); rec.palda_rate = nz($("#xR2").value); }
+      if (!rec.scope_code || !rec.scope_description) return toast("Kode dan uraian scope wajib diisi.", "err");
+      if (!id) DB.scopes.push(rec); audit(id ? "UPDATE" : "CREATE", "05_SCOPE_MASTER", rec.scope_id, "", rec.scope_code); return true;
     };
   }
 
@@ -3321,20 +3449,27 @@ function masterModal(tab, id) {
       <label class="f"><span>WO</span><select id="xWo">${opts(DB.wos, t.wo_id, w => w.wo_id, w => w.wo_no)}</select></label>
       <label class="f"><span>Rencana volume</span><input type="number" step="any" id="xQ" value="${t.planned_qty}"></label>
       <label class="f"><span>Rencana %</span><input type="number" step="any" id="xP" value="${t.planned_pct}"></label>
-      <label class="f"><span>Sumber</span><input type="text" id="xSrc" value="${esc(t.source)}"></label>
-      <label class="f"><span>Revisi</span><input type="text" id="xRev" value="${esc(t.revision)}"></label></div>`;
+      <label class="f"><span>Sumber</span><input type="text" id="xSrc" list="dlSumber" autocomplete="off" value="${esc(t.source)}" placeholder="pilih atau ketik sendiri"></label>
+      <label class="f"><span>Revisi</span><input type="text" id="xRev" value="${esc(t.revision)}"></label></div>
+      <div class="note">Kolom <b>Sumber</b> mencatat dari mana angka rencana ini berasal, supaya nanti bisa ditelusuri
+        kalau angkanya dipertanyakan. Pilih yang paling mendekati, atau ketik sendiri.</div>
+      ${daftarPilihan("dlSumber", SUMBER_TARGET, DB.targets.map(x => x.source))}`;
     onSave = () => {
-      Object.assign(t, {
+      const rec = sasaranSimpan(DB.targets, "target_id", id, t); if (!rec) return false;
+      Object.assign(rec, {
         period: $("#xPer").value, wo_id: $("#xWo").value, planned_qty: nz($("#xQ").value),
         planned_pct: nz($("#xP").value), source: $("#xSrc").value, revision: $("#xRev").value
       });
-      if (!/^\d{4}-\d{2}$/.test(t.period)) return toast("Periode harus berformat YYYY-MM.", "err");
-      if (!id) DB.targets.push(t); audit(id ? "UPDATE" : "CREATE", "06_TARGET_PLAN", t.target_id, "", t.period); return true;
+      if (!/^\d{4}-\d{2}$/.test(rec.period)) return toast("Periode harus berformat YYYY-MM.", "err");
+      if (!id) DB.targets.push(rec); audit(id ? "UPDATE" : "CREATE", "06_TARGET_PLAN", rec.target_id, "", rec.period); return true;
     };
   }
 
-  openModal(title, body, `<button class="btn p" id="xSave">Simpan</button>`);
+  openModal(title, body,
+    (id ? `<button class="btn danger" id="xHapus">Hapus</button>` : "") +
+    `<button class="btn p" id="xSave">Simpan</button>`);
   $("#xSave").onclick = () => { if (onSave() !== false) { save(); closeModal(); render(); } };
+  if (id && $("#xHapus")) $("#xHapus").onclick = () => hapusMaster(tab, id);
 
   /* Rincian luas eksterior dihitung langsung saat tipe, diameter, atau tinggi
      diubah, supaya angkanya bisa dibandingkan dengan lembar Excel sebelum disimpan. */
