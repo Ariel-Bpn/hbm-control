@@ -379,10 +379,10 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "1.8";
+const APP_VERSI = "1.9";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
-const CODEGS_VERSI = "1.6";
+const CODEGS_VERSI = "1.7";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -633,7 +633,7 @@ function pasangSyncBawaan() {
 /* Naik versi tanpa menghapus data yang sudah ada */
 function migrate() {
   if (!DB.meta || !DB.dailies) { DB = seed(); return; }
-  if (DB.meta.version === "1.8") return;
+  if (DB.meta.version === "1.9") return;
   DB.reviews = DB.reviews || [];
   DB.deleted = DB.deleted || [];
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
@@ -658,7 +658,7 @@ function migrate() {
   if (DB.config.acc_pct == null) DB.config.acc_pct = 10;
   if (nz(DB.config.tank_target) < 13) DB.config.tank_target = 13;
   migrasiSPK();
-  DB.meta.version = "1.8";
+  DB.meta.version = "1.9";
   save();
 }
 
@@ -715,6 +715,7 @@ function migrasiSPK() {
     }
     b.vol_shell = nz(b.vol_shell); b.vol_acc = nz(b.vol_acc); b.vol_roof = nz(b.vol_roof);
     if (b.bakp_qty == null) b.bakp_qty = 0;
+    b.scan_url = b.scan_url || "";
     b.approved_qty = b.vol_shell + b.vol_acc + b.vol_roof;
     /* BAMK warisan belum punya SPK induk, jadi tidak boleh langsung aktif
        di lapangan — diturunkan ke DRAFT sampai SPK-nya dimasukkan. */
@@ -3006,6 +3007,64 @@ async function serverCall(payload, timeoutMs) {
 
 /* Foto diunggah satu per satu ke Drive, lalu tautannya menggantikan data mentah
    agar penyimpanan perangkat tidak penuh dan Spreadsheet tetap ringan. */
+/* Unggah pindaian surat (SPK / BAMK / BAKP) ke folder Drive khusus dokumen.
+   Izin baca dipasang di sisi server, jadi tautannya langsung bisa dibuka siapa
+   pun yang memegangnya — tidak ada lagi "Minta akses". */
+const DOK_MAKS_MB = 8;
+function unggahDokumen(file, kabar, selesai) {
+  if (!file) return;
+  if (!syncSiap()) return toast("Unggahan butuh sambungan ke server. Isi kata sandi sinkronisasi dulu.", "err");
+  const mb = file.size / 1048576;
+  if (mb > DOK_MAKS_MB)
+    return toast("Berkas " + fmt(mb, 1) + " MB, melebihi batas " + DOK_MAKS_MB + " MB. Pindai ulang dengan mutu lebih rendah.", "err");
+  const jenisOk = /pdf$/i.test(file.type) || /^image\//.test(file.type);
+  if (!jenisOk) return toast("Hanya PDF atau foto yang bisa diunggah.", "err");
+
+  const baca = new FileReader();
+  baca.onerror = () => toast("Berkas gagal dibaca.", "err");
+  baca.onload = async () => {
+    if (kabar) kabar("Mengunggah " + fmt(mb, 1) + " MB\u2026");
+    try {
+      const r = await serverCall({ action: "dokumen", nama: file.name, data: baca.result }, 180000);
+      if (!r || !r.ok) throw new Error((r && r.pesan) || "ditolak server");
+      selesai(r.file_url, r.nama || file.name);
+      toast("Pindaian tersimpan di Drive.", "ok");
+    } catch (e) {
+      if (kabar) kabar("");
+      toast("Unggahan gagal: " + e.message, "err");
+    }
+  };
+  baca.readAsDataURL(file);
+}
+
+/* Kotak seragam untuk kolom pindaian surat: tombol unggah, tombol buka,
+   dan tetap menyediakan tempel tautan manual bagi yang sudah punya. */
+function kotakPindaian(idInput, nilai, label) {
+  return `<label class="f"><span>${esc(label)}</span>
+    <input type="text" id="${idInput}" value="${esc(nilai || "")}" placeholder="unggah berkas, atau tempel tautan Drive"></label>
+  <div class="row" style="margin-top:-6px">
+    <label class="btn a sm">Unggah pindaian
+      <input type="file" id="${idInput}File" accept="application/pdf,image/*" hidden></label>
+    <button type="button" class="btn sm" id="${idInput}Buka">Buka berkas</button>
+    <span class="tiny muted" id="${idInput}Ket">PDF atau foto, maksimal ${DOK_MAKS_MB} MB. Izin baca dipasang otomatis.</span>
+  </div>`;
+}
+function pasangPindaian(idInput) {
+  const inp = $("#" + idInput), berkas = $("#" + idInput + "File"),
+    buka = $("#" + idInput + "Buka"), ket = $("#" + idInput + "Ket");
+  if (!inp) return;
+  const kabar = t => { if (ket) ket.textContent = t || ("PDF atau foto, maksimal " + DOK_MAKS_MB + " MB. Izin baca dipasang otomatis."); };
+  if (berkas) berkas.onchange = e => {
+    const f = e.target.files[0]; e.target.value = "";
+    unggahDokumen(f, kabar, (url, nama) => { inp.value = url; kabar("Tersimpan: " + nama); });
+  };
+  if (buka) buka.onclick = () => {
+    const u = (inp.value || "").trim();
+    if (!u) return toast("Belum ada tautan pindaian.", "err");
+    window.open(u, "_blank");
+  };
+}
+
 async function unggahFoto(lapor) {
   const antre = DB.photos.filter(p => String(p.file_url || "").indexOf("data:") === 0);
   for (let i = 0; i < antre.length; i++) {
@@ -3744,7 +3803,9 @@ VIEWS.master = {
       let sisa = null;
       if (x.finish_date) sisa = Math.round((new Date(x.finish_date + "T00:00:00") - new Date(today() + "T00:00:00")) / 86400000);
       const kritis = sisa !== null && sisa <= nz(DB.config.spk_alarm_h);
-      return `<tr><td><b>${esc(x.spk_no || "—")}</b><div class="tiny muted">${esc(x.contract_no || "tanpa no. kontrak")}</div></td>
+      return `<tr><td><b>${esc(x.spk_no || "—")}</b><div class="tiny muted">${esc(x.contract_no || "tanpa no. kontrak")}</div>
+        ${x.scan_url ? `<a class="tiny" href="${esc(x.scan_url)}" target="_blank" rel="noopener">surat terpindai &rsaquo;</a>`
+          : `<span class="tiny" style="color:var(--amber)">pindaian belum ada</span>`}</td>
         <td class="tiny">${it.length ? it.map(i => esc(tankNo(i.tank_id))).join(", ") : `<span class="muted">belum ada tanki</span>`}</td>
         <td class="tiny num">${esc(x.start_date || "—")} &rarr; ${esc(x.finish_date || "—")}<div class="muted">${nz(x.duration_days)} hari kalender</div></td>
         <td class="n ${kritis ? "" : "tiny"}" ${kritis ? `style="color:var(--red);font-weight:700"` : ""}>${sisa === null ? "—" : (sisa < 0 ? "lewat " + (-sisa) : sisa)}</td>
@@ -3765,7 +3826,9 @@ VIEWS.master = {
       <tbody>${DB.bamk.length ? DB.bamk.map(w => {
       const p = persenBamk(w.bamk_id), sp = spkOf(w.spk_id);
       const yatim = !sp;
-      return `<tr><td><b>${esc(w.bamk_no || "—")}</b><div class="tiny muted">${esc(w.bamk_id)}</div></td>
+      return `<tr><td><b>${esc(w.bamk_no || "—")}</b>
+        ${w.scan_url ? `<a class="tiny" href="${esc(w.scan_url)}" target="_blank" rel="noopener">BAMK terpindai &rsaquo;</a>`
+          : `<div class="tiny muted">${esc(w.bamk_id)}</div>`}</td>
         <td class="tiny">${yatim ? `<span style="color:var(--red)">belum ditautkan</span>` : esc(sp.spk_no)}</td>
         <td>${esc(tankNo(w.tank_id))}<div class="tiny muted">${esc(areaName(w.area_id))}</div></td>
         <td class="num tiny">${esc(w.bamk_date || "—")}</td>
@@ -3984,7 +4047,7 @@ function masterModal(tab, id) {
       <label class="f"><span>Ditandatangani</span><input type="text" id="xTtd" value="${esc(x.signed_by)}" placeholder="nama penanda tangan"></label>
       <label class="f"><span>Jabatan</span><input type="text" id="xJab" value="${esc(x.signed_title)}" placeholder="Section Head Maintenance Area 4"></label>
     </div>
-    <label class="f"><span>Tautan salinan surat (opsional)</span><input type="text" id="xScan" value="${esc(x.scan_url)}" placeholder="tautan Drive ke hasil pindai SPK"></label>
+    ${kotakPindaian("xScan", x.scan_url, "Pindaian surat SPK")}
     <h4 class="mt12">Tanki yang diperintahkan <span class="tiny muted">satu baris per Tag No. pada surat</span></h4>
     <div class="note ${id ? "" : "warn"}">${id ? `Centang tanki yang masuk lingkup SPK ini.` : `Simpan dulu SPK-nya, baru daftar tanki dapat dicentang.`}</div>
     ${id ? `<div class="tw mt8" style="max-height:260px;overflow:auto"><table><thead><tr><th></th><th>Tanki</th><th>Area</th><th class="n">Luas eksterior</th><th>Uraian pekerjaan</th></tr></thead>
@@ -4043,7 +4106,7 @@ function masterModal(tab, id) {
       tank_id: "", area_id: "", bamk_date: today(), issue_date: today(),
       work_package: "PENGECATAN EKSTERIOR", instruction_ref: "",
       vol_shell: 0, vol_acc: 0, vol_roof: 0, approved_qty: 0, bakp_qty: 0, unit: "m2",
-      status: "DRAFT", revision: "R0", palda_target_qty: 0, palda_due: "", palda_pic: "",
+      status: "DRAFT", revision: "R0", palda_target_qty: 0, palda_due: "", palda_pic: "", scan_url: "",
       planned_start: today(), planned_finish: "", notes: ""
     };
     /* Tanki yang boleh dipilih hanya yang tercantum pada SPK terpilih. */
@@ -4080,6 +4143,7 @@ function masterModal(tab, id) {
       <label class="f"><span>Batas waktu</span><input type="date" id="xPd" value="${esc(w.palda_due)}"></label>
       <label class="f"><span>PIC pelaksana</span><input type="text" id="xPp" value="${esc(w.palda_pic)}"></label>
     </div>
+    ${kotakPindaian("xScan", w.scan_url, "Pindaian BAMK yang sudah ditandatangani")}
     <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(w.notes || "")}"></label>
     ${daftarPilihan("dlPaket", PAKET_KERJA, DB.bamk.map(z => z.work_package))}`;
     onSave = () => {
@@ -4092,7 +4156,7 @@ function masterModal(tab, id) {
         vol_shell: nz($("#xVs").value), vol_acc: nz($("#xVa").value), vol_roof: nz($("#xVr").value),
         bakp_qty: nz($("#xBakp").value), unit: $("#xU").value, revision: $("#xRev").value,
         palda_target_qty: nz($("#xPq").value), palda_due: $("#xPd").value, palda_pic: $("#xPp").value,
-        notes: $("#xNote").value
+        scan_url: $("#xScan").value.trim(), notes: $("#xNote").value
       });
       const sp = spkOf(rec.spk_id);
       rec.planned_start = sp ? sp.start_date : rec.planned_start;
@@ -4209,6 +4273,8 @@ function masterModal(tab, id) {
     `<button class="btn p" id="xSave">Simpan</button>`);
   $("#xSave").onclick = () => { if (onSave() !== false) { save(); closeModal(); render(); } };
   if (id && $("#xHapus")) $("#xHapus").onclick = () => hapusMaster(tab, id);
+
+  if (tab === "spk" || tab === "bamk") pasangPindaian("xScan");
 
   /* --- SPK: durasi dihitung sendiri dari tmt mulai dan selesai --- */
   if (tab === "spk") {
