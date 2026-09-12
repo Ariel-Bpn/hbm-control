@@ -379,10 +379,10 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "1.7";
+const APP_VERSI = "1.8";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
-const CODEGS_VERSI = "1.5";
+const CODEGS_VERSI = "1.6";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -500,6 +500,27 @@ const PENGAWAS_LIST = ["Pengawas HBM", "Pengawas Pertamina", "Project Control HB
 const UNIT_KEPUTUSAN = ["Direktur", "Operasional", "Finance", "Marketing",
   "Project Control", "Site / Lapangan"];
 
+/* ---------- BAGIAN TANKI & TAHAPAN PENGECATAN ---------- */
+/* Tiga bagian ini mengikuti Berita Acara Mulai Kerja ke pelaksana:
+   Shell, Accessories, Roof — masing-masing punya volume sendiri. */
+const BAGIAN = [["SHELL", "Shell (dinding)"], ["ACC", "Accessories (perlengkapan)"], ["ROOF", "Roof (atap)"]];
+const bagianLabel = k => (BAGIAN.find(b => b[0] === k) || [k, k])[1];
+
+/* Tahapan bawaan. Jumlah, nama dan bobotnya dapat diubah sendiri di
+   Master Data > Tahapan, jadi angka di bawah hanya titik awal. */
+const TAHAP_BAWAAN = [["T1", "Persiapan permukaan", 40], ["T2", "Primer coat", 25], ["T3", "Finish coat", 35]];
+
+/* Dasar penghitungan target harian per tanki. */
+const DASAR_TARGET = [
+  ["KALENDER", "Hari kalender — sesuai bunyi SPK"],
+  ["KERJA", "Hari kerja — Minggu dikecualikan"],
+  ["KERJA_LIBUR", "Hari kerja — Minggu dan libur nasional dikecualikan"]
+];
+const dasarLabel = k => (DASAR_TARGET.find(x => x[0] === k) || DASAR_TARGET[0])[1];
+
+const STATUS_SPK = ["DRAFT", "TERBIT", "SELESAI", "BATAL"];
+const STATUS_BAMK = ["DRAFT", "AKTIF", "DITUTUP", "BATAL"];
+
 /* ---------- SEED ---------- */
 /* Menandai seluruh baris bawaan sebagai data pabrik: penanda waktu 1,
    yaitu tanggal paling tua yang mungkin, sehingga tidak pernah menimpa
@@ -542,20 +563,19 @@ function bangunBawaan() {
     notes: "Tanki tambahan OM Selatan — identitas resmi menunggu penerbitan."
   });
 
-  const wo = {
-    wo_id: "WO-0001", wo_no: "WO/HBM/CTG/2026/001", tank_id: "TK-01", area_id: A1,
-    issue_date: today(), work_package: "SURFACE PREPARATION", instruction_ref: "",
-    approved_qty: 0, unit: "m2", status: "ISSUED", revision: "R0",
-    palda_target_qty: 0, palda_due: "", palda_pic: "",
-    planned_start: today(), planned_finish: "", notes: "WO contoh untuk uji coba — sesuaikan atau hapus."
-  };
+  /* Tidak ada SPK/BAMK contoh: pekerjaan hanya boleh jalan setelah SPK asli
+     dari Pertamina dimasukkan. Yang dibawa sejak awal hanya daftar tahapan. */
+  const stages = TAHAP_BAWAAN.map((x, n) => ({
+    stage_id: "ST-" + String(n + 1).padStart(2, "0"), stage_code: x[0], stage_name: x[1],
+    weight_pct: x[2], sort_order: n + 1, active: true
+  }));
   const packs = [
     ["SP-01", "PERSIAPAN / MOBILISASI", "ls"], ["SP-02", "SURFACE PREPARATION", "m2"],
     ["SP-03", "RINSE & RUST INHIBITOR", "m2"], ["SP-04", "COATING", "m2"],
     ["SP-05", "SUPPORT / TANGGA / BORDES", "ls"], ["SP-06", "HOUSEKEEPING / TKDN CLOSURE", "ls"]
   ];
   const scopes = packs.map((p, n) => ({
-    scope_id: "SC-" + String(n + 1).padStart(3, "0"), wo_id: "WO-0001", tank_id: "TK-01",
+    scope_id: "SC-" + String(n + 1).padStart(3, "0"), bamk_id: "", tank_id: "",
     scope_code: p[0], scope_description: p[1], unit: p[2],
     contract_rate: 0, palda_rate: 0, approved_qty: 0, revision: "R0", status: "AKTIF"
   }));
@@ -571,12 +591,17 @@ function bangunBawaan() {
       status: "AKTIF", revision: "R0", tank_target: 13,
       alarm_waspada: 80, alarm_kritis: 90, logo: null, holidays: [],
       roof_factor: { CRT: 1.05, FRT: 1.00, DRT: 1.12 }, acc_pct: 10,
+      target_basis: "KALENDER",
+      party_two_name: "PT. PALDA SOLUSI SINERGI",
+      party_two_addr: "Jl. Sadar Raya No. 37, RT.8/RW.2, Kec. Jagakarsa, Jakarta Selatan 12630",
+      pertamina_supervisor: "Pengawas MA-4 PT Pertamina Patra Niaga RU V",
+      spk_alarm_h: 7,
       sync: {
         url: SYNC_BAWAAN.url || "", token: SYNC_BAWAAN.token || "",
         auto: !!SYNC_BAWAAN.url, last: ""
       }
     },
-    areas, tanks, wos: [wo], scopes, targets: [],
+    areas, tanks, spk: [], spk_item: [], bamk: [], stages, scopes, targets: [],
     dailies: [], progress: [], manpower: [], materials: [], photos: [], reviews: [], deleted: [],
     qc: [], hsse: [], issues: [], verifications: [], acceptances: [],
     billables: [], billings: [], documents: [], meetings: [], actions: [],
@@ -608,7 +633,7 @@ function pasangSyncBawaan() {
 /* Naik versi tanpa menghapus data yang sudah ada */
 function migrate() {
   if (!DB.meta || !DB.dailies) { DB = seed(); return; }
-  if (DB.meta.version === "1.5") return;
+  if (DB.meta.version === "1.8") return;
   DB.reviews = DB.reviews || [];
   DB.deleted = DB.deleted || [];
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
@@ -632,8 +657,90 @@ function migrate() {
   };
   if (DB.config.acc_pct == null) DB.config.acc_pct = 10;
   if (nz(DB.config.tank_target) < 13) DB.config.tank_target = 13;
-  DB.meta.version = "1.5";
+  migrasiSPK();
+  DB.meta.version = "1.8";
   save();
+}
+
+/* Naik dari rantai lama (WO terbitan HBM) ke rantai baru
+   SPK Pertamina > BAMK ke pelaksana > eksekusi.
+   Tidak ada data yang dibuang: baris WO lama menjadi baris BAMK dengan
+   nomor yang sama, dan seluruh laporan harian tetap menempel padanya. */
+function migrasiSPK() {
+  /* Tabel WO lama bernama "wos"; pindahkan isinya apa adanya. */
+  if (Array.isArray(DB.wos) && !Array.isArray(DB.bamk)) DB.bamk = DB.wos;
+  delete DB.wos;
+  DB.bamk = DB.bamk || [];
+  DB.spk = DB.spk || [];
+  DB.spk_item = DB.spk_item || [];
+
+  /* Tahapan: kalau belum ada, pasang tiga tahap bawaan. */
+  if (!Array.isArray(DB.stages) || !DB.stages.length) {
+    DB.stages = TAHAP_BAWAAN.map((x, n) => ({
+      stage_id: "ST-" + String(n + 1).padStart(2, "0"), stage_code: x[0], stage_name: x[1],
+      weight_pct: x[2], sort_order: n + 1, active: true
+    }));
+  }
+
+  /* Kolom baru pada BAMK. Kunci lama wo_id sudah diganti bamk_id di seluruh
+     tabel anak; baris lama yang masih memakai wo_id disalin ke sini. */
+  /* Migrasi berjalan sebelum sebagian besar fungsi bantu sempat terbentuk,
+     jadi hitungan luas di sini sengaja berdiri sendiri dan tidak memanggil
+     luasTanki() atau volDariTanki(). */
+  const rf = DB.config.roof_factor || { CRT: 1.05, FRT: 1.00, DRT: 1.12 };
+  const accP = DB.config.acc_pct == null ? 10 : nz(DB.config.acc_pct);
+  const luasLokal = tank_id => {
+    const t = (DB.tanks || []).filter(x => x.tank_id === tank_id)[0];
+    if (!t) return null;
+    const D = nz(t.shell_diameter_m), H = nz(t.tank_height_m);
+    if (D <= 0 || H <= 0) return null;
+    const shell = Math.PI * D * H;
+    const atap = 0.25 * Math.PI * D * D * (nz(rf[t.tank_type]) > 0 ? nz(rf[t.tank_type]) : 1);
+    return { shell: shell, roof: atap, acc: (shell + atap) * accP / 100 };
+  };
+
+  const petaStatus = { ISSUED: "AKTIF", DRAFT: "DRAFT", CLOSED: "DITUTUP", CANCELLED: "BATAL" };
+  DB.bamk.forEach(b => {
+    if (!b.bamk_id && b.wo_id) { b.bamk_id = b.wo_id; delete b.wo_id; }
+    if (!b.bamk_no && b.wo_no) { b.bamk_no = b.wo_no; delete b.wo_no; }
+    if (petaStatus[b.status]) b.status = petaStatus[b.status];
+    if (STATUS_BAMK.indexOf(b.status) < 0) b.status = "DRAFT";
+    b.spk_id = b.spk_id || "";
+    b.bamk_date = b.bamk_date || b.issue_date || "";
+    /* Volume per bagian: kalau belum diisi, ambil dari hitungan luas
+       eksterior tanki supaya angkanya tidak nol saat pertama dibuka. */
+    if (b.vol_shell == null && b.vol_acc == null && b.vol_roof == null) {
+      const v = luasLokal(b.tank_id);
+      if (v) { b.vol_shell = +v.shell.toFixed(2); b.vol_acc = +v.acc.toFixed(2); b.vol_roof = +v.roof.toFixed(2); }
+    }
+    b.vol_shell = nz(b.vol_shell); b.vol_acc = nz(b.vol_acc); b.vol_roof = nz(b.vol_roof);
+    if (b.bakp_qty == null) b.bakp_qty = 0;
+    b.approved_qty = b.vol_shell + b.vol_acc + b.vol_roof;
+    /* BAMK warisan belum punya SPK induk, jadi tidak boleh langsung aktif
+       di lapangan — diturunkan ke DRAFT sampai SPK-nya dimasukkan. */
+    if (b.status === "AKTIF" && !b.spk_id) { b.status = "DRAFT"; b.perlu_spk = true; }
+  });
+
+  /* Baris progress lama belum punya bagian dan tahap. Diberi nilai awal
+     Shell + tahap pertama supaya tetap terbaca, dan ditandai agar
+     Project Control tahu baris mana yang perlu ditinjau. */
+  const t1 = (DB.stages[0] || {}).stage_id || "";
+  DB.progress.forEach(p => {
+    if (!p.part) { p.part = "SHELL"; p.perlu_tinjau = true; }
+    if (!p.stage_id) { p.stage_id = t1; p.perlu_tinjau = true; }
+  });
+
+  /* Kunci tabel anak yang masih memakai nama lama. */
+  ["scopes", "targets", "dailies", "progress", "manpower", "materials", "photos", "qc",
+    "hsse", "issues", "verifications", "acceptances", "billables", "billings", "documents"]
+    .forEach(t => (DB[t] || []).forEach(r => {
+      if (r.bamk_id == null && r.wo_id != null) { r.bamk_id = r.wo_id; delete r.wo_id; }
+    }));
+
+  if (!DB.config.target_basis) DB.config.target_basis = "KALENDER";
+  if (!DB.config.party_two_name) DB.config.party_two_name = "PT. PALDA SOLUSI SINERGI";
+  if (!DB.config.pertamina_supervisor) DB.config.pertamina_supervisor = "Pengawas MA-4 PT Pertamina Patra Niaga RU V";
+  if (DB.config.spk_alarm_h == null) DB.config.spk_alarm_h = 7;
 }
 
 /* Peran Super Admin sudah dihapus dari sistem. Akun lama yang tersisa dari versi
@@ -804,11 +911,12 @@ function totalLuasEksterior() {
 }
 
 /* ---------- SINKRONISASI: daftar tabel & penanda hapus ---------- */
-const SYNC_TABLES = ["areas", "tanks", "wos", "scopes", "targets", "dailies", "progress",
+const SYNC_TABLES = ["areas", "tanks", "spk", "spk_item", "bamk", "stages", "scopes", "targets", "dailies", "progress",
   "manpower", "materials", "photos", "qc", "hsse", "issues", "verifications", "acceptances",
   "billables", "billings", "documents", "meetings", "actions", "reviews", "users", "audit"];
 const SYNC_KEY = {
-  areas: "area_id", tanks: "tank_id", wos: "wo_id", scopes: "scope_id", targets: "target_id",
+  areas: "area_id", tanks: "tank_id", spk: "spk_id", spk_item: "spk_item_id",
+  bamk: "bamk_id", stages: "stage_id", scopes: "scope_id", targets: "target_id",
   dailies: "daily_id", progress: "progress_id", manpower: "manpower_id", materials: "material_id",
   photos: "photo_id", qc: "inspection_id", hsse: "hsse_id", issues: "issue_id",
   verifications: "verification_id", acceptances: "acceptance_id", billables: "billable_id",
@@ -875,36 +983,130 @@ const byId = (arr, k, v) => arr.find(x => x[k] === v) || null;
 const areaName = id => { const a = byId(DB.areas, "area_id", id); return a ? a.area_name : "—"; };
 const tankNo = id => { const t = byId(DB.tanks, "tank_id", id); return t ? t.tank_no : "—"; };
 const tankOf = id => byId(DB.tanks, "tank_id", id);
-const woOf = id => byId(DB.wos, "wo_id", id);
-const woNo = id => { const w = woOf(id); return w ? w.wo_no : "—"; };
+const bamkOf = id => byId(DB.bamk, "bamk_id", id);
+const bamkNo = id => { const w = bamkOf(id); return w ? w.bamk_no : "—"; };
 const scopeOf = id => byId(DB.scopes, "scope_id", id);
 const userName = id => { const u = byId(DB.users, "user_id", id); return u ? u.user_name : id; };
-const activeWOs = () => DB.wos.filter(w => w.status === "ISSUED");
-const scopesOfWO = id => DB.scopes.filter(s => s.wo_id === id && s.status === "AKTIF");
+const bamkAktif = () => DB.bamk.filter(w => w.status === "AKTIF" && spkTerbit(w.spk_id));
+const scopesOfBamk = id => DB.scopes.filter(s => s.bamk_id === id && s.status === "AKTIF");
 
 /* aggregate helpers */
-function verifiedQtyOfWO(wo_id) {
-  return DB.verifications.filter(v => v.wo_id === wo_id && v.status === "VERIFIED")
+function verifiedQtyOfBamk(bamk_id) {
+  return DB.verifications.filter(v => v.bamk_id === bamk_id && v.status === "VERIFIED")
     .reduce((a, v) => a + nz(v.verified_qty), 0);
 }
-function acceptedQtyOfWO(wo_id) {
-  return DB.acceptances.filter(a => a.wo_id === wo_id && a.status === "ACCEPTED")
+function acceptedQtyOfBamk(bamk_id) {
+  return DB.acceptances.filter(a => a.bamk_id === bamk_id && a.status === "ACCEPTED")
     .reduce((a, x) => a + nz(x.accepted_qty), 0);
 }
-function actualQtyOfWO(wo_id) {
-  const ok = new Set(DB.dailies.filter(d => d.wo_id === wo_id && d.status !== "REJECTED").map(d => d.daily_id));
+function actualQtyOfBamk(bamk_id) {
+  const ok = new Set(DB.dailies.filter(d => d.bamk_id === bamk_id && d.status !== "REJECTED").map(d => d.daily_id));
   return DB.progress.filter(p => ok.has(p.daily_id)).reduce((a, p) => a + nz(p.actual_qty), 0);
 }
 function verifiedQtyOfTank(tank_id) {
-  return DB.wos.filter(w => w.tank_id === tank_id).reduce((a, w) => a + verifiedQtyOfWO(w.wo_id), 0);
+  return DB.bamk.filter(w => w.tank_id === tank_id).reduce((a, w) => a + verifiedQtyOfBamk(w.bamk_id), 0);
 }
-function billedOfWO(wo_id) {
-  return DB.billables.filter(b => b.wo_id === wo_id).reduce((a, b) => a + nz(b.billable_qty), 0);
+function billedOfBamk(bamk_id) {
+  return DB.billables.filter(b => b.bamk_id === bamk_id).reduce((a, b) => a + nz(b.billable_qty), 0);
 }
-function docsComplete(wo_id) {
-  const req = DB.documents.filter(d => d.wo_id === wo_id && d.required_for_billing);
+function docsComplete(bamk_id) {
+  const req = DB.documents.filter(d => d.bamk_id === bamk_id && d.required_for_billing);
   if (!req.length) return false;
   return req.every(d => d.status === "APPROVED" || d.status === "AVAILABLE");
+}
+
+/* ---------- SPK PERTAMINA ---------- */
+const spkOf = id => byId(DB.spk, "spk_id", id);
+const spkNo = id => { const x = spkOf(id); return x ? x.spk_no : "—"; };
+const spkItemsOf = id => DB.spk_item.filter(i => i.spk_id === id);
+const spkTerbit = id => { const x = spkOf(id); return !!x && (x.status === "TERBIT" || x.status === "SELESAI"); };
+/* Tanki yang sudah punya SPK terbit — dipakai untuk hitungan "volume terilis". */
+function tankiTerilis() {
+  const set = new Set();
+  DB.spk.filter(x => x.status === "TERBIT" || x.status === "SELESAI")
+    .forEach(x => spkItemsOf(x.spk_id).forEach(i => { if (i.in_scope !== false) set.add(i.tank_id); }));
+  return set;
+}
+function volumeTerilis() {
+  let v = 0; tankiTerilis().forEach(id => { const t = tankOf(id); const L = luasTanki(t); v += L ? L.total : nz(t && t.baseline_qty); });
+  return v;
+}
+
+/* ---------- BAMK: VOLUME PER BAGIAN ---------- */
+function volBagian(b, part) {
+  if (!b) return 0;
+  return part === "SHELL" ? nz(b.vol_shell) : part === "ACC" ? nz(b.vol_acc) : part === "ROOF" ? nz(b.vol_roof) : 0;
+}
+function volBamk(b) { return b ? nz(b.vol_shell) + nz(b.vol_acc) + nz(b.vol_roof) : 0; }
+/* Volume yang dipakai untuk tagihan: BAKP kalau sudah ada, kalau belum BAMK. */
+function volTagih(b) { return b ? (nz(b.bakp_qty) > 0 ? nz(b.bakp_qty) : volBamk(b)) : 0; }
+/* Isi volume bagian dari hitungan luas eksterior tanki. */
+function volDariTanki(tank_id) {
+  const L = luasTanki(tankOf(tank_id));
+  return L ? { shell: L.shell, acc: L.acc, roof: L.atap } : { shell: 0, acc: 0, roof: 0 };
+}
+
+/* ---------- TAHAPAN ---------- */
+const tahapOf = id => byId(DB.stages, "stage_id", id);
+const tahapAktif = () => (DB.stages || []).filter(t => t.active !== false)
+  .slice().sort((a, b) => nz(a.sort_order) - nz(b.sort_order));
+const bobotTahap = id => { const t = tahapOf(id); return t ? nz(t.weight_pct) : 0; };
+const totalBobot = () => tahapAktif().reduce((a, t) => a + nz(t.weight_pct), 0);
+/* Urutan tahap: tahap ke-n tidak boleh melampaui tahap ke-(n-1). */
+function tahapSebelum(stage_id) {
+  const list = tahapAktif(), i = list.findIndex(t => t.stage_id === stage_id);
+  return i > 0 ? list[i - 1] : null;
+}
+
+/* ---------- KUMULATIF PROGRESS ---------- */
+function dailyIdsOfBamk(bamk_id, kecuali) {
+  return new Set(DB.dailies.filter(d => d.bamk_id === bamk_id && d.status !== "REJECTED" &&
+    d.daily_id !== kecuali).map(d => d.daily_id));
+}
+function kumulatif(bamk_id, part, stage_id, kecuali) {
+  const ok = dailyIdsOfBamk(bamk_id, kecuali);
+  return DB.progress.filter(p => ok.has(p.daily_id) && p.part === part && p.stage_id === stage_id)
+    .reduce((a, p) => a + nz(p.actual_qty), 0);
+}
+/* Luas terbobot (m2 setara selesai) — dasar kurva-S dan penilaian progress. */
+function earnedBamk(bamk_id) {
+  const ok = dailyIdsOfBamk(bamk_id, null);
+  return DB.progress.filter(p => ok.has(p.daily_id))
+    .reduce((a, p) => a + nz(p.actual_qty) * bobotTahap(p.stage_id) / 100, 0);
+}
+function persenBamk(bamk_id) {
+  const b = bamkOf(bamk_id), v = volBamk(b);
+  return v > 0 ? Math.min(100, earnedBamk(bamk_id) / v * 100) : 0;
+}
+
+/* ---------- TARGET HARIAN DARI SPK ---------- */
+/* Jumlah hari rencana satu BAMK menurut dasar yang dipilih di Pengaturan. */
+function hariRencana(b) {
+  if (!b) return 0;
+  const sp = spkOf(b.spk_id);
+  const mulai = (sp && sp.start_date) || b.planned_start;
+  const akhir = (sp && sp.finish_date) || b.planned_finish;
+  if (!mulai || !akhir) return 0;
+  const a = new Date(mulai + "T00:00:00"), z = new Date(akhir + "T00:00:00");
+  if (z < a) return 0;
+  const dasar = DB.config.target_basis || "KALENDER";
+  const hol = new Set(DB.config.holidays || []);
+  let n = 0, c = new Date(a);
+  while (c <= z) {
+    const dw = c.getDay(), iso = c.toISOString().slice(0, 10);
+    if (dasar === "KALENDER") n++;
+    else if (dasar === "KERJA") { if (dw !== 0) n++; }
+    else { if (dw !== 0 && !hol.has(iso)) n++; }
+    c.setDate(c.getDate() + 1);
+  }
+  return n;
+}
+function targetHarian(b) { const h = hariRencana(b); return h > 0 ? volBamk(b) / h : 0; }
+/* Sisa hari sampai batas SPK; negatif berarti sudah lewat. */
+function sisaHariSPK(b) {
+  const sp = spkOf(b && b.spk_id); if (!sp || !sp.finish_date) return null;
+  const z = new Date(sp.finish_date + "T00:00:00"), n = new Date(today() + "T00:00:00");
+  return Math.round((z - n) / 86400000);
 }
 
 /* ---------- LOGIN ---------- */
@@ -1056,7 +1258,7 @@ const TITLES = {
   issues: ["Kendala & Delay", "Hambatan, dampak dan tindakan"],
   meeting: ["Rapat & Tindak Lanjut", "Notulen dan action tracker"],
   reports: ["Rekap & Laporan", "Harian, mingguan, bulanan"],
-  master: ["Master Data", "Area, tanki, WO, scope, target"],
+  master: ["Master Data", "Area, tanki, SPK, BAMK, tahapan, scope, target"],
   settings: ["Pengaturan", "Proyek, pengguna, kalender, cadangan"],
   audit: ["Log Audit", "Jejak perubahan data penting"],
   sync: ["Sinkronisasi", "Menyatukan data perangkat ini dengan kantor"]
@@ -1098,20 +1300,52 @@ function periodSeries() {
   DB.targets.forEach(t => set.add(t.period));
   DB.verifications.forEach(v => set.add(monthOf(v.verified_date)));
   DB.dailies.forEach(d => set.add(monthOf(d.report_date)));
+  /* Jendela waktu setiap SPK ikut membentuk sumbu periode, supaya garis
+     rencana terilis tetap terlihat walau belum ada realisasi sama sekali. */
+  DB.spk.filter(x => x.status === "TERBIT" || x.status === "SELESAI").forEach(x => {
+    if (x.start_date) set.add(monthOf(x.start_date));
+    if (x.finish_date) set.add(monthOf(x.finish_date));
+  });
   if (!set.size) set.add(monthOf(today()));
   const per = Array.from(set).sort();
+  const pagu = totalLuasEksterior();
   let cp = 0, ca = 0;
   return per.map(p => {
     cp += DB.targets.filter(t => t.period === p).reduce((a, t) => a + nz(t.planned_qty), 0);
     ca += DB.verifications.filter(v => v.status === "VERIFIED" && monthOf(v.verified_date) === p)
       .reduce((a, v) => a + nz(v.verified_qty), 0);
-    return { p, plan: cp, act: ca };
+    return { p, plan: cp, act: ca, rilis: rencanaTerilis(p), pagu: pagu };
   });
 }
+
+/* Rencana terilis: volume seluruh BAMK yang SPK-nya sudah terbit, disebar
+   rata sepanjang jangka waktu SPK masing-masing, dikumulatifkan sampai
+   akhir bulan yang diminta. Setiap SPK baru menambah garis ini sendiri —
+   itulah sebabnya rencana bersifat bergulir, bukan satu garis tetap. */
+function rencanaTerilis(periode) {
+  const akhirBulan = (() => {
+    const [y, m] = periode.split("-").map(Number);
+    return new Date(y, m, 0).toISOString().slice(0, 10);
+  })();
+  let total = 0;
+  DB.bamk.forEach(b => {
+    const sp = spkOf(b.spk_id);
+    if (!sp || (sp.status !== "TERBIT" && sp.status !== "SELESAI")) return;
+    const vol = volBamk(b);
+    if (vol <= 0 || !sp.start_date || !sp.finish_date) return;
+    if (akhirBulan < sp.start_date) return;
+    if (akhirBulan >= sp.finish_date) { total += vol; return; }
+    const hariTotal = Math.max(1, Math.round((new Date(sp.finish_date + "T00:00:00") - new Date(sp.start_date + "T00:00:00")) / 86400000) + 1);
+    const hariLewat = Math.round((new Date(akhirBulan + "T00:00:00") - new Date(sp.start_date + "T00:00:00")) / 86400000) + 1;
+    total += vol * Math.min(1, Math.max(0, hariLewat / hariTotal));
+  });
+  return total;
+}
+
 function svgCurve(rows) {
   if (rows.length < 1) return `<div class="empty">Belum ada data kurva.</div>`;
-  const W = 700, H = 220, pl = 46, pr = 14, pt = 14, pb = 30;
-  const max = Math.max(1, ...rows.map(r => Math.max(r.plan, r.act)));
+  const W = 700, H = 240, pl = 52, pr = 14, pt = 14, pb = 30;
+  const max = Math.max(1, ...rows.map(r => Math.max(r.plan, r.act, r.rilis, r.pagu)));
   const x = i => pl + (rows.length === 1 ? (W - pl - pr) / 2 : i * (W - pl - pr) / (rows.length - 1));
   const y = v => pt + (H - pt - pb) * (1 - v / max);
   const line = k => rows.map((r, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(r[k]).toFixed(1)).join(" ");
@@ -1123,15 +1357,26 @@ function svgCurve(rows) {
   }).join("");
   const labs = rows.map((r, i) => rows.length > 8 && i % 2 ? "" :
     `<text x="${x(i).toFixed(1)}" y="${H - 9}" font-size="9" fill="#7A8B99" text-anchor="middle">${r.p.slice(2)}</text>`).join("");
+  const adaPagu = rows[0].pagu > 0;
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}${labs}
+    ${adaPagu ? `<path d="${line("pagu")}" fill="none" stroke="#9AA7B2" stroke-width="1.5" stroke-dasharray="2 4"/>` : ""}
     <path d="${line("plan")}" fill="none" stroke="#1F5C99" stroke-width="2" stroke-dasharray="5 4"/>
+    <path d="${line("rilis")}" fill="none" stroke="#B5761F" stroke-width="2.5"/>
     <path d="${line("act")}" fill="none" stroke="#0E6E6B" stroke-width="2.5"/>
-    ${dots("plan", "#1F5C99")}${dots("act", "#0E6E6B")}</svg>
-    <div class="row tiny muted mt8"><span style="color:#1F5C99">▬ Rencana kumulatif</span><span style="color:#0E6E6B">▬ Terverifikasi kumulatif</span></div>`;
+    ${dots("rilis", "#B5761F")}${dots("act", "#0E6E6B")}</svg>
+    <div class="row tiny muted mt8">
+      ${adaPagu ? `<span style="color:#9AA7B2">▬ Pagu kontrak (13 tanki)</span>` : ""}
+      <span style="color:#1F5C99">▬ Rencana kontrak (target plan)</span>
+      <span style="color:#B5761F">▬ Rencana terilis (SPK)</span>
+      <span style="color:#0E6E6B">▬ Terverifikasi kumulatif</span></div>
+    <div class="tiny muted mt8">Garis <b>rencana terilis</b> hanya memuat tanki yang SPK-nya sudah terbit dan sudah ber-BAMK,
+      disebar rata sepanjang jangka waktu tiap SPK. Selisihnya terhadap pagu kontrak adalah bagian program yang
+      belum diperintahkan Pertamina — bukan keterlambatan pelaksana.</div>`;
 }
+
 VIEWS.dashboard = {
   html() {
-    const woAktif = activeWOs().length;
+    const woAktif = bamkAktif().length;
     const menunggu = DB.dailies.filter(d => d.status === "SUBMITTED").length;
     const bulan = monthOf(today());
     const actBulan = DB.dailies.filter(d => monthOf(d.report_date) === bulan && d.status !== "REJECTED")
@@ -1142,7 +1387,17 @@ VIEWS.dashboard = {
     const billReady = DB.billables.filter(b => b.gate_status === "READY").reduce((a, b) => a + nz(b.billable_qty), 0);
     const openIssue = DB.issues.filter(i => i.status !== "CLOSED").length;
     const outstanding = DB.billings.filter(b => b.status !== "PAID").reduce((a, b) => a + nz(b.billing_value), 0);
-    const tanksAktif = DB.tanks.filter(t => DB.wos.some(w => w.tank_id === t.tank_id && w.status === "ISSUED")).length;
+    const tanksAktif = DB.tanks.filter(t => DB.bamk.some(w => w.tank_id === t.tank_id && w.status === "AKTIF")).length;
+
+    /* Berapa bagian program yang sudah dilepas lewat SPK. Kalau progress
+       lambat karena SPK belum turun, angka ini yang menjelaskannya. */
+    const nTerilis = tankiTerilis().size, volRilis = volumeTerilis(), volPagu = totalLuasEksterior();
+
+    /* SPK yang mendekati atau sudah melewati batas waktu. */
+    const spkGenting = DB.spk.filter(x => x.status === "TERBIT" && x.finish_date).map(x => {
+      const sisa = Math.round((new Date(x.finish_date + "T00:00:00") - new Date(today() + "T00:00:00")) / 86400000);
+      return { x, sisa };
+    }).filter(r => r.sisa <= nz(DB.config.spk_alarm_h)).sort((a, b) => a.sisa - b.sisa);
 
     const alarm = DB.tanks.map(t => {
       const base = nz(t.baseline_qty), v = verifiedQtyOfTank(t.tank_id);
@@ -1152,7 +1407,9 @@ VIEWS.dashboard = {
     const money = can("money");
     return `
     <div class="grid g4">
-      <div class="kpi blue"><div class="eyebrow">WO aktif</div><div class="v">${woAktif}</div><div class="sub">${tanksAktif} tanki dalam eksekusi</div></div>
+      <div class="kpi blue"><div class="eyebrow">BAMK aktif</div><div class="v">${woAktif}</div><div class="sub">${tanksAktif} tanki dalam eksekusi</div></div>
+      <div class="kpi olive"><div class="eyebrow">Terilis lewat SPK</div><div class="v">${nTerilis} / ${DB.config.tank_target}</div>
+        <div class="sub">${fmt(volRilis, 0)} dari ${fmt(volPagu, 0)} m² (${fmt(pct(volRilis, volPagu), 1)}%)</div></div>
       <div class="kpi amber"><div class="eyebrow">Menunggu review</div><div class="v">${menunggu}</div><div class="sub">laporan harian diajukan</div></div>
       <div class="kpi olive"><div class="eyebrow">Realisasi bulan ini</div><div class="v">${fmt(qBulan, 1)}</div><div class="sub">${monthID(bulan)}</div></div>
       <div class="kpi teal"><div class="eyebrow">Terverifikasi kumulatif</div><div class="v">${fmt(ver, 1)}</div><div class="sub">telah diperiksa Project Control</div></div>
@@ -1162,7 +1419,22 @@ VIEWS.dashboard = {
       <div class="kpi red"><div class="eyebrow">Kendala terbuka</div><div class="v">${openIssue}</div><div class="sub">belum ditutup</div></div>
     </div>
 
-    <div class="card mt16"><h3>Kurva Progress — Rencana vs Terverifikasi</h3><div class="body">${svgCurve(periodSeries())}</div></div>
+    ${spkGenting.length ? `<div class="card mt16"><h3>SPK mendekati batas waktu
+      <span class="tiny muted">ambang ${nz(DB.config.spk_alarm_h)} hari, diatur di Pengaturan › Proyek</span></h3>
+      <div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Nomor SPK</th><th>Tanki</th><th>Batas</th><th class="n">Sisa hari</th><th class="n">Progress</th></tr></thead>
+      <tbody>${spkGenting.map(r => {
+      const bs = DB.bamk.filter(b => b.spk_id === r.x.spk_id);
+      const vol = bs.reduce((a, b) => a + volBamk(b), 0);
+      const earn = bs.reduce((a, b) => a + earnedBamk(b.bamk_id), 0);
+      return `<tr><td><b>${esc(r.x.spk_no)}</b></td>
+        <td class="tiny">${spkItemsOf(r.x.spk_id).map(i => esc(tankNo(i.tank_id))).join(", ") || "—"}</td>
+        <td class="num tiny">${esc(dateID(r.x.finish_date))}</td>
+        <td class="n" style="color:${r.sisa < 0 ? "var(--red)" : "var(--amber)"};font-weight:700">${r.sisa < 0 ? "lewat " + (-r.sisa) : r.sisa}</td>
+        <td class="n">${fmt(pct(earn, vol), 1)}%</td></tr>`;
+    }).join("")}</tbody></table></div></div></div>` : ""}
+
+    <div class="card mt16"><h3>Kurva Progress — Pagu, Rencana Terilis, dan Aktual</h3><div class="body">${svgCurve(periodSeries())}</div></div>
 
     <div class="card"><h3>Kendali Pagu Volume per Tanki
       <span class="tiny muted">Ambang: ≥${DB.config.alarm_waspada}% waspada · ≥${DB.config.alarm_kritis}% kritis</span></h3>
@@ -1182,7 +1454,7 @@ VIEWS.dashboard = {
       <div class="card"><h3>Kendala terbuka</h3><div class="body flush"><div class="tw"><table>
         <thead><tr><th>Tanggal</th><th>Tanki</th><th>Kendala</th><th>PIC</th></tr></thead><tbody>
         ${DB.issues.filter(i => i.status !== "CLOSED").slice(0, 8).map(i => `<tr>
-          <td class="num tiny">${esc(i.issue_date)}</td><td>${esc(tankNo(woOf(i.wo_id) ? woOf(i.wo_id).tank_id : ""))}</td>
+          <td class="num tiny">${esc(i.issue_date)}</td><td>${esc(tankNo(bamkOf(i.bamk_id) ? bamkOf(i.bamk_id).tank_id : ""))}</td>
           <td>${esc(i.description)}</td><td class="tiny">${esc(picText(i))}</td></tr>`).join("")
         || `<tr><td colspan="4"><div class="empty">Tidak ada kendala terbuka.</div></td></tr>`}
         </tbody></table></div></div></div>
@@ -1214,18 +1486,20 @@ function picText(i) {
 VIEWS["tanks-status"] = {
   html() {
     const rows = DB.tanks.map(t => {
-      const wos = DB.wos.filter(w => w.tank_id === t.tank_id);
-      const act = wos.reduce((a, w) => a + actualQtyOfWO(w.wo_id), 0);
-      const ver = wos.reduce((a, w) => a + verifiedQtyOfWO(w.wo_id), 0);
-      const acc = wos.reduce((a, w) => a + acceptedQtyOfWO(w.wo_id), 0);
-      const bil = wos.reduce((a, w) => a + billedOfWO(w.wo_id), 0);
-      let life = "Belum ada WO";
-      if (wos.length) life = "WO terbit";
+      const wos = DB.bamk.filter(w => w.tank_id === t.tank_id);
+      const act = wos.reduce((a, w) => a + actualQtyOfBamk(w.bamk_id), 0);
+      const ver = wos.reduce((a, w) => a + verifiedQtyOfBamk(w.bamk_id), 0);
+      const acc = wos.reduce((a, w) => a + acceptedQtyOfBamk(w.bamk_id), 0);
+      const bil = wos.reduce((a, w) => a + billedOfBamk(w.bamk_id), 0);
+      const punyaSpk = DB.spk_item.some(i => i.tank_id === t.tank_id && spkTerbit(i.spk_id));
+      let life = "Belum ada SPK";
+      if (punyaSpk) life = "SPK terbit";
+      if (wos.some(w => w.status === "AKTIF")) life = "BAMK aktif";
       if (act > 0) life = "Eksekusi";
       if (ver > 0) life = "Terverifikasi";
       if (acc > 0) life = "Diterima";
       if (bil > 0) life = "Layak tagih";
-      if (wos.length && wos.every(w => w.status === "CLOSED")) life = "Selesai";
+      if (wos.length && wos.every(w => w.status === "DITUTUP")) life = "Selesai";
       return { t, wos, act, ver, acc, bil, life };
     });
     const cnt = k => rows.filter(r => r.life === k).length;
@@ -1234,22 +1508,22 @@ VIEWS["tanks-status"] = {
       <div class="kpi"><div class="eyebrow">Target program</div><div class="v">${DB.config.tank_target}</div><div class="sub">tanki</div></div>
       <div class="kpi olive"><div class="eyebrow">Sedang dieksekusi</div><div class="v">${cnt("Eksekusi") + cnt("Terverifikasi")}</div><div class="sub">ada realisasi tercatat</div></div>
       <div class="kpi violet"><div class="eyebrow">Sudah diterima</div><div class="v">${cnt("Diterima") + cnt("Layak tagih")}</div><div class="sub">lolos gerbang penerimaan</div></div>
-      <div class="kpi amber"><div class="eyebrow">Belum ada WO</div><div class="v">${cnt("Belum ada WO")}</div><div class="sub">menunggu instruksi</div></div>
+      <div class="kpi amber"><div class="eyebrow">Belum ada SPK</div><div class="v">${cnt("Belum ada SPK")}</div><div class="sub">menunggu SPK Pertamina</div></div>
     </div>
-    <div class="note mt16">Tabel ini tidak diisi manual. Daftar tankinya berasal dari <b>Master Data › Tanki</b>, kolom WO dari
-      <b>Master Data › WO</b>, sedangkan angka realisasi sampai layak tagih dihitung sendiri dari laporan harian yang sudah
+    <div class="note mt16">Tabel ini tidak diisi manual. Daftar tankinya berasal dari <b>Master Data › Tanki</b>, kolom BAMK dari
+      <b>Master Data › SPK</b> dan <b>› BAMK</b>, sedangkan angka realisasi sampai layak tagih dihitung sendiri dari laporan harian yang sudah
       melewati tiap gerbang. Kalau ada yang salah, perbaiki di Master Data atau lewat gerbang terkait — tabel ini ikut berubah.</div>
     <div class="card mt16"><h3>Siklus hidup per tanki</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Tanki</th><th>Area</th><th>Status scope</th><th>WO</th>
+      <thead><tr><th>Tanki</th><th>Area</th><th>Status scope</th><th>BAMK</th>
       <th class="n">Realisasi</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Layak tagih</th><th>Tahapan</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td><b>${esc(r.t.tank_no)}</b><div class="tiny muted">${esc(r.t.tank_type)} · ${esc(r.t.baseline_unit || "")}</div></td>
         <td>${esc(areaName(r.t.area_id))}</td>
         <td><span class="b ${r.t.scope_status === "CONFIRMED" ? "teal" : "amber"}">${esc(r.t.scope_status)}</span></td>
-        <td class="tiny">${r.wos.map(w => esc(w.wo_no)).join("<br>") || "—"}</td>
+        <td class="tiny">${r.wos.map(w => esc(w.bamk_no)).join("<br>") || "—"}</td>
         <td class="n">${fmt(r.act, 1)}</td><td class="n">${fmt(r.ver, 1)}</td>
         <td class="n">${fmt(r.acc, 1)}</td><td class="n">${fmt(r.bil, 1)}</td>
-        <td><span class="b ${r.life === "Belum ada WO" ? "gray" : r.life === "Layak tagih" ? "teal" : "blue"}">${r.life}</span></td></tr>`).join("")}
+        <td><span class="b ${r.life === "Belum ada SPK" ? "gray" : r.life === "Layak tagih" ? "teal" : "blue"}">${r.life}</span></td></tr>`).join("")}
       </tbody></table></div></div></div>`;
   }
 };
@@ -1258,13 +1532,13 @@ VIEWS["tanks-status"] = {
    VIEW: BUAT LAPORAN HARIAN
    ============================================================ */
 function newDraft() {
-  const w = activeWOs()[0];
+  const w = bamkAktif()[0];
   return {
-    daily_id: null, report_date: today(), wo_id: w ? w.wo_id : "", weather: "Cerah", shift: "Pagi",
+    daily_id: null, report_date: today(), bamk_id: w ? w.bamk_id : "", weather: "Cerah", shift: "Pagi",
     general_notes: "", status: "DRAFT", revision_no: 0,
     supervisor_side: PENGAWAS[0], supervisor_name: "",
     progress: [], manpower: [], materials: [], photos: [],
-    qc: { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "" },
+    qc: { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "", ma4_known: false, ma4_date: "" },
     hsse: { permit_status: "", toolbox_status: "", fit_to_work: "", critical_finding: "", remarks: "" },
     issue: { category: "", description: "", impact: "", action: "", owner_side: "", owner: "" }
   };
@@ -1274,14 +1548,14 @@ function loadDraft(id) {
   const q = DB.qc.find(x => x.daily_id === id), h = DB.hsse.find(x => x.daily_id === id),
     is = DB.issues.find(x => x.daily_id === id);
   S.draft = {
-    daily_id: d.daily_id, report_date: d.report_date, wo_id: d.wo_id, weather: d.weather,
+    daily_id: d.daily_id, report_date: d.report_date, bamk_id: d.bamk_id, weather: d.weather,
     shift: d.shift, general_notes: d.general_notes, status: d.status, revision_no: d.revision_no || 0,
     supervisor_side: d.supervisor_side || PENGAWAS[0], supervisor_name: d.supervisor_name || "",
     progress: DB.progress.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
     manpower: DB.manpower.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
     materials: DB.materials.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
     photos: DB.photos.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
-    qc: q ? Object.assign({}, q) : { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "" },
+    qc: q ? Object.assign({ ma4_known: false, ma4_date: "" }, q) : { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "", ma4_known: false, ma4_date: "" },
     hsse: h ? Object.assign({}, h) : { permit_status: "", toolbox_status: "", fit_to_work: "", critical_finding: "", remarks: "" },
     issue: is ? Object.assign({}, is) : { category: "", description: "", impact: "", action: "", owner_side: "", owner: "" }
   };
@@ -1295,11 +1569,16 @@ const listOpts = (arr, val, blank) =>
 VIEWS["daily-new"] = {
   html() {
     if (!S.draft) S.draft = newDraft();
-    const d = S.draft, w = woOf(d.wo_id), t = w ? tankOf(w.tank_id) : null;
-    const wos = activeWOs();
-    if (!wos.length) return `<div class="card"><div class="empty"><b>Belum ada WO aktif</b>
-      Tanpa nomor WO yang sah, input pekerjaan tidak dapat diproses. Hubungi Project Control HBM untuk penerbitan WO.</div></div>`;
-    const sc = w ? scopesOfWO(w.wo_id) : [];
+    const d = S.draft, w = bamkOf(d.bamk_id), t = w ? tankOf(w.tank_id) : null;
+    const wos = bamkAktif();
+    if (!wos.length) {
+      const adaSpk = DB.spk.some(x => x.status === "TERBIT");
+      return `<div class="card"><div class="empty"><b>Belum ada tanki yang boleh dikerjakan</b>
+      ${adaSpk ? "SPK dari Pertamina sudah ada, tetapi Berita Acara Mulai Kerja ke pelaksana belum aktif."
+          : "Pekerjaan baru boleh dimulai setelah SPK dari Pertamina terbit dan BAMK ke pelaksana ditandatangani."}
+      Hubungi Project Control HBM.</div></div>`;
+    }
+    const sc = w ? scopesOfBamk(w.bamk_id) : [];
     const thread = d.daily_id ? reviewsOf(d.daily_id) : [];
     return `
     <div class="note">Satu laporan harian ini menjadi sumber rekap mingguan dan bulanan. Tidak ada input ulang.
@@ -1313,22 +1592,36 @@ VIEWS["daily-new"] = {
     <div class="card mt16"><h3>1 · Identitas laporan</h3><div class="body">
       <div class="fg c4">
         <label class="f"><span>Tanggal <em>*</em></span><input type="date" id="dDate" value="${esc(d.report_date)}"></label>
-        <label class="f"><span>Nomor WO <em>*</em></span><select id="dWo">${opts(wos, d.wo_id, x => x.wo_id, x => x.wo_no + " — " + tankNo(x.tank_id))}</select></label>
+        <label class="f"><span>Tanki yang dikerjakan <em>*</em></span><select id="dWo">${opts(wos, d.bamk_id, x => x.bamk_id, x => tankNo(x.tank_id) + " — BAMK " + x.bamk_no)}</select></label>
         <label class="f"><span>Cuaca</span><select id="dWeather">${listOpts(["Cerah", "Berawan", "Hujan Ringan", "Hujan Deras", "Angin Kencang"], d.weather)}</select></label>
         <label class="f"><span>Shift</span><select id="dShift">${listOpts(["Pagi", "Siang", "Malam"], d.shift)}</select></label>
       </div>
       <div class="row small muted">
-        <span><b>Tanki:</b> ${esc(t ? t.tank_no : "—")}</span>
         <span><b>Area:</b> ${esc(w ? areaName(w.area_id) : "—")}</span>
-        <span><b>Paket:</b> ${esc(w ? w.work_package : "—")}</span>
+        <span><b>SPK:</b> ${esc(w ? spkNo(w.spk_id) : "—")}</span>
+        <span><b>BAMK:</b> ${esc(w ? w.bamk_no : "—")}</span>
         <span><b>Penginput:</b> ${esc(S.user.user_name)}</span>
       </div>
+      ${w ? (() => {
+        const sisa = sisaHariSPK(w), th = targetHarian(w), sp = spkOf(w.spk_id);
+        const genting = sisa !== null && sisa <= nz(DB.config.spk_alarm_h);
+        return `<div class="note ${genting ? "warn" : ""} mt12">
+          Volume BAMK <b>${fmt(volBamk(w), 2)} m&sup2;</b> &middot; target <b>${fmt(th, 2)} m&sup2;/hari</b>
+          (${esc(dasarLabel(DB.config.target_basis))}, ${hariRencana(w)} hari)
+          ${sp && sp.finish_date ? ` &middot; batas SPK <b>${esc(dateID(sp.finish_date))}</b>` : ""}
+          ${sisa === null ? "" : (sisa < 0 ? ` &middot; <b style="color:var(--red)">sudah lewat ${-sisa} hari</b>`
+            : ` &middot; <b>sisa ${sisa} hari</b>`)}</div>`;
+      })() : ""}
     </div></div>
 
-    <div class="card"><h3>2 · Progress pekerjaan <button class="btn a sm" id="addProg">+ Tambah baris</button></h3><div class="body">
-      ${sc.length ? "" : `<div class="note warn">WO ini belum memiliki scope. Minta Project Control mengisi Master Data › Scope.</div>`}
-      <div id="progList"></div>
-      <div class="tiny muted">Satuan mengikuti scope yang dipilih. Kolom persen diisi capaian kumulatif scope tersebut sampai hari ini.</div>
+    <div class="card"><h3>2 · Progress hari ini
+      <button class="btn sm" id="copyKemarin">Salin dari kemarin</button>
+      <button class="btn a sm" id="addProg">+ Tambah baris</button></h3><div class="body">
+      ${tahapAktif().length ? "" : `<div class="note warn">Tahapan pengecatan belum diatur. Minta Project Control mengisi Master Data › Tahapan.</div>`}
+      <div id="sisaBox"></div>
+      <div id="progList" class="mt12"></div>
+      <div class="tiny muted mt8">Isi <b>luas yang dikerjakan hari ini saja</b> dalam m&sup2; — bukan angka kumulatif, bukan persen.
+        Sisa tiap bagian dan tiap tahap dihitung sendiri oleh sistem.</div>
     </div></div>
 
     <div class="grid g2">
@@ -1360,6 +1653,10 @@ VIEWS["daily-new"] = {
           <label class="f"><span>Catatan</span><input type="text" id="qRem" value="${esc(d.qc.remarks)}"></label>
         </div>
         <div class="chk"><input type="checkbox" id="qRw" ${d.qc.rework_required ? "checked" : ""}><label for="qRw">Perlu rework</label></div>
+        <div class="chk"><input type="checkbox" id="qMa4" ${d.qc.ma4_known ? "checked" : ""}><label for="qMa4">Sudah diketahui ${esc(DB.config.pertamina_supervisor || "Pengawas Pertamina")}</label></div>
+        <label class="f"><span>Tanggal diketahui</span><input type="date" id="qMa4d" value="${esc(d.qc.ma4_date || "")}"></label>
+        <div class="tiny muted">SPK mensyaratkan seluruh hasil inspeksi dan rekomendasi diketahui pengawas Pertamina.
+          Laporan dengan inspeksi yang belum diketahui tidak bisa lolos gerbang verifikasi.</div>
       </div></div>
 
       <div class="card"><h3>7 · HSSE</h3><div class="body">
@@ -1402,48 +1699,116 @@ VIEWS["daily-new"] = {
   bind() {
     const d = S.draft; if (!d) return;
     const pull = () => {
-      d.report_date = $("#dDate").value; d.wo_id = $("#dWo").value;
+      d.report_date = $("#dDate").value; d.bamk_id = $("#dWo").value;
       d.weather = $("#dWeather").value; d.shift = $("#dShift").value; d.general_notes = $("#dNotes").value;
       d.supervisor_side = $("#dSupSide").value; d.supervisor_name = $("#dSupName").value;
-      d.qc = { inspection_type: $("#qType").value, result: $("#qRes").value, rework_required: $("#qRw").checked, reference_no: $("#qRef").value, remarks: $("#qRem").value };
+      d.qc = { inspection_type: $("#qType").value, result: $("#qRes").value, rework_required: $("#qRw").checked, reference_no: $("#qRef").value, remarks: $("#qRem").value, ma4_known: $("#qMa4").checked, ma4_date: $("#qMa4d").value };
       d.hsse = { permit_status: $("#hPermit").value, toolbox_status: $("#hTool").value, fit_to_work: $("#hFtw").value, critical_finding: $("#hCrit").value, remarks: $("#hRem").value };
       d.issue = { category: $("#iCat").value, description: $("#iDesc").value, impact: $("#iImp").value, action: $("#iAct").value, owner_side: $("#iSide").value, owner: $("#iOwn").value };
     };
     $("#dWo").onchange = () => { pull(); d.progress = []; render(); };
 
-    /* --- progress: satu blok tersusun ke bawah --- */
-    const sc = scopesOfWO(d.wo_id);
+    /* --- progress: bagian + tahap, isi luas hari ini saja --- */
+    const W = bamkOf(d.bamk_id);
+    const TH = tahapAktif();
+
+    /* Berapa yang sudah masuk sebelum laporan ini, per bagian per tahap. */
+    const sudah = (part, stage_id) => kumulatif(d.bamk_id, part, stage_id, d.daily_id);
+    /* Berapa yang sedang diisi di layar ini, tidak termasuk baris ke-i. */
+    const diLayar = (part, stage_id, kecualiIdx) =>
+      d.progress.reduce((a, p, n) => (n !== kecualiIdx && p.part === part && p.stage_id === stage_id)
+        ? a + nz(p.actual_qty) : a, 0);
+    const batas = (part, stage_id, idx) => {
+      const kapasitas = volBagian(W, part);
+      const sisaBagian = kapasitas - sudah(part, stage_id) - diLayar(part, stage_id, idx);
+      const seb = tahapSebelum(stage_id);
+      if (!seb) return Math.max(0, sisaBagian);
+      /* Tahap ini tidak boleh melampaui tahap sebelumnya. */
+      const atas = sudah(part, seb.stage_id) + diLayar(part, seb.stage_id, -1)
+        - sudah(part, stage_id) - diLayar(part, stage_id, idx);
+      return Math.max(0, Math.min(sisaBagian, atas));
+    };
+
+    /* Papan sisa: satu tabel kecil supaya lapangan tahu posisi tanpa buka laporan. */
+    const drawSisa = () => {
+      const kotak = $("#sisaBox"); if (!kotak || !W) return;
+      kotak.innerHTML = `<div class="tw"><table><thead><tr><th>Bagian</th><th class="n">Volume</th>
+        ${TH.map(t => `<th class="n">${esc(t.stage_name)}<div class="tiny muted">${fmt(t.weight_pct, 0)}%</div></th>`).join("")}</tr></thead>
+        <tbody>${BAGIAN.map(b => {
+        const kap = volBagian(W, b[0]);
+        return `<tr><td><b>${esc(b[1])}</b></td><td class="n tiny">${fmt(kap, 2)}</td>
+          ${TH.map(t => {
+          const done = sudah(b[0], t.stage_id) + diLayar(b[0], t.stage_id, -1);
+          const p = kap > 0 ? done / kap * 100 : 0;
+          return `<td class="n tiny">${fmt(done, 1)}<div class="muted">${fmt(p, 0)}%</div></td>`;
+        }).join("")}</tr>`;
+      }).join("")}</tbody>
+        <tfoot><tr><th>Progress tanki</th><th class="n">${fmt(volBamk(W), 2)}</th>
+          <th class="n" colspan="${TH.length}">${fmt(persenBamk(d.bamk_id), 1)}% terbobot</th></tr></tfoot></table></div>`;
+    };
+
     const drawProg = () => {
-      $("#progList").innerHTML = d.progress.length ? d.progress.map((p, i) => `
+      $("#progList").innerHTML = d.progress.length ? d.progress.map((p, i) => {
+        const maks = batas(p.part, p.stage_id, i);
+        const lebih = nz(p.actual_qty) > maks + 0.005;
+        const seb = tahapSebelum(p.stage_id);
+        return `
         <div class="entry">
           <div class="eh"><b>Baris ${i + 1}</b><button class="btn d sm" data-dp="${i}">Hapus</button></div>
-          <label class="f"><span>Scope pekerjaan</span><select data-p="scope_id" data-i="${i}">
-            ${opts(sc, p.scope_id, s => s.scope_id, s => s.scope_code + " — " + s.scope_description + " (" + s.unit + ")")}</select></label>
-          <label class="f"><span>Aktivitas</span><select data-p="activity" data-i="${i}">${listOpts(ACTIVITIES, p.activity, "— pilih aktivitas —")}</select></label>
-          ${p.activity === "Lainnya" ? `<label class="f"><span>Sebutkan aktivitas</span><input type="text" data-p="activity_other" data-i="${i}" value="${esc(p.activity_other || "")}"></label>` : ""}
-          <div class="fg c4">
-            <label class="f"><span>Target</span><input type="number" step="any" min="0" data-p="target_qty" data-i="${i}" value="${p.target_qty}"></label>
-            <label class="f"><span>Realisasi</span><input type="number" step="any" min="0" data-p="actual_qty" data-i="${i}" value="${p.actual_qty}"></label>
-            <label class="f"><span>Satuan</span><input type="text" data-p="unit" data-i="${i}" value="${esc(p.unit)}"></label>
-            <label class="f"><span>Progress (%)</span><input type="number" step="any" min="0" max="100" data-p="pct_complete" data-i="${i}" value="${p.pct_complete}"></label>
+          <div class="fg c3">
+            <label class="f"><span>Bagian <em>*</em></span><select data-p="part" data-i="${i}">
+              ${BAGIAN.map(b => `<option value="${b[0]}" ${p.part === b[0] ? "selected" : ""}>${esc(b[1])} — ${fmt(volBagian(W, b[0]), 2)} m²</option>`).join("")}</select></label>
+            <label class="f"><span>Tahap <em>*</em></span><select data-p="stage_id" data-i="${i}">
+              ${TH.map(t => `<option value="${t.stage_id}" ${p.stage_id === t.stage_id ? "selected" : ""}>${esc(t.stage_name)}</option>`).join("")}</select></label>
+            <label class="f"><span>Luas hari ini (m²) <em>*</em></span>
+              <input type="number" step="any" min="0" data-p="actual_qty" data-i="${i}" value="${p.actual_qty}"></label>
           </div>
-        </div>`).join("") : `<div class="empty"><b>Belum ada baris progress</b>Tekan “+ Tambah baris”.</div>`;
+          <div class="tiny ${lebih ? "" : "muted"}" ${lebih ? `style="color:var(--red);font-weight:700"` : ""}>
+            ${lebih ? `Melebihi batas. ` : ""}Maksimal yang masih boleh diisi di baris ini: <b>${fmt(maks, 2)} m²</b>.
+            ${seb ? `Dibatasi juga oleh tahap sebelumnya (${esc(seb.stage_name)}).` : ""}
+          </div>
+          <label class="f mt8"><span>Aktivitas / keterangan</span><select data-p="activity" data-i="${i}">${listOpts(ACTIVITIES, p.activity, "— pilih aktivitas —")}</select></label>
+          ${p.activity === "Lainnya" ? `<label class="f"><span>Sebutkan aktivitas</span><input type="text" data-p="activity_other" data-i="${i}" value="${esc(p.activity_other || "")}"></label>` : ""}
+        </div>`;
+      }).join("") : `<div class="empty"><b>Belum ada baris progress</b>Tekan “+ Tambah baris”, atau “Salin dari kemarin”.</div>`;
+
       $$("#progList [data-p]").forEach(el => el.oninput = () => {
         const i = +el.dataset.i, k = el.dataset.p;
-        d.progress[i][k] = el.value;
-        if (k === "scope_id") { const s = scopeOf(el.value); if (s) { d.progress[i].unit = s.unit; d.progress[i].work_package = s.scope_description; drawProg(); } }
-        if (k === "activity") drawProg();
+        d.progress[i][k] = (k === "actual_qty") ? el.value : el.value;
+        if (k === "part" || k === "stage_id") {
+          const t = tahapOf(d.progress[i].stage_id);
+          d.progress[i].work_package = (t ? t.stage_name : "") + " — " + bagianLabel(d.progress[i].part);
+          d.progress[i].pct_complete = 0;
+        }
+        if (k === "part" || k === "stage_id" || k === "activity" || k === "actual_qty") { drawProg(); drawSisa(); }
       });
-      $$("#progList [data-dp]").forEach(b => b.onclick = () => { d.progress.splice(+b.dataset.dp, 1); drawProg(); });
+      $$("#progList [data-dp]").forEach(b => b.onclick = () => { d.progress.splice(+b.dataset.dp, 1); drawProg(); drawSisa(); });
+      drawSisa();
+    };
+
+    const barisBaru = (part, stage_id) => {
+      const t = tahapOf(stage_id);
+      return {
+        part: part, stage_id: stage_id, scope_id: "", activity: "", activity_other: "",
+        work_package: (t ? t.stage_name : "") + " — " + bagianLabel(part),
+        target_qty: 0, actual_qty: 0, unit: "m2", pct_complete: 0
+      };
     };
     $("#addProg").onclick = () => {
-      const s = sc[0];
-      d.progress.push({
-        scope_id: s ? s.scope_id : "", activity: "", activity_other: "",
-        work_package: s ? s.scope_description : "", target_qty: 0, actual_qty: 0,
-        unit: s ? s.unit : "m2", pct_complete: 0
-      });
+      d.progress.push(barisBaru("SHELL", (TH[0] || {}).stage_id || ""));
       drawProg();
+    };
+    /* Salin susunan baris laporan terakhir tanki ini — angkanya dikosongkan,
+       supaya yang diketik ulang hanya luasannya. */
+    $("#copyKemarin").onclick = () => {
+      const lalu = DB.dailies.filter(x => x.bamk_id === d.bamk_id && x.daily_id !== d.daily_id)
+        .slice().sort((a, b) => (b.report_date || "").localeCompare(a.report_date || ""))[0];
+      if (!lalu) return toast("Belum ada laporan sebelumnya untuk tanki ini.", "err");
+      const baris = DB.progress.filter(p => p.daily_id === lalu.daily_id);
+      if (!baris.length) return toast("Laporan sebelumnya tidak punya baris progress.", "err");
+      d.progress = baris.map(p => barisBaru(p.part || "SHELL", p.stage_id || (TH[0] || {}).stage_id || ""));
+      drawProg();
+      toast("Disalin dari laporan " + dateID(lalu.report_date) + ". Isi luasannya.", "ok");
     };
     drawProg();
 
@@ -1504,9 +1869,9 @@ VIEWS["daily-new"] = {
   }
 };
 function photoName(d, p, i) {
-  const w = woOf(d.wo_id);
+  const w = bamkOf(d.bamk_id);
   const tk = tankNo(d.tank_id || (w ? w.tank_id : ""));
-  return [(w ? w.wo_no : "WO").replace(/[\/\\ ]/g, "-"), String(tk).replace(/[\/\\ ]/g, "-"),
+  return [(w ? w.bamk_no : "WO").replace(/[\/\\ ]/g, "-"), String(tk).replace(/[\/\\ ]/g, "-"),
   d.report_date, p.photo_type, String(i + 1).padStart(2, "0")].join("_") + ".jpg";
 }
 function threadHtml(list) {
@@ -1533,25 +1898,66 @@ function shrink(file, cb) {
   };
   r.readAsDataURL(file);
 }
+/* Memeriksa seluruh baris progress sebuah laporan terhadap dua aturan:
+   kumulatif per bagian tidak boleh melewati volume BAMK bagian itu, dan
+   satu tahap tidak boleh melampaui tahap sebelumnya. Mengembalikan teks
+   pelanggaran pertama, atau string kosong bila semuanya sah. */
+function periksaBatasProgress(d) {
+  const W = bamkOf(d.bamk_id); if (!W) return "";
+  const TH = tahapAktif();
+  const baru = {};
+  d.progress.forEach(p => {
+    const k = p.part + "|" + p.stage_id;
+    baru[k] = (baru[k] || 0) + nz(p.actual_qty);
+  });
+  const totalSampai = (part, stage_id) =>
+    kumulatif(d.bamk_id, part, stage_id, d.daily_id) + (baru[part + "|" + stage_id] || 0);
+  for (const b of BAGIAN) {
+    const kap = volBagian(W, b[0]);
+    for (let i = 0; i < TH.length; i++) {
+      const t = TH[i], tot = totalSampai(b[0], t.stage_id);
+      if (tot > kap + 0.005)
+        return b[1] + " — " + t.stage_name + ": kumulatif " + fmt(tot, 2) +
+          " m² melebihi volume BAMK " + fmt(kap, 2) + " m².";
+      if (i > 0) {
+        const seb = TH[i - 1], atas = totalSampai(b[0], seb.stage_id);
+        if (tot > atas + 0.005)
+          return b[1] + " — " + t.stage_name + " (" + fmt(tot, 2) + " m²) tidak boleh melebihi " +
+            seb.stage_name + " (" + fmt(atas, 2) + " m²).";
+      }
+    }
+  }
+  return "";
+}
+
 function commitDaily(status) {
   const d = S.draft;
   if (!d.report_date) return toast("Isi tanggal laporan.", "err");
-  if (!d.wo_id) return toast("Pilih nomor WO. Tanpa WO sah laporan tidak dapat diproses.", "err");
+  if (!d.bamk_id) return toast("Pilih tanki. Tanpa BAMK yang sah laporan tidak dapat diproses.", "err");
+  /* Gerbang dua lapis: SPK Pertamina harus terbit dan BAMK harus aktif. */
+  const wCek = bamkOf(d.bamk_id);
+  if (!wCek) return toast("BAMK tidak ditemukan. Muat ulang halaman.", "err");
+  if (wCek.status !== "AKTIF") return toast("BAMK tanki ini belum berstatus AKTIF.", "err");
+  if (!spkTerbit(wCek.spk_id)) return toast("SPK dari Pertamina untuk tanki ini belum berstatus TERBIT.", "err");
   if (status === "SUBMITTED") {
     if (!d.progress.length) return toast("Tambahkan minimal satu baris progress.", "err");
-    if (d.progress.some(p => !p.scope_id)) return toast("Setiap baris progress harus punya scope.", "err");
+    if (d.progress.some(p => !p.part || !p.stage_id)) return toast("Setiap baris progress harus punya bagian dan tahap.", "err");
     if (d.progress.some(p => !p.activity)) return toast("Pilih aktivitas pada setiap baris progress.", "err");
-    if (d.progress.some(p => nz(p.actual_qty) < 0)) return toast("Realisasi tidak boleh negatif.", "err");
-    if (d.progress.every(p => nz(p.actual_qty) === 0)) return toast("Isi realisasi pada minimal satu baris.", "err");
+    if (d.progress.some(p => nz(p.actual_qty) < 0)) return toast("Luas tidak boleh negatif.", "err");
+    if (d.progress.every(p => nz(p.actual_qty) === 0)) return toast("Isi luas pada minimal satu baris.", "err");
+    /* Kumulatif tidak boleh melebihi volume bagian, dan tahap berikutnya
+       tidak boleh melampaui tahap sebelumnya. */
+    const pelanggaran = periksaBatasProgress(d);
+    if (pelanggaran) return toast(pelanggaran, "err");
     if (!d.hsse.permit_status) return toast("Status PTW/izin wajib diisi sebelum mengajukan.", "err");
     if (!d.photos.length) return toast("Lampirkan minimal satu foto bukti.", "err");
     if (!d.supervisor_name) return toast("Isi nama pengawas pada bagian 9.", "err");
   }
-  const w = woOf(d.wo_id);
+  const w = bamkOf(d.bamk_id);
   const id = d.daily_id || uid("DL");
   const wasRejected = d.status === "REJECTED";
-  const dup = DB.dailies.find(x => x.daily_id !== id && x.wo_id === d.wo_id && x.report_date === d.report_date && x.shift === d.shift);
-  if (dup) return toast("Laporan untuk WO, tanggal dan shift ini sudah ada.", "err");
+  const dup = DB.dailies.find(x => x.daily_id !== id && x.bamk_id === d.bamk_id && x.report_date === d.report_date && x.shift === d.shift);
+  if (dup) return toast("Laporan untuk tanki, tanggal dan shift ini sudah ada.", "err");
 
   ["progress", "manpower", "materials", "photos", "qc", "hsse", "issues"].forEach(k => {
     const arr = DB[k]; if (!arr) return;
@@ -1564,7 +1970,7 @@ function commitDaily(status) {
   const prev = byId(DB.dailies, "daily_id", id);
   const rev = (status === "SUBMITTED" && wasRejected) ? (nz(d.revision_no) + 1) : nz(d.revision_no);
   const head = {
-    daily_id: id, report_date: d.report_date, wo_id: d.wo_id, tank_id: w.tank_id, area_id: w.area_id,
+    daily_id: id, report_date: d.report_date, bamk_id: d.bamk_id, tank_id: w.tank_id, area_id: w.area_id,
     admin_user_id: prev ? prev.admin_user_id : S.user.user_id,
     weather: d.weather, shift: d.shift, general_notes: d.general_notes,
     supervisor_side: d.supervisor_side, supervisor_name: d.supervisor_name,
@@ -1574,17 +1980,18 @@ function commitDaily(status) {
   if (ix >= 0) DB.dailies[ix] = Object.assign(DB.dailies[ix], head); else DB.dailies.push(head);
 
   d.progress.forEach(p => DB.progress.push({
-    progress_id: uid("PR"), daily_id: id, wo_id: d.wo_id, scope_id: p.scope_id,
+    progress_id: uid("PR"), daily_id: id, bamk_id: d.bamk_id,
+    part: p.part, stage_id: p.stage_id, scope_id: p.scope_id || "",
     activity: p.activity === "Lainnya" ? ("Lainnya: " + (p.activity_other || "")) : p.activity,
     work_package: p.work_package || "", target_qty: nz(p.target_qty),
     actual_qty: nz(p.actual_qty), unit: p.unit, pct_complete: nz(p.pct_complete)
   }));
-  d.manpower.forEach(m => DB.manpower.push({ manpower_id: uid("MP"), daily_id: id, wo_id: d.wo_id, category: m.category, worker_count: nz(m.worker_count), notes: m.notes || "" }));
-  d.materials.forEach(m => DB.materials.push({ material_id: uid("MT"), daily_id: id, wo_id: d.wo_id, item: m.item, qty: nz(m.qty), unit: m.unit, do_no: m.do_no, notes: m.notes || "" }));
-  d.photos.forEach(p => DB.photos.push({ photo_id: uid("PH"), daily_id: id, wo_id: d.wo_id, tank_id: w.tank_id, photo_type: p.photo_type, file_url: p.file_url, caption: p.caption, taken_at: p.taken_at, uploaded_by: S.user.user_id }));
-  if (d.qc.inspection_type || d.qc.result) DB.qc.push({ inspection_id: uid("QC"), wo_id: d.wo_id, daily_id: id, inspection_date: d.report_date, inspection_type: d.qc.inspection_type, result: d.qc.result, rework_required: !!d.qc.rework_required, reference_no: d.qc.reference_no, remarks: d.qc.remarks });
-  if (d.hsse.permit_status) DB.hsse.push({ hsse_id: uid("HS"), daily_id: id, wo_id: d.wo_id, permit_status: d.hsse.permit_status, toolbox_status: d.hsse.toolbox_status, fit_to_work: d.hsse.fit_to_work, critical_finding: d.hsse.critical_finding, remarks: d.hsse.remarks });
-  if (d.issue.description) DB.issues.push({ issue_id: uid("IS"), daily_id: id, wo_id: d.wo_id, issue_date: d.report_date, category: d.issue.category || "LAINNYA", description: d.issue.description, impact: d.issue.impact, action: d.issue.action, owner_side: d.issue.owner_side, owner: d.issue.owner, status: "OPEN" });
+  d.manpower.forEach(m => DB.manpower.push({ manpower_id: uid("MP"), daily_id: id, bamk_id: d.bamk_id, category: m.category, worker_count: nz(m.worker_count), notes: m.notes || "" }));
+  d.materials.forEach(m => DB.materials.push({ material_id: uid("MT"), daily_id: id, bamk_id: d.bamk_id, item: m.item, qty: nz(m.qty), unit: m.unit, do_no: m.do_no, notes: m.notes || "" }));
+  d.photos.forEach(p => DB.photos.push({ photo_id: uid("PH"), daily_id: id, bamk_id: d.bamk_id, tank_id: w.tank_id, photo_type: p.photo_type, file_url: p.file_url, caption: p.caption, taken_at: p.taken_at, uploaded_by: S.user.user_id }));
+  if (d.qc.inspection_type || d.qc.result) DB.qc.push({ inspection_id: uid("QC"), bamk_id: d.bamk_id, daily_id: id, inspection_date: d.report_date, inspection_type: d.qc.inspection_type, result: d.qc.result, rework_required: !!d.qc.rework_required, reference_no: d.qc.reference_no, remarks: d.qc.remarks, ma4_known: !!d.qc.ma4_known, ma4_date: d.qc.ma4_date || "" });
+  if (d.hsse.permit_status) DB.hsse.push({ hsse_id: uid("HS"), daily_id: id, bamk_id: d.bamk_id, permit_status: d.hsse.permit_status, toolbox_status: d.hsse.toolbox_status, fit_to_work: d.hsse.fit_to_work, critical_finding: d.hsse.critical_finding, remarks: d.hsse.remarks });
+  if (d.issue.description) DB.issues.push({ issue_id: uid("IS"), daily_id: id, bamk_id: d.bamk_id, issue_date: d.report_date, category: d.issue.category || "LAINNYA", description: d.issue.description, impact: d.issue.impact, action: d.issue.action, owner_side: d.issue.owner_side, owner: d.issue.owner, status: "OPEN" });
 
   if (status === "SUBMITTED") logReview(id, wasRejected ? "REVISI" : "SUBMIT",
     wasRejected ? ("Laporan diperbaiki dan diajukan kembali (revisi ke-" + rev + ").") : "Laporan diajukan ke Project Control.");
@@ -1605,7 +2012,7 @@ VIEWS["daily-list"] = {
     if (isSite()) rows = rows.filter(d => d.admin_user_id === S.user.user_id);
     if (f.from) rows = rows.filter(d => d.report_date >= f.from);
     if (f.to) rows = rows.filter(d => d.report_date <= f.to);
-    if (f.wo) rows = rows.filter(d => d.wo_id === f.wo);
+    if (f.wo) rows = rows.filter(d => d.bamk_id === f.wo);
     if (f.st) rows = rows.filter(d => d.status === f.st);
     const ditolak = rows.filter(d => d.status === "REJECTED").length;
     return `
@@ -1614,12 +2021,12 @@ VIEWS["daily-list"] = {
       <div class="filters">
         <label class="f"><span>Dari</span><input type="date" id="fFrom" value="${f.from}"></label>
         <label class="f"><span>Sampai</span><input type="date" id="fTo" value="${f.to}"></label>
-        <label class="f"><span>WO</span><select id="fWo"><option value="">Semua</option>${opts(DB.wos, f.wo, w => w.wo_id, w => w.wo_no)}</select></label>
+        <label class="f"><span>BAMK</span><select id="fWo"><option value="">Semua</option>${opts(DB.bamk, f.wo, w => w.bamk_id, w => w.bamk_no)}</select></label>
         <label class="f"><span>Status</span><select id="fSt"><option value="">Semua</option>${listOpts(["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"], f.st)}</select></label>
         <button class="btn sm" id="fClr">Bersihkan</button>
       </div>
       <div class="tw"><table>
-        <thead><tr><th>Tanggal</th><th>WO / Tanki</th><th>Shift</th><th class="n">Target</th><th class="n">Realisasi</th>
+        <thead><tr><th>Tanggal</th><th>BAMK / Tanki</th><th>Shift</th><th class="n">Target</th><th class="n">Realisasi</th>
         <th class="n">Foto</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows.length ? rows.map(d => {
       const pr = DB.progress.filter(p => p.daily_id === d.daily_id);
@@ -1629,7 +2036,7 @@ VIEWS["daily-list"] = {
       const editable = (own && (d.status === "DRAFT" || d.status === "REJECTED")) || can("review");
       return `<tr>
             <td class="num">${esc(d.report_date)}</td>
-            <td><b>${esc(woNo(d.wo_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))} · ${esc(areaName(d.area_id))}</div></td>
+            <td><b>${esc(bamkNo(d.bamk_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))} · ${esc(areaName(d.area_id))}</div></td>
             <td class="tiny">${esc(d.shift)}</td><td class="n">${fmt(tg, 1)}</td><td class="n">${fmt(ac, 1)}</td>
             <td class="n">${ph}</td><td>${statusBadge(d.status, d.revision_no)}</td>
             <td class="right"><button class="btn sm" data-open="${d.daily_id}">Lihat</button>
@@ -1655,15 +2062,22 @@ function showDaily(id) {
   const body = `
     <div class="fg c3 small">
       <div><div class="eyebrow">Tanggal</div>${dateID(d.report_date)}</div>
-      <div><div class="eyebrow">WO</div>${esc(woNo(d.wo_id))}</div>
+      <div><div class="eyebrow">BAMK</div>${esc(bamkNo(d.bamk_id))}</div>
       <div><div class="eyebrow">Tanki / Area</div>${esc(tankNo(d.tank_id))} · ${esc(areaName(d.area_id))}</div>
       <div><div class="eyebrow">Shift / Cuaca</div>${esc(d.shift)} · ${esc(d.weather)}</div>
       <div><div class="eyebrow">Penginput</div>${esc(userName(d.admin_user_id))}</div>
       <div><div class="eyebrow">Status</div>${statusBadge(d.status, d.revision_no)}</div>
     </div>
     <h4 class="mt16">Progress</h4>
-    <div class="tw"><table><thead><tr><th>Scope</th><th>Aktivitas</th><th class="n">Target</th><th class="n">Realisasi</th><th>Satuan</th><th class="n">%</th></tr></thead>
-    <tbody>${pr.map(p => { const s = scopeOf(p.scope_id); return `<tr><td>${esc(s ? s.scope_code + " " + s.scope_description : "—")}</td><td>${esc(p.activity)}</td><td class="n">${fmt(p.target_qty, 1)}</td><td class="n">${fmt(p.actual_qty, 1)}</td><td>${esc(p.unit)}</td><td class="n">${fmt(p.pct_complete, 1)}</td></tr>`; }).join("")}</tbody></table></div>
+    <div class="tw"><table><thead><tr><th>Bagian</th><th>Tahap</th><th>Aktivitas</th>
+      <th class="n">Luas (m²)</th><th class="n">Bobot</th><th class="n">Setara selesai</th></tr></thead>
+    <tbody>${pr.map(p => { const t = tahapOf(p.stage_id), bt = bobotTahap(p.stage_id);
+      return `<tr><td>${esc(bagianLabel(p.part))}</td><td>${esc(t ? t.stage_name : "—")}</td>
+        <td class="tiny">${esc(p.activity)}</td><td class="n">${fmt(p.actual_qty, 2)}</td>
+        <td class="n tiny">${fmt(bt, 0)}%</td><td class="n">${fmt(nz(p.actual_qty) * bt / 100, 2)}</td></tr>`; }).join("")}</tbody>
+      <tfoot><tr><th colspan="3" class="right">TOTAL</th>
+        <th class="n">${fmt(pr.reduce((a, p) => a + nz(p.actual_qty), 0), 2)}</th><th></th>
+        <th class="n">${fmt(pr.reduce((a, p) => a + nz(p.actual_qty) * bobotTahap(p.stage_id) / 100, 0), 2)}</th></tr></tfoot></table></div>
     ${mp.length ? `<h4 class="mt16">Tenaga kerja</h4><div class="tw"><table><thead><tr><th>Kategori</th><th class="n">Orang</th></tr></thead><tbody>${mp.map(m => `<tr><td>${esc(m.category)}</td><td class="n">${fmt0(m.worker_count)}</td></tr>`).join("")}<tr><th>Total</th><th class="n">${fmt0(mp.reduce((a, m) => a + nz(m.worker_count), 0))}</th></tr></tbody></table></div>` : ""}
     ${mt.length ? `<h4 class="mt16">Material</h4><div class="tw"><table><thead><tr><th>Item</th><th class="n">Jumlah</th><th>Satuan</th><th>DO</th></tr></thead><tbody>${mt.map(m => `<tr><td>${esc(m.item)}</td><td class="n">${fmt(m.qty, 2)}</td><td>${esc(m.unit)}</td><td>${esc(m.do_no)}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <div class="fg c2 mt16 small">
@@ -1700,13 +2114,13 @@ VIEWS.review = {
     <div class="note">Realisasi lapangan tidak otomatis menjadi volume terverifikasi. Periksa kuantitas dan bukti sebelum menyetujui.
       Laporan yang dikembalikan dapat diperbaiki Admin Site lalu diajukan ulang, dan seluruh catatan bolak-balik tersimpan.</div>
     <div class="card mt16"><h3>Antrian review <span class="b amber">${q.length}</span></h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Tanggal</th><th>WO / Tanki</th><th>Penginput</th><th class="n">Realisasi diajukan</th><th class="n">Foto</th><th>QC</th><th></th></tr></thead>
+      <thead><tr><th>Tanggal</th><th>BAMK / Tanki</th><th>Penginput</th><th class="n">Realisasi diajukan</th><th class="n">Foto</th><th>QC</th><th></th></tr></thead>
       <tbody>${q.length ? q.map(d => {
       const pr = DB.progress.filter(p => p.daily_id === d.daily_id);
       const ac = pr.reduce((a, p) => a + nz(p.actual_qty), 0);
       const qc = DB.qc.find(x => x.daily_id === d.daily_id);
       return `<tr><td class="num">${esc(d.report_date)}${d.revision_no ? ` <span class="b blue">Rev-${d.revision_no}</span>` : ""}</td>
-          <td><b>${esc(woNo(d.wo_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))}</div></td>
+          <td><b>${esc(bamkNo(d.bamk_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))}</div></td>
           <td class="tiny">${esc(userName(d.admin_user_id))}</td>
           <td class="n">${fmt(ac, 1)}</td><td class="n">${DB.photos.filter(p => p.daily_id === d.daily_id).length}</td>
           <td class="tiny">${qc ? esc(qc.result || "—") : "—"}</td>
@@ -1716,11 +2130,11 @@ VIEWS.review = {
       </tbody></table></div></div></div>
 
     <div class="card"><h3>Verifikasi terakhir</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Tanggal laporan</th><th>WO</th><th class="n">Diajukan</th><th class="n">Terverifikasi</th><th class="n">Selisih</th><th>Pemeriksa</th></tr></thead>
+      <thead><tr><th>Tanggal laporan</th><th>BAMK</th><th class="n">Diajukan</th><th class="n">Terverifikasi</th><th class="n">Selisih</th><th>Pemeriksa</th></tr></thead>
       <tbody>${done.map(d => {
       const vs = DB.verifications.filter(v => v.daily_id === d.daily_id);
       const sub = vs.reduce((a, v) => a + nz(v.submitted_qty), 0), vq = vs.reduce((a, v) => a + nz(v.verified_qty), 0);
-      return `<tr><td class="num">${esc(d.report_date)}</td><td>${esc(woNo(d.wo_id))}</td>
+      return `<tr><td class="num">${esc(d.report_date)}</td><td>${esc(bamkNo(d.bamk_id))}</td>
         <td class="n">${fmt(sub, 1)}</td><td class="n">${fmt(vq, 1)}</td>
         <td class="n" style="color:${vq < sub ? "var(--red)" : "var(--ink-2)"}">${fmt(vq - sub, 1)}</td>
         <td class="tiny">${esc(vs[0] ? userName(vs[0].verified_by) : "—")}</td></tr>`;
@@ -1739,14 +2153,14 @@ function reviewModal(id) {
   const body = `
     <div class="fg c3 small">
       <div><div class="eyebrow">Tanggal</div>${dateID(d.report_date)}</div>
-      <div><div class="eyebrow">WO / Tanki</div>${esc(woNo(d.wo_id))} · ${esc(tankNo(d.tank_id))}</div>
+      <div><div class="eyebrow">BAMK / Tanki</div>${esc(bamkNo(d.bamk_id))} · ${esc(tankNo(d.tank_id))}</div>
       <div><div class="eyebrow">Penginput</div>${esc(userName(d.admin_user_id))}</div>
     </div>
     <div class="lines mt12"><div class="lh">Kuantitas terverifikasi</div>
     ${pr.map((p, i) => {
-    const s = scopeOf(p.scope_id);
+    const t = tahapOf(p.stage_id);
     return `<div class="line" style="grid-template-columns:1.6fr .8fr .8fr 1.2fr">
-        <div><b class="small">${esc(s ? s.scope_code : "")}</b><div class="tiny muted">${esc(p.activity || (s ? s.scope_description : ""))}</div></div>
+        <div><b class="small">${esc(bagianLabel(p.part))} — ${esc(t ? t.stage_name : "—")}</b><div class="tiny muted">${esc(p.activity || "")}</div></div>
         <label class="f"><span>Diajukan</span><input type="number" value="${p.actual_qty}" disabled></label>
         <label class="f"><span>Terverifikasi</span><input type="number" step="any" min="0" data-vq="${i}" value="${p.actual_qty}"></label>
         <label class="f"><span>Catatan</span><input type="text" data-vr="${i}" placeholder="alasan bila berbeda"></label></div>`;
@@ -1774,10 +2188,17 @@ function reviewModal(id) {
       return { p, v, r };
     });
     if (rows.some(r => r.v < 0)) return toast("Nilai verified tidak boleh negatif.", "err");
+    /* SPK mensyaratkan hasil inspeksi diketahui pengawas Pertamina sebelum
+       diakui. Laporan tanpa inspeksi tetap boleh lewat; yang punya inspeksi
+       tapi belum diketahui, ditahan di sini. */
+    const qcD = DB.qc.find(x => x.daily_id === id);
+    if (qcD && qcD.inspection_type && !qcD.ma4_known)
+      return toast("Inspeksi laporan ini belum diketahui " + (DB.config.pertamina_supervisor || "pengawas Pertamina") +
+        ". Lengkapi dulu di laporan harian.", "err");
     if (over && !note) return toast("Volume terverifikasi melebihi yang diajukan. Isi catatan review sebagai dasar persetujuan.", "err");
     rows.forEach(r => {
       DB.verifications.push({
-        verification_id: uid("VF"), progress_id: r.p.progress_id, daily_id: id, wo_id: d.wo_id,
+        verification_id: uid("VF"), progress_id: r.p.progress_id, daily_id: id, bamk_id: d.bamk_id,
         scope_id: r.p.scope_id, submitted_qty: nz(r.p.actual_qty), verified_qty: r.v,
         verified_by: S.user.user_id, verified_date: today(),
         status: "VERIFIED", remarks: r.r || note
@@ -1795,26 +2216,26 @@ function reviewModal(id) {
    ============================================================ */
 VIEWS.acceptance = {
   html() {
-    const rows = DB.wos.map(w => {
-      const v = verifiedQtyOfWO(w.wo_id), a = acceptedQtyOfWO(w.wo_id);
+    const rows = DB.bamk.map(w => {
+      const v = verifiedQtyOfBamk(w.bamk_id), a = acceptedQtyOfBamk(w.bamk_id);
       return { w, v, a, sisa: v - a };
     }).filter(r => r.v > 0);
     return `
     <div class="note">Volume terverifikasi tidak otomatis menjadi diterima. Catat dasar penerimaan (BA, hasil inspeksi atau approval).</div>
     <div class="card mt16"><h3>Volume siap diterima</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>WO</th><th>Tanki</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Belum diterima</th><th></th></tr></thead>
+      <thead><tr><th>BAMK</th><th>Tanki</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Belum diterima</th><th></th></tr></thead>
       <tbody>${rows.length ? rows.map(r => `<tr>
-        <td><b>${esc(r.w.wo_no)}</b><div class="tiny muted">${esc(r.w.work_package)}</div></td>
+        <td><b>${esc(r.w.bamk_no)}</b><div class="tiny muted">${esc(r.w.work_package)}</div></td>
         <td>${esc(tankNo(r.w.tank_id))}</td><td class="n">${fmt(r.v, 1)}</td><td class="n">${fmt(r.a, 1)}</td>
         <td class="n"><b>${fmt(r.sisa, 1)}</b></td>
-        <td class="right"><button class="btn p sm" data-acc="${r.w.wo_id}" ${r.sisa <= 0 ? "disabled" : ""}>Terima</button></td></tr>`).join("")
+        <td class="right"><button class="btn p sm" data-acc="${r.w.bamk_id}" ${r.sisa <= 0 ? "disabled" : ""}>Terima</button></td></tr>`).join("")
         : `<tr><td colspan="6"><div class="empty"><b>Belum ada volume terverifikasi</b>Selesaikan review laporan harian terlebih dahulu.</div></td></tr>`}
       </tbody></table></div></div></div>
 
     <div class="card"><h3>Riwayat penerimaan</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Tanggal</th><th>WO</th><th class="n">Diterima</th><th>Referensi</th><th>Status</th><th>Catatan</th></tr></thead>
+      <thead><tr><th>Tanggal</th><th>BAMK</th><th class="n">Diterima</th><th>Referensi</th><th>Status</th><th>Catatan</th></tr></thead>
       <tbody>${DB.acceptances.slice().reverse().map(a => `<tr><td class="num">${esc(a.acceptance_date)}</td>
-        <td>${esc(woNo(a.wo_id))}</td><td class="n">${fmt(a.accepted_qty, 1)}</td><td>${esc(a.reference_no || "—")}</td>
+        <td>${esc(bamkNo(a.bamk_id))}</td><td class="n">${fmt(a.accepted_qty, 1)}</td><td>${esc(a.reference_no || "—")}</td>
         <td><span class="b ${a.status === "ACCEPTED" ? "teal" : a.status === "REJECTED" ? "red" : "amber"}">${a.status === "ACCEPTED" ? "Diterima" : a.status === "REJECTED" ? "Ditolak" : "Menunggu"}</span></td>
         <td class="tiny">${esc(a.remarks || "")}</td></tr>`).join("")
       || `<tr><td colspan="6"><div class="empty">Belum ada penerimaan tercatat.</div></td></tr>`}
@@ -1822,8 +2243,8 @@ VIEWS.acceptance = {
   },
   bind() {
     $$("[data-acc]").forEach(b => b.onclick = () => {
-      const w = woOf(b.dataset.acc), sisa = verifiedQtyOfWO(w.wo_id) - acceptedQtyOfWO(w.wo_id);
-      openModal("Penerimaan — " + w.wo_no, `
+      const w = bamkOf(b.dataset.acc), sisa = verifiedQtyOfBamk(w.bamk_id) - acceptedQtyOfBamk(w.bamk_id);
+      openModal("Penerimaan — " + w.bamk_no, `
         <div class="fg c2">
           <label class="f"><span>Tanggal penerimaan <em>*</em></span><input type="date" id="acDate" value="${today()}"></label>
           <label class="f"><span>Volume diterima <em>*</em></span><input type="number" step="any" min="0" id="acQty" value="${sisa}"></label>
@@ -1838,10 +2259,10 @@ VIEWS.acceptance = {
         if (q <= 0) return toast("Volume diterima harus lebih dari nol.", "err");
         if (q > sisa + 0.0001) return toast("Volume melebihi yang terverifikasi.", "err");
         DB.acceptances.push({
-          acceptance_id: uid("AC"), wo_id: w.wo_id, acceptance_date: $("#acDate").value,
+          acceptance_id: uid("AC"), bamk_id: w.bamk_id, acceptance_date: $("#acDate").value,
           accepted_qty: q, reference_no: $("#acRef").value, status: $("#acSt").value, remarks: $("#acRem").value
         });
-        audit("APPROVE", "16_ACCEPTANCE", w.wo_id, "", q);
+        audit("APPROVE", "16_ACCEPTANCE", w.bamk_id, "", q);
         save(); closeModal(); toast("Penerimaan tercatat.", "ok"); render();
       };
     });
@@ -1854,32 +2275,32 @@ VIEWS.acceptance = {
 VIEWS.billable = {
   html() {
     const per = monthOf(today());
-    const rows = DB.wos.map(w => {
-      const v = verifiedQtyOfWO(w.wo_id), a = acceptedQtyOfWO(w.wo_id), b = billedOfWO(w.wo_id);
-      const docs = DB.documents.filter(x => x.wo_id === w.wo_id && x.required_for_billing);
+    const rows = DB.bamk.map(w => {
+      const v = verifiedQtyOfBamk(w.bamk_id), a = acceptedQtyOfBamk(w.bamk_id), b = billedOfBamk(w.bamk_id);
+      const docs = DB.documents.filter(x => x.bamk_id === w.bamk_id && x.required_for_billing);
       const ok = docs.length ? docs.every(x => x.status !== "MISSING") : false;
       return { w, v, a, b, sisa: a - b, docs: docs.length, ok };
     }).filter(r => r.a > 0);
     const editable = can("accept") || can("master");
     return `
     <div class="note">Volume yang sudah diterima belum tentu layak tagih. Gerbang terakhir adalah kelengkapan dokumen yang dipersyaratkan.</div>
-    <div class="card mt16"><h3>Kesiapan tagihan per WO <span class="tiny muted">Periode berjalan ${monthID(per)}</span></h3>
+    <div class="card mt16"><h3>Kesiapan tagihan per BAMK <span class="tiny muted">Periode berjalan ${monthID(per)}</span></h3>
       <div class="body flush"><div class="tw"><table>
-      <thead><tr><th>WO / Tanki</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Sudah layak tagih</th>
+      <thead><tr><th>BAMK / Tanki</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Sudah layak tagih</th>
       <th class="n">Sisa belum ditagihkan</th><th>Dokumen</th><th></th></tr></thead>
       <tbody>${rows.length ? rows.map(r => `<tr>
-        <td><b>${esc(r.w.wo_no)}</b><div class="tiny muted">${esc(tankNo(r.w.tank_id))} · ${esc(r.w.work_package)}</div></td>
+        <td><b>${esc(r.w.bamk_no)}</b><div class="tiny muted">${esc(tankNo(r.w.tank_id))} · ${esc(r.w.work_package)}</div></td>
         <td class="n">${fmt(r.v, 1)}</td><td class="n">${fmt(r.a, 1)}</td><td class="n">${fmt(r.b, 1)}</td>
         <td class="n"><b>${fmt(r.sisa, 1)}</b></td>
         <td>${r.docs ? (r.ok ? `<span class="b teal">Lengkap (${r.docs})</span>` : `<span class="b red">Belum lengkap</span>`) : `<span class="b gray">Belum didaftarkan</span>`}</td>
-        <td class="right">${editable ? `<button class="btn p sm" data-bl="${r.w.wo_id}" ${r.sisa <= 0 ? "disabled" : ""}>Tetapkan layak tagih</button>` : ""}</td></tr>`).join("")
+        <td class="right">${editable ? `<button class="btn p sm" data-bl="${r.w.bamk_id}" ${r.sisa <= 0 ? "disabled" : ""}>Tetapkan layak tagih</button>` : ""}</td></tr>`).join("")
         : `<tr><td colspan="7"><div class="empty"><b>Belum ada volume diterima</b>Selesaikan gerbang Acceptance terlebih dahulu.</div></td></tr>`}
       </tbody></table></div></div></div>
 
     <div class="card"><h3>Daftar volume layak tagih</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Periode</th><th>WO</th><th class="n">Volume layak tagih</th><th>Satuan</th><th>Kesiapan</th><th>Dokumen</th><th>Dilepas</th><th></th></tr></thead>
+      <thead><tr><th>Periode</th><th>BAMK</th><th class="n">Volume layak tagih</th><th>Satuan</th><th>Kesiapan</th><th>Dokumen</th><th>Dilepas</th><th></th></tr></thead>
       <tbody>${DB.billables.slice().reverse().map(b => `<tr>
-        <td class="num">${esc(b.period)}</td><td>${esc(woNo(b.wo_id))}</td><td class="n">${fmt(b.billable_qty, 1)}</td>
+        <td class="num">${esc(b.period)}</td><td>${esc(bamkNo(b.bamk_id))}</td><td class="n">${fmt(b.billable_qty, 1)}</td>
         <td>${esc(b.unit)}</td>
         <td><span class="b ${b.gate_status === "READY" ? "teal" : "amber"}">${b.gate_status === "READY" ? "Siap" : "Belum siap"}</span></td>
         <td><span class="b ${b.document_status === "COMPLETE" ? "teal" : "red"}">${b.document_status === "COMPLETE" ? "Lengkap" : "Belum lengkap"}</span></td>
@@ -1890,11 +2311,11 @@ VIEWS.billable = {
   },
   bind() {
     $$("[data-bl]").forEach(btn => btn.onclick = () => {
-      const w = woOf(btn.dataset.bl);
-      const sisa = acceptedQtyOfWO(w.wo_id) - billedOfWO(w.wo_id);
-      const docs = DB.documents.filter(x => x.wo_id === w.wo_id && x.required_for_billing);
+      const w = bamkOf(btn.dataset.bl);
+      const sisa = acceptedQtyOfBamk(w.bamk_id) - billedOfBamk(w.bamk_id);
+      const docs = DB.documents.filter(x => x.bamk_id === w.bamk_id && x.required_for_billing);
       const ok = docs.length ? docs.every(x => x.status !== "MISSING") : false;
-      openModal("Tetapkan volume layak tagih — " + w.wo_no, `
+      openModal("Tetapkan volume layak tagih — " + w.bamk_no, `
         <div class="fg c2">
           <label class="f"><span>Periode <em>*</em></span><input type="text" id="blPer" value="${monthOf(today())}" placeholder="YYYY-MM"></label>
           <label class="f"><span>Volume layak tagih <em>*</em></span><input type="number" step="any" min="0" id="blQty" value="${sisa}"></label>
@@ -1910,23 +2331,23 @@ VIEWS.billable = {
         if (q <= 0) return toast("Volume layak tagih harus lebih dari nol.", "err");
         if (q > sisa + 0.0001) return toast("Volume melebihi yang diterima.", "err");
         DB.billables.push({
-          billable_id: uid("BL"), wo_id: w.wo_id, period: $("#blPer").value,
-          verified_qty: verifiedQtyOfWO(w.wo_id), accepted_qty: acceptedQtyOfWO(w.wo_id),
+          billable_id: uid("BL"), bamk_id: w.bamk_id, period: $("#blPer").value,
+          verified_qty: verifiedQtyOfBamk(w.bamk_id), accepted_qty: acceptedQtyOfBamk(w.bamk_id),
           billable_qty: q, unit: $("#blUnit").value,
           gate_status: doc === "COMPLETE" ? "READY" : "NOT_READY",
           document_status: doc, released_date: ""
         });
-        audit("CREATE", "17_BILLABLE_PROGRESS", w.wo_id, "", q);
+        audit("CREATE", "17_BILLABLE_PROGRESS", w.bamk_id, "", q);
         save(); closeModal(); toast("Volume layak tagih dicatat.", "ok"); render();
       };
     });
     $$("[data-rel]").forEach(b => b.onclick = () => {
       const bl = byId(DB.billables, "billable_id", b.dataset.rel);
-      const w = woOf(bl.wo_id), sc = scopesOfWO(bl.wo_id)[0];
+      const w = bamkOf(bl.bamk_id), sc = scopesOfBamk(bl.bamk_id)[0];
       const rate = sc ? nz(sc.contract_rate) : 0;
       bl.released_date = today();
       DB.billings.push({
-        billing_id: uid("BG"), billing_no: "", period: bl.period, wo_id: bl.wo_id,
+        billing_id: uid("BG"), billing_no: "", period: bl.period, bamk_id: bl.bamk_id,
         billable_qty: bl.billable_qty, billing_value: rate * nz(bl.billable_qty),
         doc_received_date: today(), review_date: "", approval_date: "", invoice_date: "", payment_date: "",
         status: "DRAFT", current_pic: "Project Control", remarks: ""
@@ -1967,13 +2388,13 @@ VIEWS.billing = {
     <div class="card mt16"><h3>Estafet tagihan
       ${rw ? `<button class="btn a sm" id="bgNew">+ Tagihan manual</button>` : ""}</h3>
       <div class="body flush"><div class="tw"><table>
-      <thead><tr><th>No. tagihan</th><th>Periode / WO</th><th class="n">Volume</th><th class="n">Nilai</th>
+      <thead><tr><th>No. tagihan</th><th>Periode / BAMK</th><th class="n">Volume</th><th class="n">Nilai</th>
       <th>Tahapan</th><th>Umur</th><th>PIC</th><th></th></tr></thead>
       <tbody>${rows.length ? rows.map(b => {
       const i = BILL_STAGES.findIndex(s => s[0] === b.status);
       return `<tr>
           <td><b>${esc(b.billing_no || "(belum bernomor)")}</b><div class="tiny muted">${esc(b.remarks || "")}</div></td>
-          <td>${esc(b.period)}<div class="tiny muted">${esc(woNo(b.wo_id))}</div></td>
+          <td>${esc(b.period)}<div class="tiny muted">${esc(bamkNo(b.bamk_id))}</div></td>
           <td class="n">${fmt(b.billable_qty, 1)}</td><td class="n">${rupiah(b.billing_value)}</td>
           <td><div class="gate">${BILL_STAGES.slice(0, 5).map((s, k) => `<span class="${k <= i && b.status !== "HOLD" ? "on" : ""}">${s[1]}</span>`).join('<i>›</i>')}
             ${b.status === "HOLD" ? `<span class="b red">Tertahan</span>` : ""}</div></td>
@@ -1991,7 +2412,7 @@ VIEWS.billing = {
 };
 function billModal(id) {
   const b = id ? byId(DB.billings, "billing_id", id) : {
-    billing_id: uid("BG"), billing_no: "", period: monthOf(today()), wo_id: DB.wos[0] ? DB.wos[0].wo_id : "",
+    billing_id: uid("BG"), billing_no: "", period: monthOf(today()), bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "",
     billable_qty: 0, billing_value: 0, doc_received_date: today(), review_date: "", approval_date: "",
     invoice_date: "", payment_date: "", status: "DRAFT", current_pic: "", remarks: ""
   };
@@ -1999,7 +2420,7 @@ function billModal(id) {
     <div class="fg c3">
       <label class="f"><span>Nomor tagihan</span><input type="text" id="bgNo" value="${esc(b.billing_no)}"></label>
       <label class="f"><span>Periode</span><input type="text" id="bgPer" value="${esc(b.period)}"></label>
-      <label class="f"><span>WO</span><select id="bgWo">${opts(DB.wos, b.wo_id, w => w.wo_id, w => w.wo_no)}</select></label>
+      <label class="f"><span>BAMK</span><select id="bgWo">${opts(DB.bamk, b.bamk_id, w => w.bamk_id, w => w.bamk_no)}</select></label>
       <label class="f"><span>Volume</span><input type="number" step="any" id="bgQty" value="${b.billable_qty}"></label>
       <label class="f"><span>Nilai tagihan (Rp)</span><input type="number" step="any" id="bgVal" value="${b.billing_value}"></label>
       <label class="f"><span>Tahapan</span><select id="bgSt">${opts(BILL_STAGES.map(s => ({ k: s[0], v: s[1] })), b.status, o => o.k, o => o.v)}</select></label>
@@ -2015,7 +2436,7 @@ function billModal(id) {
   $("#bgSave").onclick = () => {
     const old = b.status;
     Object.assign(b, {
-      billing_no: $("#bgNo").value, period: $("#bgPer").value, wo_id: $("#bgWo").value,
+      billing_no: $("#bgNo").value, period: $("#bgPer").value, bamk_id: $("#bgWo").value,
       billable_qty: nz($("#bgQty").value), billing_value: nz($("#bgVal").value), status: $("#bgSt").value,
       doc_received_date: $("#bgD1").value, review_date: $("#bgD2").value, approval_date: $("#bgD3").value,
       invoice_date: $("#bgD4").value, payment_date: $("#bgD5").value,
@@ -2037,9 +2458,9 @@ VIEWS.documents = {
     return `
     <div class="card"><h3>Dokumen dasar tagihan ${rw ? `<button class="btn a sm" id="dcNew">+ Dokumen</button>` : ""}</h3>
       <div class="body flush"><div class="tw"><table>
-      <thead><tr><th>WO</th><th>Jenis</th><th>Nomor</th><th>Tanggal</th><th>Wajib tagihan</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>BAMK</th><th>Jenis</th><th>Nomor</th><th>Tanggal</th><th>Wajib tagihan</th><th>Status</th><th></th></tr></thead>
       <tbody>${DB.documents.length ? DB.documents.map(d => `<tr>
-        <td>${esc(woNo(d.wo_id))}</td><td>${esc(d.document_type)}</td><td>${esc(d.document_no || "—")}</td>
+        <td>${esc(bamkNo(d.bamk_id))}</td><td>${esc(d.document_type)}</td><td>${esc(d.document_no || "—")}</td>
         <td class="num tiny">${esc(d.document_date || "—")}</td>
         <td>${d.required_for_billing ? `<span class="b blue">Wajib</span>` : `<span class="b gray">Pendukung</span>`}</td>
         <td><span class="b ${d.status === "APPROVED" ? "teal" : d.status === "AVAILABLE" ? "amber" : "red"}">${d.status === "APPROVED" ? "Disetujui" : d.status === "AVAILABLE" ? "Tersedia" : "Belum ada"}</span></td>
@@ -2054,12 +2475,12 @@ VIEWS.documents = {
 };
 function docModal(id) {
   const d = id ? byId(DB.documents, "document_id", id) : {
-    document_id: uid("DC"), wo_id: DB.wos[0] ? DB.wos[0].wo_id : "", document_type: DOC_TYPES[0],
+    document_id: uid("DC"), bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "", document_type: DOC_TYPES[0],
     document_no: "", document_date: today(), file_url: "", required_for_billing: true, status: "MISSING", remarks: ""
   };
   openModal(id ? "Ubah dokumen" : "Dokumen baru", `
     <div class="fg c2">
-      <label class="f"><span>WO</span><select id="dcWo">${opts(DB.wos, d.wo_id, w => w.wo_id, w => w.wo_no)}</select></label>
+      <label class="f"><span>BAMK</span><select id="dcWo">${opts(DB.bamk, d.bamk_id, w => w.bamk_id, w => w.bamk_no)}</select></label>
       <label class="f"><span>Jenis dokumen</span><select id="dcTy">${opts(DOC_TYPES.map(x => ({ x })), d.document_type, o => o.x, o => o.x)}</select></label>
       <label class="f"><span>Nomor</span><input type="text" id="dcNo" value="${esc(d.document_no)}"></label>
       <label class="f"><span>Tanggal</span><input type="date" id="dcDt" value="${esc(d.document_date)}"></label>
@@ -2074,7 +2495,7 @@ function docModal(id) {
     `${id ? `<button class="btn d" id="dcDel">Hapus</button>` : ""}<button class="btn p" id="dcSave">Simpan</button>`);
   $("#dcSave").onclick = () => {
     Object.assign(d, {
-      wo_id: $("#dcWo").value, document_type: $("#dcTy").value, document_no: $("#dcNo").value,
+      bamk_id: $("#dcWo").value, document_type: $("#dcTy").value, document_no: $("#dcNo").value,
       document_date: $("#dcDt").value, file_url: $("#dcUrl").value, status: $("#dcSt").value,
       required_for_billing: $("#dcReq").checked, remarks: $("#dcRem").value
     });
@@ -2132,10 +2553,10 @@ VIEWS.issues = {
     </div>
     <div class="card"><h3>Kendala & delay ${rw ? `<button class="btn a sm" id="isNew">+ Kendala</button>` : ""}</h3>
       <div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Tanggal</th><th>WO / Tanki</th><th>Kategori</th><th>Uraian</th><th>Dampak</th><th>Tindakan</th><th>PIC</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Tanggal</th><th>BAMK / Tanki</th><th>Kategori</th><th>Uraian</th><th>Dampak</th><th>Tindakan</th><th>PIC</th><th>Status</th><th></th></tr></thead>
       <tbody>${DB.issues.length ? DB.issues.slice().sort((a, b) => b.issue_date.localeCompare(a.issue_date)).map(i => `<tr>
         <td class="num tiny">${esc(i.issue_date)}</td>
-        <td>${esc(woNo(i.wo_id))}<div class="tiny muted">${esc(tankNo(woOf(i.wo_id) ? woOf(i.wo_id).tank_id : ""))}</div></td>
+        <td>${esc(bamkNo(i.bamk_id))}<div class="tiny muted">${esc(tankNo(bamkOf(i.bamk_id) ? bamkOf(i.bamk_id).tank_id : ""))}</div></td>
         <td class="tiny">${esc(i.category)}</td><td>${esc(i.description)}</td><td class="tiny">${esc(i.impact || "—")}</td>
         <td class="tiny">${esc(i.action || "—")}</td><td class="tiny">${esc(picText(i))}</td>
         <td><span class="b ${i.status === "CLOSED" ? "teal" : i.status === "ON PROGRESS" ? "amber" : "red"}">${esc(i.status)}</span></td>
@@ -2150,13 +2571,13 @@ VIEWS.issues = {
 };
 function issueModal(id) {
   const i = id ? byId(DB.issues, "issue_id", id) : {
-    issue_id: uid("IS"), daily_id: "", wo_id: DB.wos[0] ? DB.wos[0].wo_id : "", issue_date: today(),
+    issue_id: uid("IS"), daily_id: "", bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "", issue_date: today(),
     category: "TEKNIS", description: "", impact: "", action: "", owner_side: "", owner: "", status: "OPEN"
   };
   openModal(id ? "Ubah kendala" : "Kendala baru", `
     <div class="fg c3">
       <label class="f"><span>Tanggal</span><input type="date" id="isDt" value="${esc(i.issue_date)}"></label>
-      <label class="f"><span>WO</span><select id="isWo">${opts(DB.wos, i.wo_id, w => w.wo_id, w => w.wo_no)}</select></label>
+      <label class="f"><span>BAMK</span><select id="isWo">${opts(DB.bamk, i.bamk_id, w => w.bamk_id, w => w.bamk_no)}</select></label>
       <label class="f"><span>Kategori</span><select id="isCat">${opts(["TEKNIS", "IZIN", "MATERIAL", "CUACA", "TENAGA KERJA", "PERALATAN", "LAINNYA"].map(x => ({ x })), i.category, o => o.x, o => o.x)}</select></label>
       <label class="f"><span>Dampak</span><input type="text" id="isImp" value="${esc(i.impact)}"></label>
       <label class="f"><span>PIC dari pihak</span><select id="isSide">${listOpts(PIHAK, i.owner_side, "—")}</select></label>
@@ -2169,7 +2590,7 @@ function issueModal(id) {
   $("#isSave").onclick = () => {
     const old = i.status;
     Object.assign(i, {
-      issue_date: $("#isDt").value, wo_id: $("#isWo").value, category: $("#isCat").value,
+      issue_date: $("#isDt").value, bamk_id: $("#isWo").value, category: $("#isCat").value,
       impact: $("#isImp").value, owner_side: $("#isSide").value, owner: $("#isOwn").value, status: $("#isSt").value,
       description: $("#isDesc").value, action: $("#isAct").value
     });
@@ -2351,6 +2772,7 @@ VIEWS.reports = {
     </div><div class="body">
       <div class="row"><span class="small muted grow">Rekap dihasilkan dari laporan harian. Tidak ada input ulang.</span>
         <button class="btn sm" id="rpCsv">Unduh CSV</button>
+        <button class="btn sm" id="rpMa4">Laporan Kemajuan ke Pengawas</button>
         <button class="btn sm" id="rpPrint">Cetak</button></div>
       <div class="tw mt12"><table>
         <thead><tr><th>Periode</th><th class="n">Laporan</th><th class="n">Target</th><th class="n">Realisasi</th>
@@ -2387,13 +2809,13 @@ VIEWS.reports = {
     })()}
       </tbody></table></div></div></div>
 
-    <div class="card"><h3>Ringkasan per WO</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>WO / Tanki</th><th>Paket</th><th class="n">Realisasi</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Layak tagih</th><th>Status</th></tr></thead>
-      <tbody>${DB.wos.map(w => `<tr><td><b>${esc(w.wo_no)}</b><div class="tiny muted">${esc(tankNo(w.tank_id))}</div></td>
+    <div class="card"><h3>Ringkasan per BAMK</h3><div class="body flush"><div class="tw"><table>
+      <thead><tr><th>BAMK / Tanki</th><th>Paket</th><th class="n">Realisasi</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Layak tagih</th><th>Status</th></tr></thead>
+      <tbody>${DB.bamk.map(w => `<tr><td><b>${esc(w.bamk_no)}</b><div class="tiny muted">${esc(tankNo(w.tank_id))}</div></td>
         <td class="tiny">${esc(w.work_package)}</td>
-        <td class="n">${fmt(actualQtyOfWO(w.wo_id), 1)}</td><td class="n">${fmt(verifiedQtyOfWO(w.wo_id), 1)}</td>
-        <td class="n">${fmt(acceptedQtyOfWO(w.wo_id), 1)}</td><td class="n">${fmt(billedOfWO(w.wo_id), 1)}</td>
-        <td><span class="b ${w.status === "ISSUED" ? "blue" : "gray"}">${esc(w.status)}</span></td></tr>`).join("")}
+        <td class="n">${fmt(actualQtyOfBamk(w.bamk_id), 1)}</td><td class="n">${fmt(verifiedQtyOfBamk(w.bamk_id), 1)}</td>
+        <td class="n">${fmt(acceptedQtyOfBamk(w.bamk_id), 1)}</td><td class="n">${fmt(billedOfBamk(w.bamk_id), 1)}</td>
+        <td><span class="b ${w.status === "AKTIF" ? "blue" : "gray"}">${esc(w.status)}</span></td></tr>`).join("")}
       </tbody></table></div></div></div>`;
   },
   bind() {
@@ -2406,8 +2828,94 @@ VIEWS.reports = {
           .concat(rows.map(r => [r.lab, r.laporan, r.target, r.actual, r.actual - r.target, r.verified, r.accepted, r.billable,
             r.mp, r.laporan ? (r.mp / r.laporan).toFixed(1) : 0, r.issues])));
     };
+    $("#rpMa4").onclick = () => laporanKemajuanPengawas();
   }
 };
+
+/* Laporan kemajuan pekerjaan untuk disampaikan rutin kepada pengawas
+   Pertamina, sebagaimana diminta pada catatan SPK. Satu halaman per SPK
+   berjalan, dibuka di jendela cetak supaya bisa langsung disimpan PDF. */
+function laporanKemajuanPengawas() {
+  const aktif = DB.spk.filter(x => x.status === "TERBIT" || x.status === "SELESAI");
+  if (!aktif.length) return toast("Belum ada SPK terbit, jadi belum ada yang dilaporkan.", "err");
+  const sampai = today();
+  const bagian = aktif.map(sp => {
+    const bs = DB.bamk.filter(b => b.spk_id === sp.spk_id);
+    const vol = bs.reduce((a, b) => a + volBamk(b), 0);
+    const earn = bs.reduce((a, b) => a + earnedBamk(b.bamk_id), 0);
+    const sisa = sp.finish_date ? Math.round((new Date(sp.finish_date + "T00:00:00") - new Date(sampai + "T00:00:00")) / 86400000) : null;
+    const hari = bs.length ? hariRencana(bs[0]) : 0;
+    const lewat = (sp.start_date && hari) ? Math.min(hari, Math.max(0,
+      Math.round((new Date(sampai + "T00:00:00") - new Date(sp.start_date + "T00:00:00")) / 86400000) + 1)) : 0;
+    const rencanaPct = hari ? lewat / hari * 100 : 0;
+    const aktualPct = vol ? earn / vol * 100 : 0;
+    const dl = DB.dailies.filter(d => bs.some(b => b.bamk_id === d.bamk_id) && d.status !== "REJECTED");
+    const kendala = DB.issues.filter(i => bs.some(b => b.bamk_id === i.bamk_id) && i.status !== "CLOSED");
+
+    const perTanki = bs.map(b => {
+      const rows = tahapAktif().map(t => {
+        const per = BAGIAN.map(g => kumulatif(b.bamk_id, g[0], t.stage_id, null));
+        return { t, per, jml: per.reduce((a, v) => a + v, 0) };
+      });
+      return { b, rows };
+    });
+
+    return `
+    <h2>SPK ${esc(sp.spk_no)}</h2>
+    <table class="k"><tbody>
+      <tr><td>No. kontrak / SP</td><td>${esc(sp.contract_no || "—")}</td></tr>
+      <tr><td>Jangka waktu</td><td>${esc(dateID(sp.start_date))} s/d ${esc(dateID(sp.finish_date))} (${nz(sp.duration_days)} hari kalender)</td></tr>
+      <tr><td>Metode pelaksanaan</td><td>${esc(sp.method || "—")}</td></tr>
+      <tr><td>Jam kerja</td><td>${esc(sp.work_hours || "—")}</td></tr>
+      <tr><td>Sisa waktu</td><td>${sisa === null ? "—" : (sisa < 0 ? "terlampaui " + (-sisa) + " hari" : sisa + " hari")}</td></tr>
+      <tr><td>Volume pekerjaan</td><td>${fmt(vol, 2)} m&sup2;</td></tr>
+      <tr><td>Rencana s/d hari ini</td><td>${fmt(rencanaPct, 1)}%</td></tr>
+      <tr><td>Realisasi s/d hari ini</td><td><b>${fmt(aktualPct, 1)}%</b> (${fmt(earn, 2)} m&sup2; setara selesai)</td></tr>
+      <tr><td>Deviasi</td><td>${fmt(aktualPct - rencanaPct, 1)}%</td></tr>
+      <tr><td>Jumlah laporan harian</td><td>${dl.length}</td></tr>
+    </tbody></table>
+    ${perTanki.map(x => `
+      <h3>Tanki ${esc(tankNo(x.b.tank_id))} &mdash; BAMK ${esc(x.b.bamk_no)}</h3>
+      <table class="k"><thead><tr><th>Tahap</th>${BAGIAN.map(g => `<th>${esc(g[1])}</th>`).join("")}<th>Jumlah</th><th>%</th></tr></thead>
+      <tbody>${x.rows.map(r => `<tr><td>${esc(r.t.stage_name)}</td>
+        ${r.per.map((v, i) => `<td>${fmt(v, 2)} / ${fmt(volBagian(x.b, BAGIAN[i][0]), 2)}</td>`).join("")}
+        <td>${fmt(r.jml, 2)}</td><td>${fmt(volBamk(x.b) ? r.jml / volBamk(x.b) * 100 : 0, 1)}%</td></tr>`).join("")}
+      </tbody></table>`).join("")}
+    ${kendala.length ? `<h3>Kendala yang masih terbuka</h3><table class="k"><thead><tr><th>Tanggal</th><th>Kategori</th><th>Uraian</th><th>Tindakan</th></tr></thead>
+      <tbody>${kendala.map(i => `<tr><td>${esc(i.issue_date)}</td><td>${esc(i.category)}</td><td>${esc(i.description)}</td><td>${esc(i.action || "—")}</td></tr>`).join("")}</tbody></table>`
+        : `<p><i>Tidak ada kendala terbuka.</i></p>`}`;
+  }).join("<hr>");
+
+  const html = `<!doctype html><html lang="id"><head><meta charset="utf-8">
+  <title>Laporan Kemajuan Pekerjaan ${sampai}</title>
+  <style>
+    body{font-family:Segoe UI,Arial,sans-serif;color:#16232E;margin:28px;font-size:12px}
+    h1{font-size:17px;margin:0 0 2px} h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #0E2233;padding-bottom:3px}
+    h3{font-size:12.5px;margin:14px 0 5px} hr{margin:24px 0;border:none;border-top:1px dashed #9AA7B2}
+    table.k{border-collapse:collapse;width:100%;margin-bottom:8px}
+    table.k td,table.k th{border:1px solid #C7D0D8;padding:4px 7px;text-align:left;vertical-align:top}
+    table.k th{background:#EEF2F5} table.k td:first-child{width:190px}
+    .kop{border-bottom:3px solid #0E2233;padding-bottom:8px;margin-bottom:14px}
+    .muted{color:#5C6B78;font-size:11px}
+    @media print{body{margin:12mm}}
+  </style></head><body>
+  <div class="kop">
+    <h1>LAPORAN KEMAJUAN PEKERJAAN</h1>
+    <div class="muted">${esc(DB.config.project_name || "")}</div>
+    <div class="muted">Pelaksana: ${esc(DB.config.contractor_name || "")} &middot; Mitra pelaksana: ${esc(DB.config.party_two_name || "")}</div>
+    <div class="muted">Disampaikan kepada: ${esc(DB.config.pertamina_supervisor || "Pengawas Pertamina")}</div>
+    <div class="muted">Posisi data: ${esc(dateID(sampai))} &middot; dicetak oleh ${esc(S.user ? S.user.user_name : "-")}</div>
+  </div>
+  ${bagian}
+  <p class="muted" style="margin-top:22px">Angka pada laporan ini dihitung sendiri oleh HBM Integrated Project Control System
+  dari laporan harian yang telah melewati verifikasi, bukan diketik ulang.</p>
+  </body></html>`;
+
+  const w = window.open("", "_blank");
+  if (!w) return toast("Jendela baru diblokir peramban. Izinkan pop-up lalu ulangi.", "err");
+  w.document.write(html); w.document.close();
+  setTimeout(() => { try { w.print(); } catch (e) { } }, 400);
+}
 /* ============================================================
    MESIN SINKRONISASI
    Aplikasi tetap bekerja penuh tanpa internet. Sinkronisasi hanya
@@ -3005,6 +3513,45 @@ async function periksaSinkron(T) {
   if (tunda)
     T("Penghapusan menunggu dikirim", "info", tunda + " baris yang Anda hapus belum disampaikan ke server, jadi masih terlihat di perangkat lain sampai Sinkronkan ditekan.");
 
+  /* --- 7b. kesehatan rantai SPK > BAMK > eksekusi -------------- */
+  const bobot = totalBobot();
+  if (!tahapAktif().length)
+    T("Tahapan pengecatan", "gagal", "Belum ada tahap aktif. Layar lapangan tidak bisa dipakai sampai Master Data \u203a Tahapan diisi.");
+  else if (Math.abs(bobot - 100) > 0.01)
+    T("Bobot tahapan", "gagal", "Total bobot tahap aktif " + fmt(bobot, 1) + "%, seharusnya 100%. Selama belum 100%, persentase progress tanki salah.");
+  else
+    T("Bobot tahapan", "ok", tahapAktif().length + " tahap aktif, total bobot 100%.");
+
+  const bamkYatim = DB.bamk.filter(b => !spkOf(b.spk_id));
+  if (bamkYatim.length)
+    T("BAMK tanpa SPK", "gagal", bamkYatim.length + " BAMK belum ditautkan ke SPK Pertamina (" +
+      bamkYatim.slice(0, 3).map(b => b.bamk_no || b.bamk_id).join(", ") + "). Tanki ini tidak akan muncul di layar lapangan.");
+  else if (DB.bamk.length)
+    T("BAMK tertaut SPK", "ok", DB.bamk.length + " BAMK, semuanya menempel pada SPK.");
+
+  const aktifTanpaTerbit = DB.bamk.filter(b => b.status === "AKTIF" && !spkTerbit(b.spk_id));
+  if (aktifTanpaTerbit.length)
+    T("BAMK aktif tanpa SPK terbit", "peringatan", aktifTanpaTerbit.length + " BAMK berstatus AKTIF tetapi SPK induknya belum TERBIT, jadi tetap terkunci di lapangan.");
+
+  const bedaVol = DB.bamk.filter(b => {
+    const v = volDariTanki(b.tank_id), hit = v.shell + v.acc + v.roof, tot = volBamk(b);
+    return hit > 0 && tot > 0 && Math.abs(tot - hit) / hit > 0.01;
+  });
+  if (bedaVol.length)
+    T("Volume BAMK beda dari hitungan tanki", "peringatan", bedaVol.length + " BAMK selisihnya lebih dari 1% terhadap luas eksterior hasil hitungan (" +
+      bedaVol.slice(0, 3).map(b => tankNo(b.tank_id)).join(", ") + "). Periksa mana yang benar sebelum dipakai menagih.");
+  else if (DB.bamk.length)
+    T("Volume BAMK", "ok", "Seluruh volume BAMK cocok dengan hitungan luas eksterior dalam batas 1%.");
+
+  const perluTinjau = DB.progress.filter(p => p.perlu_tinjau).length;
+  if (perluTinjau)
+    T("Baris progress warisan versi lama", "peringatan", perluTinjau + " baris progress dari versi sebelum 1.8 diberi bagian Shell dan tahap pertama secara otomatis. Project Control perlu meninjaunya sekali.");
+
+  const spkLewat = DB.spk.filter(x => x.status === "TERBIT" && x.finish_date && x.finish_date < today());
+  if (spkLewat.length)
+    T("SPK melewati batas waktu", "peringatan", spkLewat.length + " SPK sudah lewat tanggal selesai tetapi masih berstatus TERBIT (" +
+      spkLewat.slice(0, 3).map(x => x.spk_no).join(", ") + ").");
+
   /* --- 8. kirim catatan uji ----------------------------------- */
   /* Nomor uji harus benar-benar unik: nomor yang pernah dihapus akan ditolak
      server, jadi tidak boleh terulang meski dua pemeriksaan berdekatan. */
@@ -3143,7 +3690,8 @@ async function periksaSinkron(T) {
 VIEWS.master = {
   html() {
     const tab = S.tab || "tank";
-    const T = { area: "Area", tank: "Tanki", wo: "Work Order", scope: "Scope", target: "Target Plan" };
+    const T = { area: "Area", tank: "Tanki", spk: "SPK Pertamina", bamk: "BAMK ke Pelaksana",
+      stage: "Tahapan", scope: "Scope", target: "Target Plan" };
     let body = "";
     if (tab === "area") body = `
       <div class="row"><span class="small muted grow">Tiga area kerja program.</span><button class="btn a sm" id="mNew">+ Area</button></div>
@@ -3181,26 +3729,79 @@ VIEWS.master = {
         <th class="n">${fmt(DB.tanks.reduce((a, t) => a + nz(t.baseline_qty), 0), 1)}</th>
         <th colspan="3"></th></tr></tfoot></table></div>`;
 
-    if (tab === "wo") body = `
-      <div class="row"><span class="small muted grow">WO diterbitkan dari pusat kendali HBM. Hanya WO berstatus <b>ISSUED</b> yang bisa dipakai membuat laporan harian — WO berstatus DRAFT belum terbaca di layar lapangan.</span>
-        <button class="btn a sm" id="mNew">+ Work Order</button></div>
-      <div class="tw mt12"><table><thead><tr><th>Nomor WO</th><th>Tanki / Area</th><th>Paket</th><th>Terbit</th>
-        <th class="n">Approved</th><th>Penugasan Palda</th><th>Status</th><th></th></tr></thead>
-      <tbody>${DB.wos.map(w => `<tr><td><b>${esc(w.wo_no)}</b><div class="tiny muted">${esc(w.instruction_ref || "tanpa ref instruksi")}</div></td>
+    if (tab === "spk") body = `
+      <div class="row"><span class="small muted grow">SPK diterbitkan <b>Pertamina</b>, bukan sistem ini. Nomornya diisi apa adanya sesuai surat.
+        Sebuah tanki baru boleh dikerjakan setelah SPK-nya berstatus <b>TERBIT</b>.</span>
+        <button class="btn a sm" id="mNew">+ SPK</button></div>
+      <div class="note mt12">Urutannya: <b>SPK Pertamina</b> &rsaquo; <b>BAMK ke ${esc(DB.config.party_two_name || "pelaksana")}</b> &rsaquo; eksekusi lapangan.
+        Selama dua langkah pertama belum lengkap, tanki tidak muncul di layar Admin Site.</div>
+      <div class="tw mt12"><table><thead><tr><th>Nomor SPK</th><th>Tanki</th><th>Jangka waktu</th>
+        <th class="n">Sisa hari</th><th class="n">Volume</th><th>BAMK</th><th>Status</th><th></th></tr></thead>
+      <tbody>${DB.spk.length ? DB.spk.slice().sort((a, b) => (b.issue_date || "").localeCompare(a.issue_date || "")).map(x => {
+      const it = spkItemsOf(x.spk_id);
+      const vol = it.reduce((a, i) => { const L = luasTanki(tankOf(i.tank_id)); return a + (L ? L.total : 0); }, 0);
+      const nBamk = DB.bamk.filter(b => b.spk_id === x.spk_id).length;
+      let sisa = null;
+      if (x.finish_date) sisa = Math.round((new Date(x.finish_date + "T00:00:00") - new Date(today() + "T00:00:00")) / 86400000);
+      const kritis = sisa !== null && sisa <= nz(DB.config.spk_alarm_h);
+      return `<tr><td><b>${esc(x.spk_no || "—")}</b><div class="tiny muted">${esc(x.contract_no || "tanpa no. kontrak")}</div></td>
+        <td class="tiny">${it.length ? it.map(i => esc(tankNo(i.tank_id))).join(", ") : `<span class="muted">belum ada tanki</span>`}</td>
+        <td class="tiny num">${esc(x.start_date || "—")} &rarr; ${esc(x.finish_date || "—")}<div class="muted">${nz(x.duration_days)} hari kalender</div></td>
+        <td class="n ${kritis ? "" : "tiny"}" ${kritis ? `style="color:var(--red);font-weight:700"` : ""}>${sisa === null ? "—" : (sisa < 0 ? "lewat " + (-sisa) : sisa)}</td>
+        <td class="n">${fmt(vol, 1)}</td>
+        <td class="tiny">${nBamk ? nBamk + " BAMK" : `<span style="color:var(--amber)">belum ada BAMK</span>`}</td>
+        <td><span class="b ${x.status === "TERBIT" ? "blue" : x.status === "SELESAI" ? "teal" : "gray"}">${esc(x.status)}</span></td>
+        <td class="right"><button class="btn sm" data-ed="${x.spk_id}">Ubah</button></td></tr>`;
+    }).join("") : `<tr><td colspan="8"><div class="empty"><b>Belum ada SPK</b>Masukkan SPK pertama dari Pertamina supaya pekerjaan bisa dimulai.</div></td></tr>`}
+      </tbody></table></div>`;
+
+    if (tab === "bamk") body = `
+      <div class="row"><span class="small muted grow">BAMK adalah perintah eksekusi dari HBM ke ${esc(DB.config.party_two_name || "pelaksana")}, satu baris per tanki, membawa volume Shell / Accessories / Roof.
+        Hanya BAMK berstatus <b>AKTIF</b> dengan SPK <b>TERBIT</b> yang terbaca di layar lapangan.</span>
+        <button class="btn a sm" id="mNew">+ BAMK</button></div>
+      <div class="tw mt12"><table><thead><tr><th>Nomor BAMK</th><th>SPK</th><th>Tanki / Area</th><th>Tanggal</th>
+        <th class="n">Shell</th><th class="n">Acc</th><th class="n">Roof</th><th class="n">Total</th>
+        <th class="n">Target/hari</th><th class="n">Progress</th><th>Status</th><th></th></tr></thead>
+      <tbody>${DB.bamk.length ? DB.bamk.map(w => {
+      const p = persenBamk(w.bamk_id), sp = spkOf(w.spk_id);
+      const yatim = !sp;
+      return `<tr><td><b>${esc(w.bamk_no || "—")}</b><div class="tiny muted">${esc(w.bamk_id)}</div></td>
+        <td class="tiny">${yatim ? `<span style="color:var(--red)">belum ditautkan</span>` : esc(sp.spk_no)}</td>
         <td>${esc(tankNo(w.tank_id))}<div class="tiny muted">${esc(areaName(w.area_id))}</div></td>
-        <td class="tiny">${esc(w.work_package)}</td><td class="num tiny">${esc(w.issue_date)}</td>
-        <td class="n">${fmt(w.approved_qty, 1)} ${esc(w.unit || "")}</td>
-        <td class="tiny">${w.palda_target_qty ? fmt(w.palda_target_qty, 1) + " · " + esc(w.palda_pic || "-") : "—"}</td>
-        <td><span class="b ${w.status === "ISSUED" ? "blue" : w.status === "CLOSED" ? "teal" : "gray"}">${esc(w.status)}</span></td>
-        <td class="right"><button class="btn sm" data-ed="${w.wo_id}">Ubah</button></td></tr>`).join("")}</tbody></table></div>`;
+        <td class="num tiny">${esc(w.bamk_date || "—")}</td>
+        <td class="n tiny">${fmt(w.vol_shell, 2)}</td><td class="n tiny">${fmt(w.vol_acc, 2)}</td>
+        <td class="n tiny">${fmt(w.vol_roof, 2)}</td><td class="n"><b>${fmt(volBamk(w), 2)}</b>${nz(w.bakp_qty) > 0 ? `<div class="tiny" style="color:var(--teal)">BAKP ${fmt(w.bakp_qty, 2)}</div>` : ""}</td>
+        <td class="n tiny">${targetHarian(w) ? fmt(targetHarian(w), 2) : "—"}</td>
+        <td class="n">${fmt(p, 1)}%${barHtml(p)}</td>
+        <td><span class="b ${w.status === "AKTIF" ? "blue" : w.status === "DITUTUP" ? "teal" : "gray"}">${esc(w.status)}</span></td>
+        <td class="right"><button class="btn sm" data-ed="${w.bamk_id}">Ubah</button></td></tr>`;
+    }).join("") : `<tr><td colspan="12"><div class="empty"><b>Belum ada BAMK</b>Buat SPK dulu, lalu terbitkan BAMK per tanki.</div></td></tr>`}
+      </tbody></table></div>`;
+
+    if (tab === "stage") {
+      const tot = totalBobot();
+      body = `
+      <div class="row"><span class="small muted grow">Tahapan yang diisi orang lapangan. Bobot menentukan berapa persen satu tahap menyumbang pada progress tanki.</span>
+        <button class="btn a sm" id="mNew">+ Tahap</button></div>
+      <div class="note ${Math.abs(tot - 100) > 0.01 ? "warn" : ""} mt12">Total bobot tahap aktif saat ini <b>${fmt(tot, 1)}%</b>.
+        ${Math.abs(tot - 100) > 0.01 ? "Harus tepat 100% supaya persentase progress benar." : "Sudah tepat 100%."}
+        <div class="tiny mt8">Mengubah tahapan saat tanki sedang berjalan akan menghitung ulang progress yang sudah masuk — sebaiknya ditetapkan sebelum pekerjaan dimulai.</div></div>
+      <div class="tw mt12"><table><thead><tr><th class="n">Urut</th><th>Kode</th><th>Nama tahap</th>
+        <th class="n">Bobot</th><th>Status</th><th></th></tr></thead>
+      <tbody>${(DB.stages || []).slice().sort((a, b) => nz(a.sort_order) - nz(b.sort_order)).map(t => `<tr>
+        <td class="n tiny">${nz(t.sort_order)}</td><td><b>${esc(t.stage_code)}</b></td><td>${esc(t.stage_name)}</td>
+        <td class="n">${fmt(t.weight_pct, 1)}%</td>
+        <td><span class="b ${t.active !== false ? "teal" : "gray"}">${t.active !== false ? "Aktif" : "Nonaktif"}</span></td>
+        <td class="right"><button class="btn sm" data-ed="${t.stage_id}">Ubah</button></td></tr>`).join("")}</tbody></table></div>`;
+    }
 
     if (tab === "scope") body = `
-      <div class="row"><span class="small muted grow">Scope dan kuantitas disetujui per WO. Rate hanya terlihat oleh peran berwenang.</span>
+      <div class="row"><span class="small muted grow">Scope dan kuantitas disetujui per BAMK. Rate hanya terlihat oleh peran berwenang.</span>
         <button class="btn a sm" id="mNew">+ Scope</button></div>
-      <div class="tw mt12"><table><thead><tr><th>Kode</th><th>Uraian</th><th>WO / Tanki</th><th>Satuan</th>
+      <div class="tw mt12"><table><thead><tr><th>Kode</th><th>Uraian</th><th>BAMK / Tanki</th><th>Satuan</th>
         <th class="n">Approved</th>${can("money") ? `<th class="n">Rate kontrak</th><th class="n">Rate Palda</th>` : ""}<th>Status</th><th></th></tr></thead>
       <tbody>${DB.scopes.map(s => `<tr><td><b>${esc(s.scope_code)}</b></td><td>${esc(s.scope_description)}</td>
-        <td class="tiny">${esc(woNo(s.wo_id))}<div class="muted">${esc(tankNo(s.tank_id))}</div></td>
+        <td class="tiny">${esc(bamkNo(s.bamk_id))}<div class="muted">${esc(tankNo(s.tank_id))}</div></td>
         <td>${esc(s.unit)}</td><td class="n">${fmt(s.approved_qty, 1)}</td>
         ${can("money") ? `<td class="n">${rupiah(s.contract_rate)}</td><td class="n">${rupiah(s.palda_rate)}</td>` : ""}
         <td><span class="b ${s.status === "AKTIF" ? "teal" : "gray"}">${esc(s.status)}</span></td>
@@ -3216,10 +3817,10 @@ VIEWS.master = {
         gunanya dua: menjadi garis biru putus-putus <b>rencana kumulatif</b> pada kurva di Dashboard sebagai pembanding
         realisasi, dan menjadi kolom rencana pada rekap bulanan. Kalau belum ada jadwal resmi, biarkan kosong —
         kurva akan menampilkan realisasi saja.</div>
-      <div class="tw mt12"><table><thead><tr><th>Periode</th><th>WO / Tanki</th><th class="n">Rencana</th>
+      <div class="tw mt12"><table><thead><tr><th>Periode</th><th>BAMK / Tanki</th><th class="n">Rencana</th>
         <th class="n">Rencana %</th><th>Sumber</th><th>Rev</th><th></th></tr></thead>
       <tbody>${DB.targets.length ? DB.targets.slice().sort((a, b) => a.period.localeCompare(b.period)).map(t => `<tr>
-        <td><b>${esc(monthID(t.period))}</b></td><td class="tiny">${esc(woNo(t.wo_id))} · ${esc(tankNo(woOf(t.wo_id) ? woOf(t.wo_id).tank_id : ""))}</td>
+        <td><b>${esc(monthID(t.period))}</b></td><td class="tiny">${esc(bamkNo(t.bamk_id))} · ${esc(tankNo(bamkOf(t.bamk_id) ? bamkOf(t.bamk_id).tank_id : ""))}</td>
         <td class="n">${fmt(t.planned_qty, 1)}</td><td class="n">${fmt(t.planned_pct, 1)}%</td>
         <td class="tiny">${esc(t.source || "—")}</td><td class="tiny">${esc(t.revision)}</td>
         <td class="right"><button class="btn sm" data-ed="${t.target_id}">Ubah</button></td></tr>`).join("")
@@ -3253,7 +3854,9 @@ function sasaranSimpan(arr, kunci, id, cadangan) {
 const MASTER_TABEL = {
   area:   { arr: () => DB.areas,   kunci: "area_id",   tabel: "areas",   log: "02_AREA_MASTER",  nama: "area",  label: r => r.area_name },
   tank:   { arr: () => DB.tanks,   kunci: "tank_id",   tabel: "tanks",   log: "03_TANK_MASTER",  nama: "tanki", label: r => r.tank_no },
-  wo:     { arr: () => DB.wos,     kunci: "wo_id",     tabel: "wos",     log: "04_WORK_ORDER",   nama: "work order", label: r => r.wo_no },
+  spk:    { arr: () => DB.spk,     kunci: "spk_id",    tabel: "spk",     log: "04A_SPK",        nama: "SPK",   label: r => r.spk_no },
+  bamk:   { arr: () => DB.bamk,    kunci: "bamk_id",   tabel: "bamk",    log: "04B_BAMK",       nama: "BAMK",  label: r => r.bamk_no },
+  stage:  { arr: () => DB.stages,  kunci: "stage_id",  tabel: "stages",  log: "04C_TAHAPAN",    nama: "tahap", label: r => r.stage_name },
   scope:  { arr: () => DB.scopes,  kunci: "scope_id",  tabel: "scopes",  log: "05_SCOPE_MASTER", nama: "scope", label: r => r.scope_code },
   target: { arr: () => DB.targets, kunci: "target_id", tabel: "targets", log: "06_TARGET_PLAN",  nama: "target", label: r => r.period }
 };
@@ -3268,11 +3871,13 @@ function alasanTakBolehHapus(tab, id) {
     if (n) pakai.push(n + " " + nama);
   };
   if (tab === "area") hitung(DB.tanks, "area_id", "tanki");
-  if (tab === "tank") { hitung(DB.wos, "tank_id", "work order"); hitung(DB.dailies, "tank_id", "laporan harian"); }
-  if (tab === "wo") {
-    hitung(DB.scopes, "wo_id", "scope"); hitung(DB.dailies, "wo_id", "laporan harian");
-    hitung(DB.targets, "wo_id", "target"); hitung(DB.verifications, "wo_id", "verifikasi");
-    hitung(DB.billables, "wo_id", "baris layak tagih"); hitung(DB.billings, "wo_id", "tagihan");
+  if (tab === "tank") { hitung(DB.spk_item, "tank_id", "baris SPK"); hitung(DB.bamk, "tank_id", "BAMK"); hitung(DB.dailies, "tank_id", "laporan harian"); }
+  if (tab === "spk") { hitung(DB.spk_item, "spk_id", "baris tanki"); hitung(DB.bamk, "spk_id", "BAMK"); }
+  if (tab === "stage") hitung(DB.progress, "stage_id", "baris progress");
+  if (tab === "bamk") {
+    hitung(DB.scopes, "bamk_id", "scope"); hitung(DB.dailies, "bamk_id", "laporan harian");
+    hitung(DB.targets, "bamk_id", "target"); hitung(DB.verifications, "bamk_id", "verifikasi");
+    hitung(DB.billables, "bamk_id", "baris layak tagih"); hitung(DB.billings, "bamk_id", "tagihan");
   }
   if (tab === "scope") { hitung(DB.progress, "scope_id", "baris progress"); hitung(DB.verifications, "scope_id", "verifikasi"); }
   return pakai.length ? pakai.join(", ") : "";
@@ -3354,65 +3959,199 @@ function masterModal(tab, id) {
     };
   }
 
-  if (tab === "wo") {
-    const w = id ? byId(DB.wos, "wo_id", id) : {
-      wo_id: uid("WO"), wo_no: "", tank_id: DB.tanks[0] ? DB.tanks[0].tank_id : "", area_id: "",
-      issue_date: today(), work_package: "", instruction_ref: "", approved_qty: 0, unit: "m2",
+  if (tab === "spk") {
+    const x = id ? byId(DB.spk, "spk_id", id) : {
+      spk_id: uid("SPK"), spk_no: "", contract_no: DB.config.contract_no || "",
+      issue_date: today(), start_date: today(), finish_date: "", duration_days: 30,
+      work_hours: "07.00 - 18.00 WITA", method: "Rope access",
+      supervisor_pertamina: DB.config.pertamina_supervisor || "", signed_by: "", signed_title: "",
+      status: "DRAFT", scan_url: "", notes: ""
+    };
+    const items = id ? spkItemsOf(id) : [];
+    title = id ? "Ubah SPK" : "SPK baru dari Pertamina";
+    body = `<div class="note">Nomor dan tanggal diisi <b>persis seperti surat</b> dari Pertamina. Sistem tidak membuat nomor SPK sendiri.</div>
+    <div class="fg c3 mt12">
+      <label class="f"><span>Nomor SPK <em>*</em></span><input type="text" id="xNo" value="${esc(x.spk_no)}" placeholder="003/KPI48144/2026-S0"></label>
+      <label class="f"><span>No. kontrak / SP induk</span><input type="text" id="xKon" value="${esc(x.contract_no)}" placeholder="SP3MK 030/KPI48100/2026-S0"></label>
+      <label class="f"><span>Tanggal surat</span><input type="date" id="xDt" value="${esc(x.issue_date)}"></label>
+      <label class="f"><span>Mulai (tmt) <em>*</em></span><input type="date" id="xSd" value="${esc(x.start_date)}"></label>
+      <label class="f"><span>Sampai dengan <em>*</em></span><input type="date" id="xFd" value="${esc(x.finish_date)}"></label>
+      <label class="f"><span>Durasi (hari kalender)</span><input type="number" id="xDur" value="${nz(x.duration_days)}" readonly></label>
+      <label class="f"><span>Jam kerja</span><input type="text" id="xJam" value="${esc(x.work_hours)}"></label>
+      <label class="f"><span>Metode pelaksanaan</span><input type="text" id="xMet" value="${esc(x.method)}" placeholder="rope access / scaffolding"></label>
+      <label class="f"><span>Status</span><select id="xSt">${opts(STATUS_SPK.map(v => ({ v })), x.status, o => o.v, o => o.v)}</select></label>
+      <label class="f"><span>Pengawas Pertamina</span><input type="text" id="xPw" value="${esc(x.supervisor_pertamina)}"></label>
+      <label class="f"><span>Ditandatangani</span><input type="text" id="xTtd" value="${esc(x.signed_by)}" placeholder="nama penanda tangan"></label>
+      <label class="f"><span>Jabatan</span><input type="text" id="xJab" value="${esc(x.signed_title)}" placeholder="Section Head Maintenance Area 4"></label>
+    </div>
+    <label class="f"><span>Tautan salinan surat (opsional)</span><input type="text" id="xScan" value="${esc(x.scan_url)}" placeholder="tautan Drive ke hasil pindai SPK"></label>
+    <h4 class="mt12">Tanki yang diperintahkan <span class="tiny muted">satu baris per Tag No. pada surat</span></h4>
+    <div class="note ${id ? "" : "warn"}">${id ? `Centang tanki yang masuk lingkup SPK ini.` : `Simpan dulu SPK-nya, baru daftar tanki dapat dicentang.`}</div>
+    ${id ? `<div class="tw mt8" style="max-height:260px;overflow:auto"><table><thead><tr><th></th><th>Tanki</th><th>Area</th><th class="n">Luas eksterior</th><th>Uraian pekerjaan</th></tr></thead>
+      <tbody>${DB.tanks.map(t => {
+      const it = items.find(i => i.tank_id === t.tank_id);
+      const L = luasTanki(t);
+      return `<tr><td><input type="checkbox" class="spkTank" data-tk="${t.tank_id}" ${it ? "checked" : ""}></td>
+        <td><b>${esc(t.tank_no)}</b></td><td class="tiny">${esc(areaName(t.area_id))}</td>
+        <td class="n tiny">${L ? fmt(L.total, 1) : "—"}</td>
+        <td><input type="text" class="spkDesc" data-tk="${t.tank_id}" value="${esc(it ? it.work_description : "Pengecatan tanki dengan metode " + (x.method || "rope access"))}" style="width:100%"></td></tr>`;
+    }).join("")}</tbody></table></div>` : ""}
+    <label class="f mt12"><span>Catatan</span><input type="text" id="xNote" value="${esc(x.notes || "")}"></label>`;
+    onSave = () => {
+      const rec = sasaranSimpan(DB.spk, "spk_id", id, x); if (!rec) return false;
+      const sd = $("#xSd").value, fd = $("#xFd").value;
+      Object.assign(rec, {
+        spk_no: $("#xNo").value.trim(), contract_no: $("#xKon").value, issue_date: $("#xDt").value,
+        start_date: sd, finish_date: fd,
+        duration_days: (sd && fd) ? Math.round((new Date(fd + "T00:00:00") - new Date(sd + "T00:00:00")) / 86400000) + 1 : 0,
+        work_hours: $("#xJam").value, method: $("#xMet").value, status: $("#xSt").value,
+        supervisor_pertamina: $("#xPw").value, signed_by: $("#xTtd").value, signed_title: $("#xJab").value,
+        scan_url: $("#xScan").value, notes: $("#xNote").value
+      });
+      if (!rec.spk_no) return toast("Nomor SPK wajib diisi persis seperti surat.", "err");
+      if (!rec.start_date || !rec.finish_date) return toast("Tanggal mulai dan selesai SPK wajib diisi.", "err");
+      if (rec.duration_days <= 0) return toast("Tanggal selesai tidak boleh sebelum tanggal mulai.", "err");
+      if (DB.spk.some(y => y.spk_id !== rec.spk_id && y.spk_no === rec.spk_no)) return toast("Nomor SPK sudah ada.", "err");
+      if (id) {
+        /* Sinkronkan daftar tanki dengan centang di layar. */
+        const dipilih = {};
+        $$(".spkTank").forEach(c => { if (c.checked) dipilih[c.dataset.tk] = true; });
+        const desc = {}; $$(".spkDesc").forEach(inp => desc[inp.dataset.tk] = inp.value);
+        spkItemsOf(id).forEach(it => {
+          if (!dipilih[it.tank_id]) {
+            tandaiHapus("spk_item", it.spk_item_id);
+            const i = DB.spk_item.findIndex(z => z.spk_item_id === it.spk_item_id);
+            if (i >= 0) DB.spk_item.splice(i, 1);
+          }
+        });
+        Object.keys(dipilih).forEach(tk => {
+          const t = tankOf(tk);
+          let it = DB.spk_item.find(z => z.spk_id === id && z.tank_id === tk);
+          if (!it) { it = { spk_item_id: uid("SI"), spk_id: id, tank_id: tk, in_scope: true, notes: "" }; DB.spk_item.push(it); }
+          it.area_id = t ? t.area_id : ""; it.work_description = desc[tk] || ""; it.in_scope = true;
+        });
+      }
+      if (!id) DB.spk.push(rec);
+      audit(id ? "UPDATE" : "CREATE", "04A_SPK", rec.spk_id, "", rec.spk_no);
+      return true;
+    };
+  }
+
+  if (tab === "bamk") {
+    const w = id ? byId(DB.bamk, "bamk_id", id) : {
+      bamk_id: uid("BA"), bamk_no: "", spk_id: S.f.spkBaru || (DB.spk[0] || {}).spk_id || "",
+      tank_id: "", area_id: "", bamk_date: today(), issue_date: today(),
+      work_package: "PENGECATAN EKSTERIOR", instruction_ref: "",
+      vol_shell: 0, vol_acc: 0, vol_roof: 0, approved_qty: 0, bakp_qty: 0, unit: "m2",
       status: "DRAFT", revision: "R0", palda_target_qty: 0, palda_due: "", palda_pic: "",
       planned_start: today(), planned_finish: "", notes: ""
     };
-    title = id ? "Ubah work order" : "Work order baru";
-    body = `<div class="fg c3">
-      <label class="f"><span>Nomor WO <em>*</em></span><input type="text" id="xNo" value="${esc(w.wo_no)}"></label>
-      <label class="f"><span>Tanki <em>*</em></span><select id="xTank">${opts(DB.tanks, w.tank_id, t => t.tank_id, t => t.tank_no + " — " + areaName(t.area_id))}</select></label>
-      <label class="f"><span>Tanggal terbit</span><input type="date" id="xDt" value="${esc(w.issue_date)}"></label>
-      <label class="f"><span>Paket pekerjaan <em>*</em></span><input type="text" id="xWp" list="dlPaket" autocomplete="off" value="${esc(w.work_package)}" placeholder="pilih atau ketik sendiri"></label>
-      <label class="f"><span>Referensi instruksi</span><input type="text" id="xRef" list="dlRef" autocomplete="off" value="${esc(w.instruction_ref)}" placeholder="pilih atau ketik sendiri"></label>
-      <label class="f"><span>Status</span><select id="xSt">${opts(["DRAFT", "ISSUED", "CLOSED", "CANCELLED"].map(x => ({ x })), w.status, o => o.x, o => o.x)}</select></label>
-      <label class="f"><span>Volume disetujui</span><input type="number" step="any" id="xQ" value="${w.approved_qty}"></label>
+    /* Tanki yang boleh dipilih hanya yang tercantum pada SPK terpilih. */
+    const spkPilih = w.spk_id, itemSPK = spkPilih ? spkItemsOf(spkPilih) : [];
+    const tanksSPK = itemSPK.map(i => tankOf(i.tank_id)).filter(Boolean);
+    const daftarTank = tanksSPK.length ? tanksSPK : DB.tanks;
+    title = id ? "Ubah BAMK" : "Berita Acara Mulai Kerja baru";
+    body = `<div class="note">BAMK ini yang dipegang ${esc(DB.config.party_two_name || "pelaksana")} sebagai dasar mulai bekerja.
+      Volume di bawah adalah <b>volume BAMK</b>; angka final untuk tagihan diisi di kolom BAKP setelah disetujui Pertamina.</div>
+    <div class="fg c3 mt12">
+      <label class="f"><span>SPK induk <em>*</em></span><select id="xSpk">${(DB.spk.length ? opts(DB.spk, w.spk_id, y => y.spk_id, y => y.spk_no + " (" + y.status + ")") : `<option value="">— belum ada SPK —</option>`)}</select></label>
+      <label class="f"><span>Nomor BAMK <em>*</em></span><input type="text" id="xNo" value="${esc(w.bamk_no)}" placeholder="001/BAMK-HBM/CTG/IX/2026"></label>
+      <label class="f"><span>Tanggal BAMK</span><input type="date" id="xDt" value="${esc(w.bamk_date)}"></label>
+      <label class="f"><span>Tanki <em>*</em></span><select id="xTank">${opts(daftarTank, w.tank_id, t => t.tank_id, t => t.tank_no + " — " + areaName(t.area_id))}</select></label>
+      <label class="f"><span>Paket pekerjaan</span><input type="text" id="xWp" list="dlPaket" autocomplete="off" value="${esc(w.work_package)}"></label>
+      <label class="f"><span>Status</span><select id="xSt">${opts(STATUS_BAMK.map(v => ({ v })), w.status, o => o.v, o => o.v)}</select></label>
+    </div>
+    <h4 class="mt12">Volume pekerjaan <button class="btn sm" id="xAmbil" type="button">Ambil dari hitungan tanki</button></h4>
+    <div class="fg c4">
+      <label class="f"><span>Shell (m&sup2;)</span><input type="number" step="any" id="xVs" value="${nz(w.vol_shell)}"></label>
+      <label class="f"><span>Accessories (m&sup2;)</span><input type="number" step="any" id="xVa" value="${nz(w.vol_acc)}"></label>
+      <label class="f"><span>Roof (m&sup2;)</span><input type="number" step="any" id="xVr" value="${nz(w.vol_roof)}"></label>
+      <label class="f"><span>Total BAMK</span><input type="text" id="xVt" value="${fmt(volBamk(w), 2)}" readonly></label>
+    </div>
+    <div id="xBeda" class="tiny muted"></div>
+    <div class="fg c3 mt12">
+      <label class="f"><span>Volume disetujui BAKP</span><input type="number" step="any" id="xBakp" value="${nz(w.bakp_qty)}" placeholder="isi setelah BAKP terbit"></label>
       <label class="f"><span>Satuan</span><input type="text" id="xU" value="${esc(w.unit)}"></label>
       <label class="f"><span>Revisi</span><input type="text" id="xRev" value="${esc(w.revision)}"></label>
-      <label class="f"><span>Rencana mulai</span><input type="date" id="xPs" value="${esc(w.planned_start)}"></label>
-      <label class="f"><span>Rencana selesai</span><input type="date" id="xPf" value="${esc(w.planned_finish)}"></label>
     </div>
-    <h4 class="mt12">Penugasan ${esc(DB.config.partner_name)} <span class="tiny muted">internal HBM</span></h4>
+    <h4 class="mt12">Penugasan pelaksana <span class="tiny muted">internal HBM</span></h4>
     <div class="fg c3">
-      <label class="f"><span>Target penugasan</span><input type="number" step="any" id="xPq" value="${w.palda_target_qty}"></label>
+      <label class="f"><span>Target penugasan</span><input type="number" step="any" id="xPq" value="${nz(w.palda_target_qty)}"></label>
       <label class="f"><span>Batas waktu</span><input type="date" id="xPd" value="${esc(w.palda_due)}"></label>
       <label class="f"><span>PIC pelaksana</span><input type="text" id="xPp" value="${esc(w.palda_pic)}"></label>
     </div>
     <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(w.notes || "")}"></label>
-    ${daftarPilihan("dlPaket", PAKET_KERJA, DB.wos.map(x => x.work_package).concat(DB.scopes.map(x => x.scope_description)))}
-    ${daftarPilihan("dlRef", REF_INSTRUKSI, DB.wos.map(x => x.instruction_ref).concat(DB.documents.map(x => x.document_no)))}`;
+    ${daftarPilihan("dlPaket", PAKET_KERJA, DB.bamk.map(z => z.work_package))}`;
     onSave = () => {
       const t = tankOf($("#xTank").value);
-      const rec = sasaranSimpan(DB.wos, "wo_id", id, w); if (!rec) return false;
+      const rec = sasaranSimpan(DB.bamk, "bamk_id", id, w); if (!rec) return false;
       Object.assign(rec, {
-        wo_no: $("#xNo").value, tank_id: $("#xTank").value, area_id: t ? t.area_id : "",
-        issue_date: $("#xDt").value, work_package: $("#xWp").value, instruction_ref: $("#xRef").value,
-        status: $("#xSt").value, approved_qty: nz($("#xQ").value), unit: $("#xU").value, revision: $("#xRev").value,
-        planned_start: $("#xPs").value, planned_finish: $("#xPf").value,
+        spk_id: $("#xSpk").value, bamk_no: $("#xNo").value.trim(), bamk_date: $("#xDt").value,
+        issue_date: $("#xDt").value, tank_id: $("#xTank").value, area_id: t ? t.area_id : "",
+        work_package: $("#xWp").value, status: $("#xSt").value,
+        vol_shell: nz($("#xVs").value), vol_acc: nz($("#xVa").value), vol_roof: nz($("#xVr").value),
+        bakp_qty: nz($("#xBakp").value), unit: $("#xU").value, revision: $("#xRev").value,
         palda_target_qty: nz($("#xPq").value), palda_due: $("#xPd").value, palda_pic: $("#xPp").value,
         notes: $("#xNote").value
       });
-      if (!rec.wo_no) return toast("Nomor WO wajib diisi.", "err");
-      if (!rec.work_package) return toast("Paket pekerjaan wajib diisi.", "err");
-      if (DB.wos.some(x => x.wo_id !== rec.wo_id && x.wo_no === rec.wo_no)) return toast("Nomor WO sudah dipakai.", "err");
-      if (!id) DB.wos.push(rec);
-      audit(id ? "UPDATE" : "CREATE", "04_WORK_ORDER", rec.wo_id, "", rec.wo_no + " " + rec.status);
-      if (rec.status !== "ISSUED") toast("WO tersimpan berstatus " + rec.status + ". Laporan harian hanya bisa dibuat untuk WO berstatus ISSUED.", "err");
+      const sp = spkOf(rec.spk_id);
+      rec.planned_start = sp ? sp.start_date : rec.planned_start;
+      rec.planned_finish = sp ? sp.finish_date : rec.planned_finish;
+      rec.approved_qty = volBamk(rec);
+      if (!rec.spk_id) return toast("BAMK harus menempel pada satu SPK Pertamina.", "err");
+      if (!rec.bamk_no) return toast("Nomor BAMK wajib diisi.", "err");
+      if (!rec.tank_id) return toast("Tanki wajib dipilih.", "err");
+      if (volBamk(rec) <= 0) return toast("Volume BAMK masih nol. Isi Shell / Accessories / Roof.", "err");
+      if (DB.bamk.some(z => z.bamk_id !== rec.bamk_id && z.bamk_no === rec.bamk_no)) return toast("Nomor BAMK sudah dipakai.", "err");
+      if (DB.bamk.some(z => z.bamk_id !== rec.bamk_id && z.spk_id === rec.spk_id && z.tank_id === rec.tank_id))
+        return toast("Tanki ini sudah punya BAMK pada SPK yang sama.", "err");
+      if (rec.status === "AKTIF" && !spkTerbit(rec.spk_id))
+        return toast("SPK induknya belum berstatus TERBIT, jadi BAMK belum boleh AKTIF.", "err");
+      if (!id) DB.bamk.push(rec);
+      audit(id ? "UPDATE" : "CREATE", "04B_BAMK", rec.bamk_id, "", rec.bamk_no);
+      return true;
+    };
+  }
+
+  if (tab === "stage") {
+    const urut = (DB.stages || []).reduce((a, t) => Math.max(a, nz(t.sort_order)), 0) + 1;
+    const t = id ? byId(DB.stages, "stage_id", id) : {
+      stage_id: uid("ST"), stage_code: "T" + urut, stage_name: "", weight_pct: 0,
+      sort_order: urut, active: true
+    };
+    title = id ? "Ubah tahap" : "Tahap baru";
+    body = `<div class="note">Bobot seluruh tahap aktif harus berjumlah 100%. Tahap dikerjakan berurutan:
+      tahap berikutnya tidak bisa melebihi luas tahap sebelumnya.</div>
+    <div class="fg c2 mt12">
+      <label class="f"><span>Kode <em>*</em></span><input type="text" id="xCode" value="${esc(t.stage_code)}"></label>
+      <label class="f"><span>Nama tahap <em>*</em></span><input type="text" id="xName" value="${esc(t.stage_name)}" placeholder="mis. Persiapan permukaan"></label>
+      <label class="f"><span>Bobot (%)</span><input type="number" step="any" id="xW" value="${nz(t.weight_pct)}"></label>
+      <label class="f"><span>Urutan</span><input type="number" id="xOrd" value="${nz(t.sort_order)}"></label>
+    </div>
+    <div class="chk"><input type="checkbox" id="xAct" ${t.active !== false ? "checked" : ""}><label for="xAct">Tahap aktif dan muncul di layar lapangan</label></div>`;
+    onSave = () => {
+      const rec = sasaranSimpan(DB.stages, "stage_id", id, t); if (!rec) return false;
+      Object.assign(rec, {
+        stage_code: $("#xCode").value.trim(), stage_name: $("#xName").value.trim(),
+        weight_pct: nz($("#xW").value), sort_order: nz($("#xOrd").value), active: $("#xAct").checked
+      });
+      if (!rec.stage_code || !rec.stage_name) return toast("Kode dan nama tahap wajib diisi.", "err");
+      if (!id) DB.stages.push(rec);
+      const tot = totalBobot();
+      if (Math.abs(tot - 100) > 0.01) toast("Tersimpan. Total bobot sekarang " + fmt(tot, 1) + "% — belum 100%.", "err");
+      audit(id ? "UPDATE" : "CREATE", "04C_TAHAPAN", rec.stage_id, "", rec.stage_name);
       return true;
     };
   }
 
   if (tab === "scope") {
     const s = id ? byId(DB.scopes, "scope_id", id) : {
-      scope_id: uid("SC"), wo_id: DB.wos[0] ? DB.wos[0].wo_id : "", tank_id: "", scope_code: "",
+      scope_id: uid("SC"), bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "", tank_id: "", scope_code: "",
       scope_description: "", unit: "m2", contract_rate: 0, palda_rate: 0, approved_qty: 0, revision: "R0", status: "AKTIF"
     };
     title = id ? "Ubah scope" : "Scope baru";
     body = `<div class="fg c3">
-      <label class="f"><span>WO <em>*</em></span><select id="xWo">${opts(DB.wos, s.wo_id, w => w.wo_id, w => w.wo_no)}</select></label>
+      <label class="f"><span>BAMK <em>*</em></span><select id="xWo">${opts(DB.bamk, s.bamk_id, w => w.bamk_id, w => w.bamk_no)}</select></label>
       <label class="f"><span>Kode scope <em>*</em></span><input type="text" id="xCode" value="${esc(s.scope_code)}"></label>
       <label class="f"><span>Satuan</span><input type="text" id="xU" value="${esc(s.unit)}"></label>
       <label class="f"><span>Kuantitas disetujui</span><input type="number" step="any" id="xQ" value="${s.approved_qty}"></label>
@@ -3425,10 +4164,10 @@ function masterModal(tab, id) {
       <label class="f"><span>Rate ${esc(DB.config.partner_name)} (Rp)</span><input type="number" step="any" id="xR2" value="${s.palda_rate}"></label></div>
       <div class="note">Data komersial internal. Tidak pernah ditampilkan pada wajah Admin Site.</div>` : ""}`;
     onSave = () => {
-      const w = woOf($("#xWo").value);
+      const w = bamkOf($("#xWo").value);
       const rec = sasaranSimpan(DB.scopes, "scope_id", id, s); if (!rec) return false;
       Object.assign(rec, {
-        wo_id: $("#xWo").value, tank_id: w ? w.tank_id : "", scope_code: $("#xCode").value,
+        bamk_id: $("#xWo").value, tank_id: w ? w.tank_id : "", scope_code: $("#xCode").value,
         scope_description: $("#xDesc").value, unit: $("#xU").value, approved_qty: nz($("#xQ").value),
         revision: $("#xRev").value, status: $("#xSt").value
       });
@@ -3440,13 +4179,13 @@ function masterModal(tab, id) {
 
   if (tab === "target") {
     const t = id ? byId(DB.targets, "target_id", id) : {
-      target_id: uid("TG"), wo_id: DB.wos[0] ? DB.wos[0].wo_id : "", period: monthOf(today()),
+      target_id: uid("TG"), bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "", period: monthOf(today()),
       planned_qty: 0, planned_pct: 0, cumulative_plan_qty: 0, source: "Monthly Schedule", revision: "R0"
     };
     title = id ? "Ubah target" : "Target baru";
     body = `<div class="fg c3">
       <label class="f"><span>Periode (YYYY-MM) <em>*</em></span><input type="text" id="xPer" value="${esc(t.period)}"></label>
-      <label class="f"><span>WO</span><select id="xWo">${opts(DB.wos, t.wo_id, w => w.wo_id, w => w.wo_no)}</select></label>
+      <label class="f"><span>BAMK</span><select id="xWo">${opts(DB.bamk, t.bamk_id, w => w.bamk_id, w => w.bamk_no)}</select></label>
       <label class="f"><span>Rencana volume</span><input type="number" step="any" id="xQ" value="${t.planned_qty}"></label>
       <label class="f"><span>Rencana %</span><input type="number" step="any" id="xP" value="${t.planned_pct}"></label>
       <label class="f"><span>Sumber</span><input type="text" id="xSrc" list="dlSumber" autocomplete="off" value="${esc(t.source)}" placeholder="pilih atau ketik sendiri"></label>
@@ -3457,7 +4196,7 @@ function masterModal(tab, id) {
     onSave = () => {
       const rec = sasaranSimpan(DB.targets, "target_id", id, t); if (!rec) return false;
       Object.assign(rec, {
-        period: $("#xPer").value, wo_id: $("#xWo").value, planned_qty: nz($("#xQ").value),
+        period: $("#xPer").value, bamk_id: $("#xWo").value, planned_qty: nz($("#xQ").value),
         planned_pct: nz($("#xP").value), source: $("#xSrc").value, revision: $("#xRev").value
       });
       if (!/^\d{4}-\d{2}$/.test(rec.period)) return toast("Periode harus berformat YYYY-MM.", "err");
@@ -3470,6 +4209,47 @@ function masterModal(tab, id) {
     `<button class="btn p" id="xSave">Simpan</button>`);
   $("#xSave").onclick = () => { if (onSave() !== false) { save(); closeModal(); render(); } };
   if (id && $("#xHapus")) $("#xHapus").onclick = () => hapusMaster(tab, id);
+
+  /* --- SPK: durasi dihitung sendiri dari tmt mulai dan selesai --- */
+  if (tab === "spk") {
+    const hitungDur = () => {
+      const a = $("#xSd").value, z = $("#xFd").value;
+      $("#xDur").value = (a && z) ? Math.max(0, Math.round((new Date(z + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000) + 1) : 0;
+    };
+    $("#xSd").onchange = hitungDur; $("#xFd").onchange = hitungDur; hitungDur();
+  }
+
+  /* --- BAMK: total volume hidup, tombol ambil dari hitungan tanki,
+         dan peringatan bila volume BAMK meleset dari hitungan luas eksterior --- */
+  if (tab === "bamk") {
+    const segar = () => {
+      const vs = nz($("#xVs").value), va = nz($("#xVa").value), vr = nz($("#xVr").value);
+      const tot = vs + va + vr;
+      $("#xVt").value = fmt(tot, 2);
+      const v = volDariTanki($("#xTank").value), hit = v.shell + v.acc + v.roof;
+      const kotak = $("#xBeda"); if (!kotak) return;
+      if (hit <= 0) { kotak.innerHTML = `Tanki ini belum punya diameter/tinggi, jadi tidak ada pembanding.`; return; }
+      const beda = tot - hit, pctBeda = hit ? Math.abs(beda) / hit * 100 : 0;
+      kotak.innerHTML = `Hitungan luas eksterior tanki: <b>${fmt(hit, 2)}</b> m&sup2;. Selisih dengan BAMK: ` +
+        `<b style="color:${pctBeda > 1 ? "var(--amber)" : "var(--teal)"}">${beda >= 0 ? "+" : ""}${fmt(beda, 2)} m&sup2; (${fmt(pctBeda, 2)}%)</b>` +
+        (pctBeda > 1 ? ` — periksa kembali, selisihnya lebih dari 1%.` : ` — dalam batas wajar.`);
+    };
+    ["#xVs", "#xVa", "#xVr"].forEach(k => { $(k).oninput = segar; });
+    $("#xTank").onchange = segar;
+    $("#xAmbil").onclick = () => {
+      const v = volDariTanki($("#xTank").value);
+      if (v.shell + v.acc + v.roof <= 0) return toast("Tanki ini belum punya diameter dan tinggi di Master Data.", "err");
+      $("#xVs").value = v.shell.toFixed(2); $("#xVa").value = v.acc.toFixed(2); $("#xVr").value = v.roof.toFixed(2);
+      segar(); toast("Volume diisi dari hitungan luas eksterior.", "ok");
+    };
+    /* Ganti SPK berarti daftar tankinya ikut berganti — jendela digambar ulang. */
+    $("#xSpk").onchange = () => {
+      const rec = id ? byId(DB.bamk, "bamk_id", id) : null;
+      if (rec) { rec.spk_id = $("#xSpk").value; masterModal("bamk", id); }
+      else { S.f.spkBaru = $("#xSpk").value; masterModal("bamk", null); }
+    };
+    segar();
+  }
 
   /* Rincian luas eksterior dihitung langsung saat tipe, diameter, atau tinggi
      diubah, supaya angkanya bisa dibandingkan dengan lembar Excel sebelum disimpan. */
@@ -3526,6 +4306,17 @@ VIEWS.settings = {
         <label class="f"><span>Ambang waspada (%)</span><input type="number" id="cW" value="${c.alarm_waspada}"></label>
         <label class="f"><span>Ambang kritis (%)</span><input type="number" id="cK" value="${c.alarm_kritis}"></label>
       </div>
+      <h4 class="mt16">Rantai SPK &rsaquo; BAMK &rsaquo; eksekusi</h4>
+      <p class="small muted">Menentukan bagaimana target harian dihitung dan kapan alarm SPK menyala.
+        Boleh diubah kapan saja — seluruh angka target dan SPI ikut menyesuaikan tanpa input ulang.</p>
+      <div class="fg c3 mt8">
+        <label class="f"><span>Dasar target harian</span><select id="cTB">${opts(DASAR_TARGET.map(x => ({ k: x[0], l: x[1] })), c.target_basis || "KALENDER", o => o.k, o => o.l)}</select></label>
+        <label class="f"><span>Alarm SPK sisa (hari)</span><input type="number" id="cSA" value="${nz(c.spk_alarm_h)}"></label>
+        <label class="f"><span>Pengawas Pertamina</span><input type="text" id="cPW" value="${esc(c.pertamina_supervisor || "")}"></label>
+        <label class="f"><span>Pihak Kedua pada BAMK</span><input type="text" id="cP2" value="${esc(c.party_two_name || "")}"></label>
+        <label class="f grow" style="grid-column:span 2"><span>Alamat Pihak Kedua</span><input type="text" id="cP2A" value="${esc(c.party_two_addr || "")}"></label>
+      </div>
+
       <h4 class="mt16">Perhitungan luas pengecatan eksterior</h4>
       <p class="small muted">Dipakai untuk menghitung luas tiap tanki di Master Data. Ubah hanya bila basis perhitungan
         pada lembar Excel ikut berubah.</p>
@@ -3651,7 +4442,10 @@ VIEWS.settings = {
           start_date: $("#cS").value, end_date: $("#cE").value, tank_target: nz($("#cTk").value),
           revision: $("#cRev").value, alarm_waspada: nz($("#cW").value), alarm_kritis: nz($("#cK").value),
           roof_factor: { CRT: nz($("#cFC").value), FRT: nz($("#cFF").value), DRT: nz($("#cFD").value) },
-          acc_pct: nz($("#cACC").value)
+          acc_pct: nz($("#cACC").value),
+          target_basis: $("#cTB").value, spk_alarm_h: nz($("#cSA").value),
+          pertamina_supervisor: $("#cPW").value, party_two_name: $("#cP2").value,
+          party_two_addr: $("#cP2A").value
         });
         audit("UPDATE", "26_SYSTEM_CONFIG", "config", "", c.project_code);
         save(); toast("Pengaturan tersimpan.", "ok"); boot();
