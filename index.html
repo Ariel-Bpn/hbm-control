@@ -379,10 +379,10 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "2.4";
+const APP_VERSI = "2.5";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
-const CODEGS_VERSI = "2.0";
+const CODEGS_VERSI = "2.1";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -759,7 +759,7 @@ function pasangSyncBawaan() {
 /* Naik versi tanpa menghapus data yang sudah ada */
 function migrate() {
   if (!DB.meta || !DB.dailies) { DB = seed(); return; }
-  if (DB.meta.version === "2.4") return;
+  if (DB.meta.version === "2.5") return;
   DB.reviews = DB.reviews || [];
   DB.deleted = DB.deleted || [];
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
@@ -784,7 +784,7 @@ function migrate() {
   if (DB.config.acc_pct == null) DB.config.acc_pct = 10;
   if (nz(DB.config.tank_target) < 13) DB.config.tank_target = 13;
   migrasiSPK();
-  DB.meta.version = "2.4";
+  DB.meta.version = "2.5";
   save();
 }
 
@@ -884,6 +884,15 @@ function migrasiSPK() {
   DB.messages = DB.messages || [];
   DB.bill_steps = DB.bill_steps || [];
   if (!Array.isArray(DB.bill_stages) || !DB.bill_stages.length) DB.bill_stages = bikinTahapTagihan();
+  /* Dasar menagih ke Pertamina adalah SPK, bukan BAMK — BAMK urusan HBM dengan
+     pelaksana. Tagihan lama dipindahkan ke SPK induk dari BAMK-nya. */
+  DB.billings.forEach(b => {
+    if (!b.spk_id && b.bamk_id) {
+      const w = (DB.bamk || []).filter(x => x.bamk_id === b.bamk_id)[0];
+      if (w && w.spk_id) b.spk_id = w.spk_id;
+    }
+    if (b.spk_id == null) b.spk_id = "";
+  });
   /* Laporan yang sudah dikembalikan sebelum ada kode, diberi kode surut
      supaya Admin Site punya rujukan yang sama saat berkoordinasi. */
   DB.dailies.forEach(d => {
@@ -3047,9 +3056,12 @@ VIEWS.billable = {
       </tbody></table></div></div></div>
 
     <div class="card"><h3>Daftar volume layak tagih</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Periode</th><th>BAMK</th><th class="n">Volume layak tagih</th><th>Satuan</th><th>Kesiapan</th><th>Dokumen</th><th>Dilepas</th><th></th></tr></thead>
+      <thead><tr><th>Periode</th><th>BAMK / tanki</th><th>Ditagihkan lewat SPK</th><th class="n">Volume layak tagih</th><th>Satuan</th><th>Kesiapan</th><th>Dokumen</th><th>Dilepas</th><th></th></tr></thead>
       <tbody>${DB.billables.slice().reverse().map(b => `<tr>
-        <td class="num">${esc(b.period)}</td><td>${esc(bamkNo(b.bamk_id))}</td><td class="n">${fmt(b.billable_qty, 1)}</td>
+        <td class="num">${esc(b.period)}</td>
+        <td>${esc(bamkNo(b.bamk_id))}<div class="tiny muted">${esc(tankNo((bamkOf(b.bamk_id) || {}).tank_id))}</div></td>
+        <td class="tiny">${esc(spkNo((bamkOf(b.bamk_id) || {}).spk_id))}</td>
+        <td class="n">${fmt(b.billable_qty, 1)}</td>
         <td>${esc(b.unit)}</td>
         <td><span class="b ${b.gate_status === "READY" ? "teal" : "amber"}">${b.gate_status === "READY" ? "Siap" : "Belum siap"}</span></td>
         <td><span class="b ${b.document_status === "COMPLETE" ? "teal" : "red"}">${b.document_status === "COMPLETE" ? "Lengkap" : "Belum lengkap"}</span></td>
@@ -3168,6 +3180,21 @@ function umurPerPihak(b) {
   });
   return r;
 }
+/* Tagihan ke Pertamina berdasar SPK — BAMK adalah urusan HBM dengan pelaksana,
+   bukan dasar menagih. Satu SPK bisa memuat beberapa tanki, jadi volumenya
+   dijumlahkan dari seluruh BAMK di bawah SPK itu. */
+const spkTagihan = b => spkOf(b.spk_id);
+const spkNoTagihan = b => { const x = spkOf(b.spk_id); return x ? x.spk_no : "(SPK belum ditautkan)"; };
+function tankiSPKTeks(spk_id) {
+  const t = spkItemsOf(spk_id).map(i => tankNo(i.tank_id)).filter(Boolean);
+  return t.length ? t.join(", ") : "—";
+}
+/* Volume yang layak ditagih untuk sebuah SPK: pakai BAKP bila sudah terbit,
+   kalau belum pakai volume BAMK. */
+function volumeSPK(spk_id) {
+  return DB.bamk.filter(b => b.spk_id === spk_id).reduce((a, b) => a + volTagih(b), 0);
+}
+
 const nilaiLunas = () => DB.billings.filter(b => tagihanLunas(b)).reduce((a, b) => a + nz(b.billing_value), 0);
 const nilaiOutstanding = () => DB.billings.filter(b => !tagihanLunas(b)).reduce((a, b) => a + nz(b.billing_value), 0);
 
@@ -3235,7 +3262,7 @@ VIEWS.billing = {
       return `<div style="border-bottom:1px solid var(--line);padding:12px 16px">
           <div class="row">
             <div class="grow"><b>${esc(b.billing_no || "(belum bernomor)")}</b>
-              <span class="tiny muted"> · ${esc(b.period || "")} · ${esc(bamkNo(b.bamk_id))} · ${esc(tankNo((bamkOf(b.bamk_id) || {}).tank_id))}</span>
+              <span class="tiny muted"> · ${esc(b.period || "")} · SPK ${esc(spkNoTagihan(b))} · ${esc(tankiSPKTeks(b.spk_id))}</span>
               <div class="tiny muted">${fmt(b.billable_qty, 2)} m² · ${can("money") ? rupiah(b.billing_value) : "nilai disembunyikan"}</div></div>
             <div style="text-align:right">
               ${ageBadge(umur, false)}<div class="tiny muted">target seluruhnya ${tot} hk</div></div>
@@ -3279,12 +3306,12 @@ VIEWS.billing = {
 
     if (tab === "lunas") isi = `
       <div class="card"><h3>Sudah dibayar <span class="b teal">${lunas.length}</span></h3><div class="body flush"><div class="tw"><table>
-        <thead><tr><th>No. tagihan</th><th>Periode / BAMK</th><th class="n">Volume</th>
+        <thead><tr><th>No. tagihan</th><th>Periode / SPK</th><th class="n">Volume</th>
           ${can("money") ? `<th class="n">Nilai</th>` : ""}<th class="n">Umur total</th><th>Di Pertamina</th><th></th></tr></thead>
         <tbody>${lunas.length ? lunas.map(b => {
       const pihak = umurPerPihak(b);
       return `<tr><td><b>${esc(b.billing_no || "—")}</b></td>
-          <td>${esc(b.period || "")}<div class="tiny muted">${esc(bamkNo(b.bamk_id))}</div></td>
+          <td>${esc(b.period || "")}<div class="tiny muted">SPK ${esc(spkNoTagihan(b))} · ${esc(tankiSPKTeks(b.spk_id))}</div></td>
           <td class="n">${fmt(b.billable_qty, 2)}</td>
           ${can("money") ? `<td class="n">${rupiah(b.billing_value)}</td>` : ""}
           <td class="n">${umurTagihan(b)} hk<div class="tiny muted">target ${targetTotal()}</div></td>
@@ -3344,7 +3371,7 @@ function ageBadge(n, paid) {
 function billModal(id) {
   const b = id ? byId(DB.billings, "billing_id", id) : {
     billing_id: uid("BG"), billing_no: "", period: monthOf(today()),
-    bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "",
+    spk_id: (DB.spk.find(x => x.status === "TERBIT") || DB.spk[0] || {}).spk_id || "",
     billable_qty: 0, billing_value: 0, doc_received_date: today(),
     status: "JALAN", current_pic: "", remarks: ""
   };
@@ -3355,8 +3382,12 @@ function billModal(id) {
     <div class="fg c3">
       <label class="f"><span>Nomor tagihan</span><input type="text" id="bgNo" value="${esc(b.billing_no)}"></label>
       <label class="f"><span>Periode</span><input type="text" id="bgPer" value="${esc(b.period)}" placeholder="2026-09"></label>
-      <label class="f"><span>BAMK / tanki</span><select id="bgWo">${opts(DB.bamk, b.bamk_id, w => w.bamk_id, w => w.bamk_no + " — " + tankNo(w.tank_id))}</select></label>
-      <label class="f"><span>Volume (m²)</span><input type="number" step="any" id="bgQty" value="${b.billable_qty}"></label>
+      <label class="f"><span>SPK / tanki</span><select id="bgSpk">${DB.spk.length
+      ? opts(DB.spk, b.spk_id, x => x.spk_id, x => x.spk_no + " — " + tankiSPKTeks(x.spk_id))
+      : `<option value="">— belum ada SPK —</option>`}</select></label>
+      <label class="f"><span>Volume (m²)
+        <button type="button" class="btn sm" id="bgAmbil">Ambil dari SPK</button></span>
+        <input type="number" step="any" id="bgQty" value="${b.billable_qty}"></label>
       ${can("money") ? `<label class="f"><span>Nilai tagihan (Rp)</span><input type="number" step="any" id="bgVal" value="${b.billing_value}"></label>` : ""}
       <label class="f"><span>Tanggal mulai estafet</span><input type="date" id="bgD1" value="${esc(b.doc_received_date)}"></label>
     </div>
@@ -3380,14 +3411,29 @@ function billModal(id) {
     rw ? `<button class="btn p" id="bgSave">Simpan</button>` : "");
 
   if (!rw) return;
+  if ($("#bgAmbil")) $("#bgAmbil").onclick = () => {
+    const sid = $("#bgSpk").value;
+    const bs = DB.bamk.filter(x => x.spk_id === sid);
+    const v = volumeSPK(sid);
+    if (v <= 0) return toast("SPK ini belum punya BAMK bervolume.", "err");
+    $("#bgQty").value = v.toFixed(2);
+    /* Sebutkan apa adanya tanki mana yang sudah ber-BAKP dan mana yang belum —
+       menagih dengan volume BAMK berisiko dikoreksi Pertamina kemudian. */
+    const belum = bs.filter(x => nz(x.bakp_qty) <= 0).map(x => tankNo(x.tank_id));
+    if (!belum.length) toast("Volume diisi " + fmt(v, 2) + " m², seluruhnya dari BAKP.", "ok");
+    else toast("Volume diisi " + fmt(v, 2) + " m². BAKP belum terbit untuk " + belum.join(", ") +
+      " — bagian itu masih memakai volume BAMK dan bisa berubah.", "err");
+  };
+
   $("#bgSave").onclick = () => {
     Object.assign(b, {
-      billing_no: $("#bgNo").value.trim(), period: $("#bgPer").value, bamk_id: $("#bgWo").value,
+      billing_no: $("#bgNo").value.trim(), period: $("#bgPer").value, spk_id: $("#bgSpk").value,
       billable_qty: nz($("#bgQty").value), doc_received_date: $("#bgD1").value,
       remarks: $("#bgRem").value
     });
     if ($("#bgVal")) b.billing_value = nz($("#bgVal").value);
     if (!b.billing_no) return toast("Nomor tagihan wajib diisi.", "err");
+    if (!b.spk_id) return toast("Tagihan harus menempel pada satu SPK Pertamina — itulah dasar menagih.", "err");
     if (DB.billings.some(x => x.billing_id !== b.billing_id && x.billing_no === b.billing_no))
       return toast("Nomor tagihan sudah dipakai.", "err");
 
