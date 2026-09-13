@@ -379,7 +379,7 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "2.1";
+const APP_VERSI = "2.3";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
 const CODEGS_VERSI = "1.9";
@@ -442,6 +442,20 @@ const today = () => new Date().toISOString().slice(0, 10);
 const monthOf = d => (d || today()).slice(0, 7);
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 function dateID(d) { if (!d) return "—"; const p = d.split("-"); return p[2] + " " + MONTHS[+p[1] - 1] + " " + p[0]; }
+/* Penanda waktu disimpan dalam UTC supaya urutannya benar walau perangkat
+   berbeda zona. Saat ditampilkan HARUS diubah ke jam perangkat pembaca —
+   kalau ditampilkan mentah, pesan yang dikirim pukul 09.33 WITA terbaca 01.33. */
+function jamLokal(iso) {
+  if (!iso) return "";
+  const t = new Date(iso); if (isNaN(t)) return String(iso).slice(11, 16);
+  return String(t.getHours()).padStart(2, "0") + "." + String(t.getMinutes()).padStart(2, "0");
+}
+function tanggalLokal(iso) {
+  if (!iso) return "";
+  const t = new Date(iso); if (isNaN(t)) return String(iso).slice(0, 10);
+  return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
+}
+function waktuLokal(iso) { return iso ? dateID(tanggalLokal(iso)) + " " + jamLokal(iso) : "—"; }
 function monthID(m) { if (!m) return "—"; const p = m.split("-"); return MONTHS[+p[1] - 1] + " " + p[0]; }
 function weekKey(d) {
   const dt = new Date(d + "T00:00:00"); const day = (dt.getDay() + 6) % 7;
@@ -506,6 +520,81 @@ const PIC_LIST = ["Pengawas HBM", "Project Control HBM", "HSSE HBM", "Admin Site
 const PENGAWAS_LIST = ["Pengawas HBM", "Pengawas Pertamina", "Project Control HBM", "Pelaksana Palda"];
 const UNIT_KEPUTUSAN = ["Direktur", "Operasional", "Finance", "Marketing",
   "Project Control", "Site / Lapangan"];
+
+/* ---------- KOP SURAT & CETAK ----------
+   Kop bawaan ditanam di berkas aplikasi, bukan di basis data, supaya tidak
+   membebani penyimpanan tiap perangkat dan tidak ikut lalu-lalang saat sinkron.
+   Bila HBM mengganti kop, unggah yang baru di Pengaturan — yang diunggah
+   menang atas bawaan ini. */
+const KOP_BAWAAN = "data:image/png;base64,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";
+const kopSurat = () => (DB.config && DB.config.kop_url) || KOP_BAWAAN;
+
+/* Blok tanda tangan. Nama dan jabatan diatur di Pengaturan; yang kosong
+   tidak dicetak, jadi dokumen tidak pernah punya kolom tanda tangan kosong
+   tanpa nama di bawahnya. */
+function blokTandaTangan(tempat) {
+  const c = DB.config || {};
+  const kolom = [
+    { l: c.sign1_label || "Disiapkan oleh", n: c.sign1_name || "", j: c.sign1_title || "" },
+    { l: c.sign2_label || "Diperiksa oleh", n: c.sign2_name || "", j: c.sign2_title || "" },
+    { l: c.sign3_label || "Disetujui oleh", n: c.sign3_name || "", j: c.sign3_title || "" }
+  ].filter(k => k.n || k.j);
+  if (!kolom.length) return "";
+  const w = (100 / kolom.length).toFixed(2) + "%";
+  return `<table class="ttd"><tr>
+    <td colspan="${kolom.length}" style="border:none;text-align:right;padding-bottom:10px" class="mut">
+      ${esc(tempat || "Balikpapan")}, ${esc(dateID(today()))}</td></tr>
+    <tr>${kolom.map(k => `<td style="width:${w}">${esc(k.l)}</td>`).join("")}</tr>
+    <tr>${kolom.map(() => `<td class="ruang"></td>`).join("")}</tr>
+    <tr>${kolom.map(k => `<td><b>${esc(k.n || "( .................... )")}</b>
+      <div class="mut">${esc(k.j || "")}</div></td>`).join("")}</tr></table>`;
+}
+
+/* Satu pintu untuk semua hasil cetak: kop HBM di atas, judul, isi, blok tanda
+   tangan, lalu catatan kaki. Dibuka di jendela terpisah supaya yang tercetak
+   adalah dokumennya, bukan tampilan aplikasi. */
+function cetakDokumen(judul, subjudul, isi, opsi) {
+  opsi = opsi || {};
+  const c = DB.config || {};
+  const html = `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${esc(judul)}</title>
+  <style>
+    @page { size: A4 ${opsi.lanskap ? "landscape" : "portrait"}; margin: 12mm 12mm 14mm 12mm; }
+    body { font-family: "Segoe UI", Arial, sans-serif; color:#16232E; margin:0; font-size:11px; line-height:1.5 }
+    .kop { width:100%; display:block; margin-bottom:6px }
+    .kop img { width:100%; height:auto; display:block }
+    .jd { border-top:2.5px solid #0E2233; border-bottom:2.5px solid #0E2233;
+          padding:7px 0; margin:2px 0 12px }
+    .jd h1 { font-size:15px; margin:0; letter-spacing:.3px; text-transform:uppercase }
+    .jd .s { color:#5C6B78; font-size:10.5px; margin-top:2px }
+    h2 { font-size:12.5px; margin:16px 0 6px; border-bottom:1.5px solid #0E2233; padding-bottom:3px }
+    h3 { font-size:11.5px; margin:12px 0 5px }
+    table { border-collapse:collapse; width:100%; margin:5px 0 10px }
+    th,td { border:1px solid #C7D0D8; padding:4px 7px; text-align:left; vertical-align:top }
+    th { background:#EEF2F5 }
+    tr { page-break-inside:avoid }
+    .mut { color:#5C6B78; font-size:10px }
+    .num { font-variant-numeric:tabular-nums }
+    table.ttd { margin-top:26px; page-break-inside:avoid }
+    table.ttd td { border:none; text-align:center; font-size:10.5px; padding:2px 8px }
+    table.ttd td.ruang { height:62px }
+    .kaki { margin-top:18px; border-top:1px solid #C7D0D8; padding-top:6px; color:#5C6B78; font-size:9.5px }
+    img.bukti { max-width:100%; border:1px solid #C7D0D8 }
+    @media print { .noprint { display:none } }
+  </style></head><body>
+  <div class="kop"><img src="${kopSurat()}" alt=""></div>
+  <div class="jd"><h1>${esc(judul)}</h1>${subjudul ? `<div class="s">${subjudul}</div>` : ""}</div>
+  ${isi}
+  ${opsi.tanpaTtd ? "" : blokTandaTangan(c.kota || "Balikpapan")}
+  <div class="kaki">${esc(c.project_name || "")} &middot; ${esc(c.project_code || "")}
+    &middot; dicetak ${esc(dateID(today()))} ${jamLokal(new Date().toISOString())} oleh ${esc(S.user ? S.user.user_name : "-")}
+    <div>Angka pada dokumen ini dihitung sendiri oleh HBM Integrated Project Control System dari laporan harian
+      yang telah melewati verifikasi, bukan diketik ulang.</div></div>
+  </body></html>`;
+  const win = window.open("", "_blank");
+  if (!win) return toast("Jendela cetak diblokir peramban. Izinkan pop-up lalu ulangi.", "err");
+  win.document.write(html); win.document.close();
+  setTimeout(() => { try { win.print(); } catch (e) { } }, 500);
+}
 
 /* ---------- BAGIAN TANKI & TAHAPAN PENGECATAN ---------- */
 /* Tiga bagian ini mengikuti Berita Acara Mulai Kerja ke pelaksana:
@@ -599,6 +688,10 @@ function bangunBawaan() {
       alarm_waspada: 80, alarm_kritis: 90, logo: null, holidays: [],
       roof_factor: { CRT: 1.05, FRT: 1.00, DRT: 1.12 }, acc_pct: 10,
       target_basis: "KALENDER",
+      kota: "Balikpapan", kop_url: null,
+      sign1_label: "Disiapkan oleh", sign1_name: "", sign1_title: "Project Control HBM",
+      sign2_label: "Diperiksa oleh", sign2_name: "", sign2_title: "Site Manager HBM",
+      sign3_label: "Disetujui oleh", sign3_name: "", sign3_title: "Direktur PT. Hudaya Bayanaka Mandiri",
       party_two_name: "PT. PALDA SOLUSI SINERGI",
       party_two_addr: "Jl. Sadar Raya No. 37, RT.8/RW.2, Kec. Jagakarsa, Jakarta Selatan 12630",
       pertamina_supervisor: "Pengawas MA-4 PT Pertamina Patra Niaga RU V",
@@ -640,7 +733,7 @@ function pasangSyncBawaan() {
 /* Naik versi tanpa menghapus data yang sudah ada */
 function migrate() {
   if (!DB.meta || !DB.dailies) { DB = seed(); return; }
-  if (DB.meta.version === "2.1") return;
+  if (DB.meta.version === "2.3") return;
   DB.reviews = DB.reviews || [];
   DB.deleted = DB.deleted || [];
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
@@ -665,7 +758,7 @@ function migrate() {
   if (DB.config.acc_pct == null) DB.config.acc_pct = 10;
   if (nz(DB.config.tank_target) < 13) DB.config.tank_target = 13;
   migrasiSPK();
-  DB.meta.version = "2.1";
+  DB.meta.version = "2.3";
   save();
 }
 
@@ -749,6 +842,12 @@ function migrasiSPK() {
   if (!DB.config.party_two_name) DB.config.party_two_name = "PT. PALDA SOLUSI SINERGI";
   if (!DB.config.pertamina_supervisor) DB.config.pertamina_supervisor = "Pengawas MA-4 PT Pertamina Patra Niaga RU V";
   if (DB.config.spk_alarm_h == null) DB.config.spk_alarm_h = 7;
+  if (!DB.config.kota) DB.config.kota = "Balikpapan";
+  if (DB.config.sign1_label == null) {
+    DB.config.sign1_label = "Disiapkan oleh"; DB.config.sign1_name = ""; DB.config.sign1_title = "Project Control HBM";
+    DB.config.sign2_label = "Diperiksa oleh"; DB.config.sign2_name = ""; DB.config.sign2_title = "Site Manager HBM";
+    DB.config.sign3_label = "Disetujui oleh"; DB.config.sign3_name = ""; DB.config.sign3_title = "Direktur PT. Hudaya Bayanaka Mandiri";
+  }
 
   /* Shift dihapus: satu laporan per tanki per hari. Nilai lama disatukan
      supaya tidak ada lagi laporan kembar Pagi/Siang/Malam untuk tanggal sama. */
@@ -1002,7 +1101,7 @@ function logReview(daily_id, action, note) {
   });
 }
 const reviewsOf = id => DB.reviews.filter(r => r.daily_id === id);
-const REVIEW_LABEL = { SUBMIT: "Diajukan", REVISI: "Diajukan ulang", TOLAK: "Dikembalikan", SETUJU: "Disetujui", CATATAN: "Catatan" };
+const REVIEW_LABEL = { SUBMIT: "Diajukan", REVISI: "Diajukan ulang", TOLAK: "Dikembalikan", SETUJU: "Disetujui", CATATAN: "Catatan", UBAH: "Perubahan isi" };
 
 /* ---------- LOOKUPS ---------- */
 const byId = (arr, k, v) => arr.find(x => x[k] === v) || null;
@@ -1480,13 +1579,13 @@ VIEWS.pesan = {
     const gelembung = pesan.map(m => {
       const punyaku = m.author_user_id === aku;
       const sistem = m.author_role === "SISTEM";
-      const hari = String(m.ts || "").slice(0, 10);
+      const hari = tanggalLokal(m.ts);
       let pemisah = "";
       if (hari !== hariTerakhir) {
         hariTerakhir = hari;
         pemisah = `<div style="text-align:center;margin:14px 0 8px"><span class="b gray">${esc(dateID(hari))}</span></div>`;
       }
-      const jam = String(m.ts || "").slice(11, 16);
+      const jam = jamLokal(m.ts);
       if (sistem) return pemisah + `<div style="text-align:center;margin:6px 0">
         <span class="tiny muted" style="background:var(--soft);padding:4px 10px;border-radius:10px">${esc(m.body)} · ${jam}</span></div>`;
       return pemisah + `<div style="display:flex;margin:6px 0;${punyaku ? "justify-content:flex-end" : ""}">
@@ -1748,10 +1847,9 @@ VIEWS["daily-new"] = {
     const wos = bamkAktif();
     /* Laporan yang dikembalikan mudah terlewat kalau Admin Site langsung
        membuat laporan baru. Ditampilkan di layar ini juga. */
-    const balik = DB.dailies.filter(x => x.status === "REJECTED" &&
-      (!isSite() || x.admin_user_id === S.user.user_id));
+    const balik = DB.dailies.filter(x => x.status === "REJECTED");
     const spanduk = balik.length ? `<div class="card"><div class="body">
-      <div class="note stop"><b>${balik.length} laporan Anda dikembalikan dan belum diperbaiki.</b>
+      <div class="note stop"><b>${balik.length} laporan dikembalikan dan belum diperbaiki.</b>
         Selesaikan dulu sebelum membuat laporan baru.
         ${balik.map(x => `<div class="mt8"><span class="mono" style="font-weight:700">${esc(x.return_code || "—")}</span>
           <span class="tiny muted"> · ${esc(dateID(x.report_date))} · ${esc(tankNo(x.tank_id))}</span>
@@ -2105,10 +2203,10 @@ function photoName(d, p, i) {
 function threadHtml(list) {
   if (!list.length) return `<div class="empty">Belum ada catatan koordinasi.</div>`;
   return `<div class="lines">${list.slice().reverse().map(r => `<div class="line" style="grid-template-columns:1fr">
-    <div><span class="b ${r.action === "TOLAK" ? "red" : r.action === "SETUJU" ? "teal" : "blue"}">${REVIEW_LABEL[r.action] || r.action}</span>
+    <div><span class="b ${r.action === "TOLAK" ? "red" : r.action === "SETUJU" ? "teal" : r.action === "UBAH" ? "gray" : "blue"}">${REVIEW_LABEL[r.action] || r.action}</span>
       <b class="small"> ${esc(r.user_name)}</b>
-      <span class="tiny muted"> · ${esc(r.timestamp.slice(0, 16).replace("T", " "))}</span>
-      <div class="small mt8">${esc(r.note || "—")}</div></div></div>`).join("")}</div>`;
+      <span class="tiny muted"> · ${esc(waktuLokal(r.timestamp))}</span>
+      <div class="small mt8" style="white-space:pre-wrap">${esc(r.note || "—")}</div></div></div>`).join("")}</div>`;
 }
 function shrink(file, cb) {
   const r = new FileReader();
@@ -2158,6 +2256,54 @@ function periksaBatasProgress(d) {
   return "";
 }
 
+/* Ringkasan isi sebuah laporan — dipakai membandingkan keadaan sebelum dan
+   sesudah disunting, supaya riwayat perubahannya bisa dibaca manusia. */
+function ringkasLaporan(id) {
+  const pr = DB.progress.filter(p => p.daily_id === id);
+  const mp = DB.manpower.filter(p => p.daily_id === id);
+  const qc = DB.qc.find(x => x.daily_id === id) || {};
+  const hs = DB.hsse.find(x => x.daily_id === id) || {};
+  const d = byId(DB.dailies, "daily_id", id) || {};
+  return {
+    tanggal: d.report_date || "", tanki: d.tank_id || "", cuaca: d.weather || "",
+    luas: pr.reduce((a, p) => a + nz(p.actual_qty), 0),
+    baris: pr.length,
+    rinci: pr.map(p => bagianLabel(p.part) + "/" + ((tahapOf(p.stage_id) || {}).stage_name || "?") +
+      "=" + fmt(p.actual_qty, 2)).sort().join("; "),
+    orang: mp.reduce((a, m) => a + nz(m.worker_count), 0),
+    foto: DB.photos.filter(p => p.daily_id === id).length,
+    material: DB.materials.filter(p => p.daily_id === id).length,
+    kendala: DB.issues.filter(p => p.daily_id === id).length,
+    qc: (qc.inspection_type || "-") + "/" + (qc.result || "-") + (qc.ma4_known ? "/diketahui MA-4" : ""),
+    ptw: hs.permit_status || "-",
+    pengawas: d.supervisor_name || "",
+    catatan: d.general_notes || ""
+  };
+}
+
+/* Menyusun kalimat perubahan dari dua ringkasan. */
+function bedaLaporan(a, b) {
+  if (!a) return [];
+  const L = [], angka = (nama, x, y, sat) => {
+    if (Math.abs(nz(x) - nz(y)) > 0.005)
+      L.push(nama + " " + fmt(x, 2) + " → " + fmt(y, 2) + (sat || ""));
+  };
+  const teks = (nama, x, y) => { if ((x || "") !== (y || "")) L.push(nama + ": \"" + (x || "kosong") + "\" → \"" + (y || "kosong") + "\""); };
+  angka("Luas total", a.luas, b.luas, " m²");
+  if (a.rinci !== b.rinci) L.push("Rincian bagian/tahap berubah — sebelumnya " + (a.rinci || "kosong") + "; kini " + (b.rinci || "kosong"));
+  angka("Jumlah orang", a.orang, b.orang, "");
+  angka("Jumlah foto", a.foto, b.foto, "");
+  angka("Baris material", a.material, b.material, "");
+  angka("Baris kendala", a.kendala, b.kendala, "");
+  teks("Tanggal", a.tanggal, b.tanggal);
+  teks("Cuaca", a.cuaca, b.cuaca);
+  teks("QC", a.qc, b.qc);
+  teks("Status PTW", a.ptw, b.ptw);
+  teks("Nama pengawas", a.pengawas, b.pengawas);
+  if ((a.catatan || "") !== (b.catatan || "")) L.push("Catatan umum diubah");
+  return L;
+}
+
 function commitDaily(status) {
   const d = S.draft;
   if (!d.report_date) return toast("Isi tanggal laporan.", "err");
@@ -2190,6 +2336,9 @@ function commitDaily(status) {
      dalam satu laporan, tidak dipecah per shift. */
   const dup = DB.dailies.find(x => x.daily_id !== id && x.bamk_id === d.bamk_id && x.report_date === d.report_date);
   if (dup) return toast("Tanki ini sudah punya laporan untuk tanggal tersebut. Ubah laporan yang sudah ada, jangan membuat baru.", "err");
+
+  /* Potret isi laporan sebelum ditimpa, untuk menyusun riwayat perubahan. */
+  const sebelum = d.daily_id ? ringkasLaporan(id) : null;
 
   ["progress", "manpower", "materials", "photos", "qc", "hsse", "issues"].forEach(k => {
     const arr = DB[k]; if (!arr) return;
@@ -2225,9 +2374,18 @@ function commitDaily(status) {
   if (d.hsse.permit_status) DB.hsse.push({ hsse_id: uid("HS"), daily_id: id, bamk_id: d.bamk_id, permit_status: d.hsse.permit_status, toolbox_status: d.hsse.toolbox_status, fit_to_work: d.hsse.fit_to_work, critical_finding: d.hsse.critical_finding, remarks: d.hsse.remarks });
   if (d.issue.description) DB.issues.push({ issue_id: uid("IS"), daily_id: id, bamk_id: d.bamk_id, issue_date: d.report_date, category: d.issue.category || "LAINNYA", description: d.issue.description, impact: d.issue.impact, action: d.issue.action, owner_side: d.issue.owner_side, owner: d.issue.owner, status: "OPEN" });
 
+  /* Riwayat perubahan: apa persisnya yang berubah dari isi sebelumnya.
+     Dicatat sebagai catatan koordinasi supaya tampil menyatu dengan
+     percakapan review, bukan di daftar terpisah yang jarang dibuka. */
+  const sesudah = ringkasLaporan(id);
+  const beda = bedaLaporan(sebelum, sesudah);
+  if (beda.length)
+    logReview(id, "UBAH", "Isi laporan diubah:\n· " + beda.join("\n· "));
+
   if (status === "SUBMITTED") logReview(id, wasRejected ? "REVISI" : "SUBMIT",
     wasRejected ? ("Laporan diperbaiki dan diajukan kembali (revisi ke-" + rev + ").") : "Laporan diajukan ke Project Control.");
-  audit(d.daily_id ? "UPDATE" : "CREATE", "07_DAILY_REPORT", id, "", status);
+  audit(d.daily_id ? "UPDATE" : "CREATE", "07_DAILY_REPORT", id, "",
+    status + (beda.length ? " · " + beda.length + " perubahan" : ""));
   save();
   toast(status === "DRAFT" ? "Draft tersimpan." : (wasRejected ? "Laporan diajukan ulang." : "Laporan diajukan ke Project Control."), "ok");
   S.draft = null;
@@ -2241,7 +2399,10 @@ VIEWS["daily-list"] = {
   html() {
     const f = S.f.dl || (S.f.dl = { from: "", to: "", wo: "", st: "" });
     let rows = DB.dailies.slice().sort((a, b) => (b.report_date + b.daily_id).localeCompare(a.report_date + a.daily_id));
-    if (isSite()) rows = rows.filter(d => d.admin_user_id === S.user.user_id);
+    /* Admin Site melihat laporan miliknya sendiri, DITAMBAH semua laporan yang
+       dikembalikan. Petugas lapangan bergantian; kalau yang mengetik kemarin
+       sedang libur, laporan yang dikembalikan tidak boleh tertahan. */
+    if (isSite()) rows = rows.filter(d => d.admin_user_id === S.user.user_id || d.status === "REJECTED");
     if (f.from) rows = rows.filter(d => d.report_date >= f.from);
     if (f.to) rows = rows.filter(d => d.report_date <= f.to);
     if (f.wo) rows = rows.filter(d => d.bamk_id === f.wo);
@@ -2254,7 +2415,7 @@ VIEWS["daily-list"] = {
       ${rows.filter(d => d.status === "REJECTED").map(d => `<div class="mt8" style="padding-left:10px;border-left:3px solid var(--red)">
         <span class="mono" style="font-weight:700">${esc(d.return_code || "—")}</span>
         <span class="tiny muted"> · ${esc(dateID(d.report_date))} · ${esc(tankNo(d.tank_id))}
-        ${d.returned_at ? " · dikembalikan " + esc(String(d.returned_at).slice(0, 16).replace("T", " ")) : ""}</span>
+        ${d.returned_at ? " · dikembalikan " + esc(waktuLokal(d.returned_at)) : ""}</span>
         <div class="small">${esc(d.review_note || "tanpa catatan")}</div></div>`).join("")}
       </div>` : ""}
     ${isSite() ? `<div class="note">Laporan yang salah <b>tidak bisa Anda hapus sendiri</b>. Selama masih Draft atau Dikembalikan,
@@ -2275,8 +2436,10 @@ VIEWS["daily-list"] = {
       const pr = DB.progress.filter(p => p.daily_id === d.daily_id);
       const tg = pr.reduce((a, p) => a + nz(p.target_qty), 0), ac = pr.reduce((a, p) => a + nz(p.actual_qty), 0);
       const ph = DB.photos.filter(p => p.daily_id === d.daily_id).length;
-      const own = d.admin_user_id === S.user.user_id;
-      const editable = (own && (d.status === "DRAFT" || d.status === "REJECTED")) || can("review");
+      /* Yang boleh diubah: laporan yang masih Draft atau Dikembalikan, oleh
+         siapa pun yang berwenang mengisi laporan. Sesudah Diajukan atau
+         Disetujui, hanya Project Control. */
+      const editable = (can("daily_input") && (d.status === "DRAFT" || d.status === "REJECTED")) || can("review");
       return `<tr>
             <td class="num">${esc(d.report_date)}</td>
             <td><b>${esc(bamkNo(d.bamk_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))} · ${esc(areaName(d.area_id))}</div></td>
@@ -2374,7 +2537,8 @@ function showDaily(id) {
       <div class="cap">${esc(p.caption || "")}</div></div>`).join("")}</div>` : ""}
     <h4 class="mt16">Riwayat koordinasi</h4>${threadHtml(th)}`;
   openModal("Laporan Harian " + d.report_date, body,
-    `<button class="btn" onclick="window.print()">Cetak</button>`, true);
+    `<button class="btn" id="dlCetak">Cetak</button>`, true);
+  if ($("#dlCetak")) $("#dlCetak").onclick = () => cetakLaporanHarian(id);
   if ($("#dlAll")) $("#dlAll").onclick = () => {
     ph.forEach((p, i) => setTimeout(() => {
       const a = document.createElement("a");
@@ -2384,6 +2548,99 @@ function showDaily(id) {
     toast("Mengunduh " + ph.length + " foto.", "ok");
   };
 }
+/* Menyusun laporan harian menjadi dokumen resmi berkop HBM. */
+function cetakLaporanHarian(id) {
+  const d = byId(DB.dailies, "daily_id", id); if (!d) return;
+  const w = bamkOf(d.bamk_id), sp = w ? spkOf(w.spk_id) : null;
+  const pr = DB.progress.filter(p => p.daily_id === id);
+  const mp = DB.manpower.filter(p => p.daily_id === id);
+  const mt = DB.materials.filter(p => p.daily_id === id);
+  const ph = DB.photos.filter(p => p.daily_id === id);
+  const qc = DB.qc.find(x => x.daily_id === id);
+  const hs = DB.hsse.find(x => x.daily_id === id);
+  const kn = DB.issues.filter(x => x.daily_id === id);
+  const luas = pr.reduce((a, p) => a + nz(p.actual_qty), 0);
+  const bobot = pr.reduce((a, p) => a + nz(p.actual_qty) * bobotTahap(p.stage_id) / 100, 0);
+
+  const baris = (k, v) => `<tr><th style="width:170px">${k}</th><td>${v}</td></tr>`;
+  let isi = `<table>
+    ${baris("Tanggal laporan", esc(dateID(d.report_date)))}
+    ${baris("Tanki", esc(tankNo(d.tank_id)) + " &mdash; " + esc(areaName(d.area_id)))}
+    ${baris("Nomor SPK", esc(sp ? sp.spk_no : "—"))}
+    ${baris("Nomor BAMK", esc(w ? w.bamk_no : "—"))}
+    ${baris("Cuaca", esc(d.weather || "—"))}
+    ${baris("Penginput", esc(userName(d.admin_user_id)))}
+    ${baris("Pengawas menyaksikan", esc([d.supervisor_side, d.supervisor_name].filter(Boolean).join(" — ") || "—"))}
+    ${baris("Status laporan", esc((({ DRAFT: "Draft", SUBMITTED: "Diajukan", APPROVED: "Disetujui", REJECTED: "Dikembalikan" })[d.status]) || d.status) +
+      (d.revision_no ? " (revisi ke-" + d.revision_no + ")" : ""))}
+  </table>
+
+  <h2>Progress pekerjaan</h2>
+  <table><thead><tr><th>Bagian</th><th>Tahap</th><th>Aktivitas</th>
+    <th class="num" style="width:80px">Luas (m&sup2;)</th><th class="num" style="width:60px">Bobot</th>
+    <th class="num" style="width:90px">Setara selesai</th></tr></thead>
+  <tbody>${pr.length ? pr.map(p => {
+    const t = tahapOf(p.stage_id), b = bobotTahap(p.stage_id);
+    return `<tr><td>${esc(bagianLabel(p.part))}</td><td>${esc(t ? t.stage_name : "—")}</td>
+      <td>${esc(p.activity || "—")}</td><td class="num">${fmt(p.actual_qty, 2)}</td>
+      <td class="num">${fmt(b, 0)}%</td><td class="num">${fmt(nz(p.actual_qty) * b / 100, 2)}</td></tr>`;
+  }).join("") : `<tr><td colspan="6"><i>Tidak ada progress pada hari ini.</i></td></tr>`}</tbody>
+  <tfoot><tr><th colspan="3" style="text-align:right">JUMLAH</th>
+    <th class="num">${fmt(luas, 2)}</th><th></th><th class="num">${fmt(bobot, 2)}</th></tr></tfoot></table>`;
+
+  if (mp.length) isi += `<h2>Tenaga kerja</h2>
+    <table><thead><tr><th style="width:110px">Pihak</th><th>Kategori</th>
+      <th class="num" style="width:80px">Orang</th><th>Keterangan</th></tr></thead>
+    <tbody>${mp.map(m => `<tr><td>${esc(m.pihak || "—")}</td><td>${esc(m.category)}</td>
+      <td class="num">${fmt(m.worker_count, 0)}</td><td>${esc(m.notes || "")}</td></tr>`).join("")}</tbody>
+    <tfoot><tr><th colspan="2" style="text-align:right">TOTAL</th>
+      <th class="num">${fmt(mp.reduce((a, m) => a + nz(m.worker_count), 0), 0)}</th><th></th></tr></tfoot></table>`;
+
+  if (mt.length) isi += `<h2>Material &amp; peralatan</h2>
+    <table><thead><tr><th>Item</th><th class="num" style="width:80px">Jumlah</th>
+      <th style="width:70px">Satuan</th><th style="width:110px">No. DO</th><th>Keterangan</th></tr></thead>
+    <tbody>${mt.map(m => `<tr><td>${esc(m.item)}</td><td class="num">${fmt(m.qty, 2)}</td>
+      <td>${esc(m.unit || "")}</td><td>${esc(m.do_no || "")}</td><td>${esc(m.notes || "")}</td></tr>`).join("")}</tbody></table>`;
+
+  isi += `<h2>QC dan HSSE</h2><table>
+    ${baris("Inspeksi", qc ? esc((qc.inspection_type || "—") + " · hasil " + (qc.result || "—") +
+      (qc.rework_required ? " · perlu rework" : "")) : "<i>tidak ada inspeksi hari ini</i>")}
+    ${qc ? baris("Diketahui Pengawas Pertamina", qc.ma4_known
+      ? esc("Ya" + (qc.ma4_date ? " · " + dateID(qc.ma4_date) : "")) : "<b>Belum</b>") : ""}
+    ${baris("Status izin kerja (PTW)", esc(hs ? (hs.permit_status || "—") : "—"))}
+    ${baris("Toolbox meeting", esc(hs ? (hs.toolbox_status || "—") : "—"))}
+    ${baris("Fit to work", esc(hs ? (hs.fit_to_work || "—") : "—"))}
+    ${hs && hs.critical_finding ? baris("Temuan kritis", esc(hs.critical_finding)) : ""}
+  </table>`;
+
+  if (kn.length) isi += `<h2>Kendala</h2>
+    <table><thead><tr><th style="width:100px">Kategori</th><th>Uraian</th><th style="width:120px">Dampak</th>
+      <th>Tindakan</th><th style="width:130px">PIC</th></tr></thead>
+    <tbody>${kn.map(k => `<tr><td>${esc(k.category)}</td><td>${esc(k.description)}</td>
+      <td>${esc(k.impact || "")}</td><td>${esc(k.action || "—")}</td>
+      <td>${esc([k.owner_side, k.owner].filter(Boolean).join(" · ") || "—")}</td></tr>`).join("")}</tbody></table>`;
+
+  if (d.general_notes) isi += `<h2>Catatan umum</h2><p>${esc(d.general_notes)}</p>`;
+
+  if (ph.length) isi += `<h2>Dokumentasi foto</h2>
+    <table><tbody>${ph.map((p, i) => (i % 2 === 0 ? "<tr>" : "") +
+      `<td style="width:50%"><img class="bukti" src="${p.file_url}">
+        <div class="mut"><b>${esc(p.photo_type)}</b> &middot; ${esc(p.caption || "")}</div></td>` +
+      (i % 2 === 1 || i === ph.length - 1 ? (i % 2 === 0 ? "<td></td></tr>" : "</tr>") : "")).join("")}</tbody></table>`;
+
+  const rw = reviewsOf(id);
+  if (rw.length) isi += `<h2>Riwayat koordinasi</h2>
+    <table><thead><tr><th style="width:110px">Tindakan</th><th style="width:130px">Oleh</th>
+      <th style="width:120px">Waktu</th><th>Catatan</th></tr></thead>
+    <tbody>${rw.slice().reverse().map(r => `<tr><td>${esc(REVIEW_LABEL[r.action] || r.action)}</td>
+      <td>${esc(r.user_name)}</td><td class="mut">${esc(waktuLokal(r.timestamp))}</td>
+      <td style="white-space:pre-wrap">${esc(r.note || "")}</td></tr>`).join("")}</tbody></table>`;
+
+  cetakDokumen("Laporan Harian Pekerjaan",
+    esc(tankNo(d.tank_id)) + " &middot; " + esc(dateID(d.report_date)) +
+    (d.return_code ? " &middot; " + esc(d.return_code) : ""), isi);
+}
+
 /* ============================================================
    VIEW: REVIEW & VERIFIKASI  (realisasi -> terverifikasi)
    ============================================================ */
@@ -3230,7 +3487,18 @@ VIEWS.reports = {
   },
   bind() {
     $$("[data-tab]").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; render(); });
-    $("#rpPrint").onclick = () => window.print();
+    $("#rpPrint").onclick = () => {
+      /* Ambil tabel yang sedang tampil di layar, lalu bungkus dengan kop. */
+      const wadah = $("#view");
+      const potongan = Array.from(wadah.querySelectorAll(".card")).map(k => {
+        const jd = k.querySelector("h3");
+        const tb = k.querySelector("table");
+        if (!tb) return "";
+        return (jd ? "<h2>" + esc(jd.textContent.trim()) + "</h2>" : "") + tb.outerHTML;
+      }).filter(Boolean).join("");
+      if (!potongan) return toast("Tidak ada tabel untuk dicetak pada tampilan ini.", "err");
+      cetakDokumen("Rekap Pekerjaan", esc(judulRekap()), potongan);
+    };
     $("#rpCsv").onclick = () => {
       const mode = S.tab || "H", rows = recapRows(mode);
       csvDownload("REKAP_" + mode + "_" + today() + ".csv",
@@ -3245,6 +3513,15 @@ VIEWS.reports = {
 /* Laporan kemajuan pekerjaan untuk disampaikan rutin kepada pengawas
    Pertamina, sebagaimana diminta pada catatan SPK. Satu halaman per SPK
    berjalan, dibuka di jendela cetak supaya bisa langsung disimpan PDF. */
+/* Judul kecil untuk hasil cetak rekap, mengikuti tab yang sedang dibuka. */
+function judulRekap() {
+  const f = S.f.rp || {};
+  const nama = { harian: "Rekap Harian", mingguan: "Rekap Mingguan", bulanan: "Rekap Bulanan",
+    tanki: "Rekap per Tanki", tk: "Rekap Tenaga Kerja" };
+  return (nama[S.tab] || "Rekap") +
+    ((f.from || f.to) ? " · " + (f.from ? dateID(f.from) : "awal") + " s/d " + (f.to ? dateID(f.to) : "kini") : "");
+}
+
 function laporanKemajuanPengawas() {
   const aktif = DB.spk.filter(x => x.status === "TERBIT" || x.status === "SELESAI");
   if (!aktif.length) return toast("Belum ada SPK terbit, jadi belum ada yang dilaporkan.", "err");
@@ -3296,35 +3573,10 @@ function laporanKemajuanPengawas() {
         : `<p><i>Tidak ada kendala terbuka.</i></p>`}`;
   }).join("<hr>");
 
-  const html = `<!doctype html><html lang="id"><head><meta charset="utf-8">
-  <title>Laporan Kemajuan Pekerjaan ${sampai}</title>
-  <style>
-    body{font-family:Segoe UI,Arial,sans-serif;color:#16232E;margin:28px;font-size:12px}
-    h1{font-size:17px;margin:0 0 2px} h2{font-size:14px;margin:18px 0 6px;border-bottom:2px solid #0E2233;padding-bottom:3px}
-    h3{font-size:12.5px;margin:14px 0 5px} hr{margin:24px 0;border:none;border-top:1px dashed #9AA7B2}
-    table.k{border-collapse:collapse;width:100%;margin-bottom:8px}
-    table.k td,table.k th{border:1px solid #C7D0D8;padding:4px 7px;text-align:left;vertical-align:top}
-    table.k th{background:#EEF2F5} table.k td:first-child{width:190px}
-    .kop{border-bottom:3px solid #0E2233;padding-bottom:8px;margin-bottom:14px}
-    .muted{color:#5C6B78;font-size:11px}
-    @media print{body{margin:12mm}}
-  </style></head><body>
-  <div class="kop">
-    <h1>LAPORAN KEMAJUAN PEKERJAAN</h1>
-    <div class="muted">${esc(DB.config.project_name || "")}</div>
-    <div class="muted">Pelaksana: ${esc(DB.config.contractor_name || "")} &middot; Mitra pelaksana: ${esc(DB.config.party_two_name || "")}</div>
-    <div class="muted">Disampaikan kepada: ${esc(DB.config.pertamina_supervisor || "Pengawas Pertamina")}</div>
-    <div class="muted">Posisi data: ${esc(dateID(sampai))} &middot; dicetak oleh ${esc(S.user ? S.user.user_name : "-")}</div>
-  </div>
-  ${bagian}
-  <p class="muted" style="margin-top:22px">Angka pada laporan ini dihitung sendiri oleh HBM Integrated Project Control System
-  dari laporan harian yang telah melewati verifikasi, bukan diketik ulang.</p>
-  </body></html>`;
-
-  const w = window.open("", "_blank");
-  if (!w) return toast("Jendela baru diblokir peramban. Izinkan pop-up lalu ulangi.", "err");
-  w.document.write(html); w.document.close();
-  setTimeout(() => { try { w.print(); } catch (e) { } }, 400);
+  cetakDokumen("Laporan Kemajuan Pekerjaan",
+    "Disampaikan kepada " + esc(DB.config.pertamina_supervisor || "Pengawas Pertamina") +
+    " &middot; posisi data " + esc(dateID(sampai)),
+    bagian);
 }
 /* ============================================================
    MESIN SINKRONISASI
@@ -3646,7 +3898,7 @@ function perbaruiLencana() {
   const n = jumlahBelumTerkirim();
   if (SYNC.jalan) { kotak.className = "sidesync"; kotak.innerHTML = `<b>Mengirim…</b><span>sedang menyatukan data</span>`; return; }
   if (n === 0) {
-    const jam = DB.config.sync.last ? DB.config.sync.last.slice(11, 16) : "";
+    const jam = jamLokal(DB.config.sync.last);
     kotak.className = "sidesync hijau";
     kotak.innerHTML = `<b>Semua terkirim</b><span>${jam ? "terakhir " + esc(jam) : "siap"}</span>`;
   } else {
@@ -3744,6 +3996,9 @@ function ujiTulis(judul, status, ket) {
 }
 
 function bukaPeriksaSinkron() {
+  /* Hasil pemeriksaan memuat alamat Web App dan tautan Spreadsheet. Dikunci di
+     sini juga, bukan hanya dengan menyembunyikan tombolnya. */
+  if (!isPC()) return toast("Pemeriksaan sinkron hanya untuk Project Control. Kabari lewat menu Pesan bila ada yang tidak cocok.", "err");
   UJI.hasil = [];
   openModal("Pemeriksaan sinkron",
     '<div class="tiny muted" style="margin:-6px 0 12px">Menguji kirim dan terima ke Google Sheets</div>' +
@@ -4800,6 +5055,34 @@ VIEWS.settings = {
         <label class="f"><span>Ambang waspada (%)</span><input type="number" id="cW" value="${c.alarm_waspada}"></label>
         <label class="f"><span>Ambang kritis (%)</span><input type="number" id="cK" value="${c.alarm_kritis}"></label>
       </div>
+      <h4 class="mt16">Kop surat &amp; tanda tangan pada hasil cetak</h4>
+      <p class="small muted">Berlaku untuk semua yang dicetak dari aplikasi: laporan harian, rekap, dan
+        laporan kemajuan ke pengawas. Kolom tanda tangan yang nama <b>dan</b> jabatannya kosong tidak ikut dicetak,
+        jadi tidak akan ada kotak tanda tangan menganggur.</p>
+      <div class="row mt8">
+        <img src="${kopSurat()}" style="max-width:320px;border:1px solid var(--line);border-radius:4px;background:#fff">
+        <div>
+          <label class="btn a sm">Ganti kop surat<input type="file" id="cKopFile" accept="image/*" hidden></label>
+          ${c.kop_url ? `<button class="btn sm" id="cKopHapus">Pakai kop bawaan</button>` : ""}
+          <div class="tiny muted mt8">PNG atau JPG memanjang, lebar sekitar 1200 piksel.<br>
+            ${c.kop_url ? "Sedang memakai kop unggahan Anda." : "Sedang memakai kop bawaan aplikasi."}</div>
+        </div>
+      </div>
+      <div class="fg c4 mt12">
+        <label class="f"><span>Kota pada tanda tangan</span><input type="text" id="cKota" value="${esc(c.kota || "Balikpapan")}"></label>
+        <label class="f"><span>Kolom 1 &mdash; keterangan</span><input type="text" id="cS1L" value="${esc(c.sign1_label || "")}"></label>
+        <label class="f"><span>Kolom 1 &mdash; nama</span><input type="text" id="cS1N" value="${esc(c.sign1_name || "")}"></label>
+        <label class="f"><span>Kolom 1 &mdash; jabatan</span><input type="text" id="cS1J" value="${esc(c.sign1_title || "")}"></label>
+        <label class="f"><span>Kolom 2 &mdash; keterangan</span><input type="text" id="cS2L" value="${esc(c.sign2_label || "")}"></label>
+        <label class="f"><span>Kolom 2 &mdash; nama</span><input type="text" id="cS2N" value="${esc(c.sign2_name || "")}"></label>
+        <label class="f"><span>Kolom 2 &mdash; jabatan</span><input type="text" id="cS2J" value="${esc(c.sign2_title || "")}"></label>
+        <div class="f"></div>
+        <label class="f"><span>Kolom 3 &mdash; keterangan</span><input type="text" id="cS3L" value="${esc(c.sign3_label || "")}"></label>
+        <label class="f"><span>Kolom 3 &mdash; nama direksi</span><input type="text" id="cS3N" value="${esc(c.sign3_name || "")}" placeholder="nama Direktur HBM"></label>
+        <label class="f"><span>Kolom 3 &mdash; jabatan</span><input type="text" id="cS3J" value="${esc(c.sign3_title || "")}"></label>
+        <div class="f" style="align-self:end"><button class="btn sm" id="cKopUji">Lihat contoh cetak</button></div>
+      </div>
+
       <h4 class="mt16">Rantai SPK &rsaquo; BAMK &rsaquo; eksekusi</h4>
       <p class="small muted">Menentukan bagaimana target harian dihitung dan kapan alarm SPK menyala.
         Boleh diubah kapan saja — seluruh angka target dan SPI ikut menyesuaikan tanpa input ulang.</p>
@@ -4929,6 +5212,36 @@ VIEWS.settings = {
 
     if (tab === "proj") {
       paintLogo($("#cfgLogo"));
+      /* Kop diunggah sebagai gambar tertanam supaya ikut ke perangkat lain
+         lewat sinkronisasi, tanpa bergantung pada tautan luar yang bisa mati. */
+      if ($("#cKopFile")) $("#cKopFile").onchange = e => {
+        const f = e.target.files[0]; e.target.value = "";
+        if (!f) return;
+        if (f.size > 400 * 1024) return toast("Berkas kop " + fmt(f.size / 1024, 0) +
+          " KB, terlalu besar. Perkecil sampai di bawah 400 KB supaya tidak membebani tiap perangkat.", "err");
+        const baca = new FileReader();
+        baca.onload = () => {
+          DB.config.kop_url = baca.result; save();
+          audit("UPDATE", "26_SYSTEM_CONFIG", "kop", "", "kop surat diganti");
+          render(); toast("Kop surat diganti.", "ok");
+        };
+        baca.readAsDataURL(f);
+      };
+      if ($("#cKopHapus")) $("#cKopHapus").onclick = () => {
+        DB.config.kop_url = null; save();
+        audit("UPDATE", "26_SYSTEM_CONFIG", "kop", "", "kembali ke kop bawaan");
+        render(); toast("Kembali memakai kop bawaan.", "ok");
+      };
+      if ($("#cKopUji")) $("#cKopUji").onclick = () => {
+        cetakDokumen("Contoh Hasil Cetak", "Halaman ini hanya untuk memeriksa tampilan kop dan blok tanda tangan",
+          `<h2>Contoh isi laporan</h2>
+           <table><thead><tr><th>Bagian</th><th>Tahap</th><th class="num">Luas (m&sup2;)</th></tr></thead>
+           <tbody><tr><td>Shell (dinding)</td><td>Persiapan permukaan</td><td class="num">9,34</td></tr>
+           <tr><td>Shell (dinding)</td><td>Primer coat</td><td class="num">5,00</td></tr></tbody></table>
+           <p class="mut">Simpan dulu pengaturannya bila baru saja mengubah nama atau jabatan &mdash;
+           contoh ini memakai nilai yang sudah tersimpan.</p>`);
+      };
+
       $("#cSave").onclick = () => {
         Object.assign(c, {
           project_code: $("#cCode").value, contract_no: $("#cCon").value, project_name: $("#cName").value,
@@ -4938,6 +5251,10 @@ VIEWS.settings = {
           roof_factor: { CRT: nz($("#cFC").value), FRT: nz($("#cFF").value), DRT: nz($("#cFD").value) },
           acc_pct: nz($("#cACC").value),
           target_basis: $("#cTB").value, spk_alarm_h: nz($("#cSA").value),
+          kota: $("#cKota").value,
+          sign1_label: $("#cS1L").value, sign1_name: $("#cS1N").value, sign1_title: $("#cS1J").value,
+          sign2_label: $("#cS2L").value, sign2_name: $("#cS2N").value, sign2_title: $("#cS2J").value,
+          sign3_label: $("#cS3L").value, sign3_name: $("#cS3N").value, sign3_title: $("#cS3J").value,
           pertamina_supervisor: $("#cPW").value, party_two_name: $("#cP2").value,
           party_two_addr: $("#cP2A").value
         });
@@ -5153,9 +5470,7 @@ VIEWS.sync = {
 
       ${siap ? `
       <div class="note ok mt12"><b>Perangkat ini sudah tersambung ke kantor.</b>
-        Kata sandi dan alamat kantor disembunyikan supaya tidak bisa diubah orang lain
-        yang kebetulan memakai perangkat ini. Bila memang perlu diganti, tekan
-        <b>Ubah sambungan</b> dan masukkan PIN Project Control.</div>`
+        Tidak ada yang perlu Anda atur. Cukup tekan Sinkronkan sekarang.</div>`
       : `
       <div class="note warn mt12"><b>Perangkat ini belum tersambung.</b> Isian Anda tersimpan di perangkat
         tetapi <b>tidak akan pernah sampai</b> ke kantor sampai kata sandi diisi. Minta kepada Project Control HBM.
@@ -5168,9 +5483,13 @@ VIEWS.sync = {
 
       <div class="row mt12">
         <button class="btn p" id="spGo">Sinkronkan sekarang</button>
-        <button class="btn" id="spPeriksa">Periksa sinkron</button>
-        ${siap ? `<button class="btn" id="spUbah">Ubah sambungan</button>`
-                : `<button class="btn" id="spSave">Simpan kata sandi</button>`}
+        ${/* Periksa sinkron menampilkan alamat Web App dan tautan Spreadsheet.
+             Itu tidak boleh terlihat di perangkat lapangan yang bisa dipinjam
+             orang. Hanya Project Control yang boleh membukanya. */
+      isPC() ? `<button class="btn" id="spPeriksa">Periksa sinkron</button>` : ""}
+        ${!siap ? `<button class="btn" id="spSave">Simpan kata sandi</button>` : ""}
+        ${siap && isPC() ? `<button class="btn" id="spUbah">Ubah sambungan</button>` : ""}
+        ${siap && !isPC() ? `<span class="tiny muted" style="align-self:center">Pengaturan sambungan dikelola Project Control.</span>` : ""}
       </div>
       <div id="spMsg" class="mt12"></div>
 
@@ -5182,8 +5501,9 @@ VIEWS.sync = {
       </div>
 
       <div class="note warn mt16"><b>Kebiasaan harian.</b> Tekan Sinkronkan sekali sebelum mulai bekerja, dan
-        sekali lagi setelah laporan selesai diisi. Bila terasa ada yang tidak cocok dengan kantor, tekan
-        <b>Periksa sinkron</b> lalu <b>Salin hasil</b> dan kirimkan ke Project Control.</div>
+        sekali lagi setelah laporan selesai diisi. ${isPC()
+      ? `Bila terasa ada yang tidak cocok dengan kantor, tekan <b>Periksa sinkron</b> lalu <b>Salin hasil</b>.`
+      : `Bila lencana di sidebar tetap kuning setelah beberapa kali ditekan, kabari Project Control lewat menu <b>Pesan</b>.`}</div>
     </div></div>`;
   },
   bind() {
@@ -5222,7 +5542,7 @@ VIEWS.sync = {
       render();
       kabar("Sambungan dibuka. Isi kata sandi baru lalu tekan Simpan kata sandi.", "warn");
     };
-    $("#spPeriksa").onclick = () => { ambil(); save(); bukaPeriksaSinkron(); };
+    if ($("#spPeriksa")) $("#spPeriksa").onclick = () => { ambil(); save(); bukaPeriksaSinkron(); };
     $("#spGo").onclick = async () => {
       ambil(); save();
       if (!syncSiap()) return kabar("Isi kata sandi sinkronisasi lebih dulu. Mintalah kepada Project Control HBM.", "stop");
