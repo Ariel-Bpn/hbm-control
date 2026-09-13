@@ -379,10 +379,10 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "1.9";
+const APP_VERSI = "2.1";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
-const CODEGS_VERSI = "1.7";
+const CODEGS_VERSI = "1.9";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -430,7 +430,11 @@ const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const uid = p => p + "-" + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 6).toUpperCase();
-const nz = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+/* Menerima "9.34" maupun "9,34" — papan tombol Indonesia sering mengetik koma. */
+const nz = v => {
+  if (typeof v === "string") v = v.trim().replace(",", ".");
+  const n = parseFloat(v); return isNaN(n) ? 0 : n;
+};
 const fmt = (n, d = 2) => nz(n).toLocaleString("id-ID", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmt0 = n => nz(n).toLocaleString("id-ID", { maximumFractionDigits: 0 });
 const rupiah = n => "Rp " + nz(n).toLocaleString("id-ID", { maximumFractionDigits: 0 });
@@ -490,6 +494,9 @@ const AKTIVITAS = [
 ];
 const KATEGORI_MP = ["Spv / QC", "Project Control", "Safety Man", "Blaster Painter",
   "RAT Level 2", "RAT Level 3", "Helper"];
+/* Pihak yang menurunkan tenaga. Dipisah dari kategori supaya rekap orang-hari
+   bisa dibelah per pihak tanpa mengurai teks. */
+const PIHAK_MP = ["HBM", "Palda", "Vendor"];
 const JENIS_QC = ["Visual Inspection", "Surface Preparation / Profil Permukaan",
   "Salt Test / Chloride Test", "WFT — Wet Film Thickness", "DFT — Dry Film Thickness",
   "Holiday / Porosity Test", "Adhesion / Pull-off Test", "Rinse & Rust Inhibitor Check",
@@ -602,7 +609,7 @@ function bangunBawaan() {
       }
     },
     areas, tanks, spk: [], spk_item: [], bamk: [], stages, scopes, targets: [],
-    dailies: [], progress: [], manpower: [], materials: [], photos: [], reviews: [], deleted: [],
+    dailies: [], progress: [], manpower: [], materials: [], photos: [], reviews: [], deleted: [], messages: [],
     qc: [], hsse: [], issues: [], verifications: [], acceptances: [],
     billables: [], billings: [], documents: [], meetings: [], actions: [],
     users: [
@@ -633,7 +640,7 @@ function pasangSyncBawaan() {
 /* Naik versi tanpa menghapus data yang sudah ada */
 function migrate() {
   if (!DB.meta || !DB.dailies) { DB = seed(); return; }
-  if (DB.meta.version === "1.9") return;
+  if (DB.meta.version === "2.1") return;
   DB.reviews = DB.reviews || [];
   DB.deleted = DB.deleted || [];
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
@@ -658,7 +665,7 @@ function migrate() {
   if (DB.config.acc_pct == null) DB.config.acc_pct = 10;
   if (nz(DB.config.tank_target) < 13) DB.config.tank_target = 13;
   migrasiSPK();
-  DB.meta.version = "1.9";
+  DB.meta.version = "2.1";
   save();
 }
 
@@ -742,6 +749,24 @@ function migrasiSPK() {
   if (!DB.config.party_two_name) DB.config.party_two_name = "PT. PALDA SOLUSI SINERGI";
   if (!DB.config.pertamina_supervisor) DB.config.pertamina_supervisor = "Pengawas MA-4 PT Pertamina Patra Niaga RU V";
   if (DB.config.spk_alarm_h == null) DB.config.spk_alarm_h = 7;
+
+  /* Shift dihapus: satu laporan per tanki per hari. Nilai lama disatukan
+     supaya tidak ada lagi laporan kembar Pagi/Siang/Malam untuk tanggal sama. */
+  DB.dailies.forEach(d => { if (!d.shift || ["Pagi", "Siang", "Malam"].indexOf(d.shift) >= 0) d.shift = "Harian"; });
+  /* Tenaga kerja warisan belum menyebut pihak — dikosongkan agar tampak dan
+     bisa dilengkapi, bukan ditebak sendiri oleh sistem. */
+  DB.manpower.forEach(m => { if (m.pihak == null) m.pihak = ""; });
+  DB.messages = DB.messages || [];
+  /* Laporan yang sudah dikembalikan sebelum ada kode, diberi kode surut
+     supaya Admin Site punya rujukan yang sama saat berkoordinasi. */
+  DB.dailies.forEach(d => {
+    if (d.status === "REJECTED" && !d.return_code) {
+      const t = (DB.tanks || []).filter(x => x.tank_id === d.tank_id)[0];
+      d.return_code = "KMB-" + String(d.report_date || "").replace(/-/g, "").slice(2) +
+        "-" + String((t && t.tank_no) || "?").replace(/[^A-Za-z0-9]/g, "") +
+        "-R" + (nz(d.revision_no) || 1);
+    }
+  });
 }
 
 /* Peran Super Admin sudah dihapus dari sistem. Akun lama yang tersisa dari versi
@@ -777,12 +802,12 @@ const ROLE_LABEL = {
   MANAGEMENT: "Management HBM", FINANCE: "Finance HBM"
 };
 const PERM = {
-  ADMIN_SITE: ["daily_input", "daily_own", "sync_panel"],
+  ADMIN_SITE: ["daily_input", "daily_own", "sync_panel", "pesan"],
   PROJECT_CONTROL: ["dash", "daily_input", "daily_all", "daily_edit_all", "review", "verify", "accept",
     "billable", "billing", "documents", "issues", "reports", "master", "money", "audit",
-    "settings", "users", "meeting"],
-  MANAGEMENT: ["dash", "reports", "money", "billing_view", "issues_view", "meeting", "sync_panel"],
-  FINANCE: ["dash", "billable", "billing", "reports", "money", "documents", "audit", "sync_panel"]
+    "settings", "users", "meeting", "pesan"],
+  MANAGEMENT: ["dash", "reports", "money", "billing_view", "issues_view", "meeting", "sync_panel", "pesan"],
+  FINANCE: ["dash", "billable", "billing", "reports", "money", "documents", "audit", "sync_panel", "pesan"]
 };
 function can(p) { return S.user ? (PERM[S.user.role] || []).indexOf(p) >= 0 : false; }
 function isSite() { return S.user && S.user.role === "ADMIN_SITE"; }
@@ -912,7 +937,7 @@ function totalLuasEksterior() {
 }
 
 /* ---------- SINKRONISASI: daftar tabel & penanda hapus ---------- */
-const SYNC_TABLES = ["areas", "tanks", "spk", "spk_item", "bamk", "stages", "scopes", "targets", "dailies", "progress",
+const SYNC_TABLES = ["areas", "tanks", "spk", "spk_item", "bamk", "stages", "scopes", "messages", "targets", "dailies", "progress",
   "manpower", "materials", "photos", "qc", "hsse", "issues", "verifications", "acceptances",
   "billables", "billings", "documents", "meetings", "actions", "reviews", "users", "audit"];
 const SYNC_KEY = {
@@ -922,7 +947,7 @@ const SYNC_KEY = {
   photos: "photo_id", qc: "inspection_id", hsse: "hsse_id", issues: "issue_id",
   verifications: "verification_id", acceptances: "acceptance_id", billables: "billable_id",
   billings: "billing_id", documents: "document_id", meetings: "meeting_id", actions: "action_id",
-  reviews: "review_id", users: "user_id", audit: "audit_id"
+  reviews: "review_id", messages: "msg_id", users: "user_id", audit: "audit_id"
 };
 /* Sidik jari isi satu baris, dipakai untuk mengenali baris mana yang berubah. */
 function sidikBaris(r) {
@@ -1186,7 +1211,7 @@ const NAV = [
   { v: "tanks-status", t: "Status Tanki", i: "⬢", p: "dash" },
   { g: "Lapangan" },
   { v: "daily-new", t: "Buat Laporan Harian", i: "✎", p: "daily_input" },
-  { v: "daily-list", t: "Daftar Laporan", i: "☰", p: "daily_input" },
+  { v: "daily-list", t: "Daftar Laporan", i: "☰", p: "daily_input", badge: "dikembalikan" },
   { v: "daily-list", t: "Laporan Harian", i: "☰", p: "daily_all", hideIf: "daily_input" },
   { g: "Verifikasi" },
   { v: "review", t: "Review & Verifikasi", i: "✓", p: "review", badge: "review" },
@@ -1205,11 +1230,21 @@ const NAV = [
   { v: "master", t: "Master Data", i: "⚙", p: "master" },
   { v: "settings", t: "Pengaturan", i: "⚒", p: "settings" },
   { v: "audit", t: "Log Audit", i: "◔", p: "audit" },
+  { g: "Koordinasi" },
+  { v: "pesan", t: "Pesan", i: "✉", p: "pesan", badge: "pesan" },
   { g: "Sambungan" },
   { v: "sync", t: "Sinkronisasi", i: "⇅", p: "sync_panel" }
 ];
 function navCount(k) {
   if (k === "review") return DB.dailies.filter(d => d.status === "SUBMITTED").length;
+  /* Admin Site perlu melihat sendiri berapa laporannya yang dikembalikan,
+     tanpa harus membuka daftar satu per satu. */
+  if (k === "dikembalikan") {
+    let r = DB.dailies.filter(d => d.status === "REJECTED");
+    if (isSite()) r = r.filter(d => d.admin_user_id === S.user.user_id);
+    return r.length;
+  }
+  if (k === "pesan") return pesanBelumDibaca();
   return 0;
 }
 function paintNav() {
@@ -1375,6 +1410,145 @@ function svgCurve(rows) {
       belum diperintahkan Pertamina — bukan keterlambatan pelaksana.</div>`;
 }
 
+/* ══════════════ PESAN — papan koordinasi antar peran ══════════════
+   Ini BUKAN obrolan langsung. Pesan ikut mesin sinkronisasi yang sama dengan
+   data lain, jadi baru sampai ke orang lain setelah kedua perangkat
+   menyinkronkan (otomatis tiap 5 menit selama aplikasi terbuka). Untuk hal
+   mendesak, tetap pakai telepon. Kelebihannya: seluruh percakapan tersimpan
+   bersama datanya dan bisa dibuka lagi berbulan-bulan kemudian. */
+
+/* Tanda baca disimpan per perangkat, di luar basis data yang disinkronkan,
+   supaya tidak ada perang tulis antar perangkat hanya karena membaca pesan. */
+const BACA_KEY = "HBM_IPCS_BACA";
+function semuaBaca() {
+  try { return JSON.parse(localStorage.getItem(BACA_KEY) || "{}"); } catch (e) { return {}; }
+}
+/* Ditandai per pengguna, bukan per perangkat: satu laptop bisa dipakai
+   bergantian, dan pesan yang sudah dibaca satu orang tidak berarti sudah
+   dibaca orang berikutnya. */
+function bacaTerakhir() {
+  const u = (S.user || {}).user_id || "-";
+  return semuaBaca()[u] || {};
+}
+function tandaiBaca(kanal) {
+  const u = (S.user || {}).user_id || "-";
+  const semua = semuaBaca();
+  semua[u] = semua[u] || {};
+  semua[u][kanal] = new Date().toISOString();
+  try { localStorage.setItem(BACA_KEY, JSON.stringify(semua)); } catch (e) { }
+}
+function daftarKanal() {
+  const k = [{ id: "UMUM", nama: "Umum — semua peran", jenis: "umum" }];
+  DB.bamk.filter(b => b.status === "AKTIF" || b.status === "DRAFT").forEach(b =>
+    k.push({ id: "BAMK:" + b.bamk_id, nama: tankNo(b.tank_id) + " — " + (b.bamk_no || b.bamk_id), jenis: "tanki" }));
+  return k;
+}
+const pesanKanal = id => DB.messages.filter(m => m.channel === id)
+  .slice().sort((a, b) => String(a.ts || "").localeCompare(String(b.ts || "")));
+function belumDibacaKanal(id) {
+  const b = bacaTerakhir()[id] || "";
+  return DB.messages.filter(m => m.channel === id && String(m.ts || "") > b &&
+    m.author_user_id !== (S.user || {}).user_id).length;
+}
+function pesanBelumDibaca() {
+  if (!S.user) return 0;
+  return daftarKanal().reduce((a, k) => a + belumDibacaKanal(k.id), 0);
+}
+/* Dipakai juga oleh layar lain untuk menaruh pesan sistem ke papan. */
+function kirimPesan(kanal, teks, sistem) {
+  const m = {
+    msg_id: uid("MSG"), channel: kanal, body: teks,
+    author_user_id: sistem ? "" : S.user.user_id,
+    author_name: sistem ? "Sistem" : S.user.user_name,
+    author_role: sistem ? "SISTEM" : S.user.role,
+    ts: new Date().toISOString()
+  };
+  DB.messages.push(m);
+  return m;
+}
+
+VIEWS.pesan = {
+  html() {
+    const kanal = S.f.kanal || (S.f.kanal = "UMUM");
+    const daftar = daftarKanal();
+    if (!daftar.some(k => k.id === kanal)) S.f.kanal = "UMUM";
+    const pesan = pesanKanal(S.f.kanal);
+    const aku = S.user.user_id;
+    const namaKanal = (daftar.find(k => k.id === S.f.kanal) || {}).nama || "Umum";
+
+    let hariTerakhir = "";
+    const gelembung = pesan.map(m => {
+      const punyaku = m.author_user_id === aku;
+      const sistem = m.author_role === "SISTEM";
+      const hari = String(m.ts || "").slice(0, 10);
+      let pemisah = "";
+      if (hari !== hariTerakhir) {
+        hariTerakhir = hari;
+        pemisah = `<div style="text-align:center;margin:14px 0 8px"><span class="b gray">${esc(dateID(hari))}</span></div>`;
+      }
+      const jam = String(m.ts || "").slice(11, 16);
+      if (sistem) return pemisah + `<div style="text-align:center;margin:6px 0">
+        <span class="tiny muted" style="background:var(--soft);padding:4px 10px;border-radius:10px">${esc(m.body)} · ${jam}</span></div>`;
+      return pemisah + `<div style="display:flex;margin:6px 0;${punyaku ? "justify-content:flex-end" : ""}">
+        <div style="max-width:76%;border:1px solid var(--line);border-radius:10px;padding:8px 11px;
+          background:${punyaku ? "#EAF2F9" : "var(--card)"}">
+          <div class="tiny muted" style="margin-bottom:2px"><b>${esc(m.author_name || "—")}</b>
+            · ${esc(ROLE_LABEL[m.author_role] || m.author_role)} · ${jam}</div>
+          <div class="small" style="white-space:pre-wrap">${esc(m.body)}</div>
+        </div></div>`;
+    }).join("");
+
+    return `
+    <div class="note">Pesan di sini ikut mesin sinkronisasi yang sama dengan data lain — <b>bukan obrolan langsung</b>.
+      Pesan sampai ke orang lain setelah kedua perangkat menyinkronkan, otomatis tiap 5 menit selama aplikasi terbuka.
+      Untuk hal mendesak, tetap telepon. Yang dicatat di sini tersimpan bersama proyeknya dan bisa dibuka lagi nanti.</div>
+
+    <div class="card mt16"><div class="body">
+      <div class="filters">
+        <label class="f grow"><span>Kanal</span><select id="pKanal">${daftar.map(k => {
+      const n = belumDibacaKanal(k.id);
+      return `<option value="${esc(k.id)}" ${k.id === S.f.kanal ? "selected" : ""}>${esc(k.nama)}${n ? "  (" + n + " baru)" : ""}</option>`;
+    }).join("")}</select></label>
+        <button class="btn sm" id="pSegar">Muat ulang</button>
+      </div>
+      <div class="tiny muted">Kanal <b>Umum</b> dibaca semua peran. Kanal per tanki hanya untuk hal yang menyangkut tanki itu —
+        pakailah supaya urusan G-1 tidak tercampur dengan tanki lain.</div>
+
+      <div id="pList" style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:8px;
+        padding:10px;margin-top:12px;background:var(--soft)">
+        ${pesan.length ? gelembung : `<div class="empty"><b>Belum ada pesan di ${esc(namaKanal)}</b>Tulis yang pertama.</div>`}
+      </div>
+
+      <label class="f mt12"><span>Tulis pesan</span>
+        <textarea id="pTeks" rows="2" placeholder="tulis di sini, lalu tekan Kirim"></textarea></label>
+      <div class="row">
+        <button class="btn p" id="pKirim">Kirim</button>
+        <span class="tiny muted">Masuk sebagai <b>${esc(S.user.user_name)}</b> · ${esc(ROLE_LABEL[S.user.role])}.
+          Pesan tidak bisa dihapus atau diubah setelah dikirim.</span>
+      </div>
+    </div></div>`;
+  },
+  bind() {
+    const gulirBawah = () => { const el = $("#pList"); if (el) el.scrollTop = el.scrollHeight; };
+    gulirBawah();
+    tandaiBaca(S.f.kanal);
+    $("#pKanal").onchange = e => { S.f.kanal = e.target.value; render(); };
+    $("#pSegar").onclick = async () => {
+      if (syncSiap()) { await syncNow(() => { }); }
+      render(); toast("Dimuat ulang.", "ok");
+    };
+    $("#pKirim").onclick = () => {
+      const teks = $("#pTeks").value.trim();
+      if (!teks) return toast("Tulis pesannya dulu.", "err");
+      if (teks.length > 2000) return toast("Pesan terlalu panjang. Ringkas jadi di bawah 2000 huruf.", "err");
+      kirimPesan(S.f.kanal, teks, false);
+      save(); tandaiBaca(S.f.kanal); render();
+      if (syncSiap()) syncNow(() => { }).then(() => render());
+      toast("Terkirim. Sampai ke yang lain setelah perangkat mereka menyinkronkan.", "ok");
+    };
+  }
+};
+
 VIEWS.dashboard = {
   html() {
     const woAktif = bamkAktif().length;
@@ -1535,7 +1709,7 @@ VIEWS["tanks-status"] = {
 function newDraft() {
   const w = bamkAktif()[0];
   return {
-    daily_id: null, report_date: today(), bamk_id: w ? w.bamk_id : "", weather: "Cerah", shift: "Pagi",
+    daily_id: null, report_date: today(), bamk_id: w ? w.bamk_id : "", weather: "Cerah", shift: "Harian",
     general_notes: "", status: "DRAFT", revision_no: 0,
     supervisor_side: PENGAWAS[0], supervisor_name: "",
     progress: [], manpower: [], materials: [], photos: [],
@@ -1572,16 +1746,29 @@ VIEWS["daily-new"] = {
     if (!S.draft) S.draft = newDraft();
     const d = S.draft, w = bamkOf(d.bamk_id), t = w ? tankOf(w.tank_id) : null;
     const wos = bamkAktif();
+    /* Laporan yang dikembalikan mudah terlewat kalau Admin Site langsung
+       membuat laporan baru. Ditampilkan di layar ini juga. */
+    const balik = DB.dailies.filter(x => x.status === "REJECTED" &&
+      (!isSite() || x.admin_user_id === S.user.user_id));
+    const spanduk = balik.length ? `<div class="card"><div class="body">
+      <div class="note stop"><b>${balik.length} laporan Anda dikembalikan dan belum diperbaiki.</b>
+        Selesaikan dulu sebelum membuat laporan baru.
+        ${balik.map(x => `<div class="mt8"><span class="mono" style="font-weight:700">${esc(x.return_code || "—")}</span>
+          <span class="tiny muted"> · ${esc(dateID(x.report_date))} · ${esc(tankNo(x.tank_id))}</span>
+          <div class="small">${esc(x.review_note || "tanpa catatan")}</div>
+          <button class="btn a sm mt8" data-fix="${x.daily_id}">Perbaiki sekarang</button></div>`).join("")}
+      </div></div></div>` : "";
+
     if (!wos.length) {
       const adaSpk = DB.spk.some(x => x.status === "TERBIT");
-      return `<div class="card"><div class="empty"><b>Belum ada tanki yang boleh dikerjakan</b>
+      return spanduk + `<div class="card"><div class="empty"><b>Belum ada tanki yang boleh dikerjakan</b>
       ${adaSpk ? "SPK dari Pertamina sudah ada, tetapi Berita Acara Mulai Kerja ke pelaksana belum aktif."
           : "Pekerjaan baru boleh dimulai setelah SPK dari Pertamina terbit dan BAMK ke pelaksana ditandatangani."}
       Hubungi Project Control HBM.</div></div>`;
     }
     const sc = w ? scopesOfBamk(w.bamk_id) : [];
     const thread = d.daily_id ? reviewsOf(d.daily_id) : [];
-    return `
+    return spanduk + `
     <div class="note">Satu laporan harian ini menjadi sumber rekap mingguan dan bulanan. Tidak ada input ulang.
       ${d.daily_id ? `<b>Sedang mengubah laporan ${esc(d.daily_id)} — status ${esc(d.status)}${d.revision_no ? ", revisi ke-" + d.revision_no : ""}.</b>` : ""}</div>
 
@@ -1595,7 +1782,7 @@ VIEWS["daily-new"] = {
         <label class="f"><span>Tanggal <em>*</em></span><input type="date" id="dDate" value="${esc(d.report_date)}"></label>
         <label class="f"><span>Tanki yang dikerjakan <em>*</em></span><select id="dWo">${opts(wos, d.bamk_id, x => x.bamk_id, x => tankNo(x.tank_id) + " — BAMK " + x.bamk_no)}</select></label>
         <label class="f"><span>Cuaca</span><select id="dWeather">${listOpts(["Cerah", "Berawan", "Hujan Ringan", "Hujan Deras", "Angin Kencang"], d.weather)}</select></label>
-        <label class="f"><span>Shift</span><select id="dShift">${listOpts(["Pagi", "Siang", "Malam"], d.shift)}</select></label>
+
       </div>
       <div class="row small muted">
         <span><b>Area:</b> ${esc(w ? areaName(w.area_id) : "—")}</span>
@@ -1698,10 +1885,11 @@ VIEWS["daily-new"] = {
     </div></div>`;
   },
   bind() {
+    $$("[data-fix]").forEach(b => b.onclick = () => loadDraft(b.dataset.fix));
     const d = S.draft; if (!d) return;
     const pull = () => {
       d.report_date = $("#dDate").value; d.bamk_id = $("#dWo").value;
-      d.weather = $("#dWeather").value; d.shift = $("#dShift").value; d.general_notes = $("#dNotes").value;
+      d.weather = $("#dWeather").value; d.general_notes = $("#dNotes").value;
       d.supervisor_side = $("#dSupSide").value; d.supervisor_name = $("#dSupName").value;
       d.qc = { inspection_type: $("#qType").value, result: $("#qRes").value, rework_required: $("#qRw").checked, reference_no: $("#qRef").value, remarks: $("#qRem").value, ma4_known: $("#qMa4").checked, ma4_date: $("#qMa4d").value };
       d.hsse = { permit_status: $("#hPermit").value, toolbox_status: $("#hTool").value, fit_to_work: $("#hFtw").value, critical_finding: $("#hCrit").value, remarks: $("#hRem").value };
@@ -1748,6 +1936,19 @@ VIEWS["daily-new"] = {
           <th class="n" colspan="${TH.length}">${fmt(persenBamk(d.bamk_id), 1)}% terbobot</th></tr></tfoot></table></div>`;
     };
 
+    /* Memperbarui keterangan batas satu baris tanpa menyentuh kotak isiannya,
+       supaya kursor dan angka yang sedang diketik tidak hilang. */
+    const segarkanBatas = (i) => {
+      const el = $("#batas" + i); if (!el) return;
+      const p = d.progress[i], maks = batas(p.part, p.stage_id, i);
+      const lebih = nz(p.actual_qty) > maks + 0.005, seb = tahapSebelum(p.stage_id);
+      el.className = "tiny " + (lebih ? "" : "muted");
+      el.style.cssText = lebih ? "color:var(--red);font-weight:700" : "";
+      el.innerHTML = (lebih ? "Melebihi batas. " : "") +
+        "Maksimal yang masih boleh diisi di baris ini: <b>" + fmt(maks, 2) + " m²</b>. " +
+        (seb ? "Dibatasi juga oleh tahap sebelumnya (" + esc(seb.stage_name) + ")." : "");
+    };
+
     const drawProg = () => {
       $("#progList").innerHTML = d.progress.length ? d.progress.map((p, i) => {
         const maks = batas(p.part, p.stage_id, i);
@@ -1762,9 +1963,10 @@ VIEWS["daily-new"] = {
             <label class="f"><span>Tahap <em>*</em></span><select data-p="stage_id" data-i="${i}">
               ${TH.map(t => `<option value="${t.stage_id}" ${p.stage_id === t.stage_id ? "selected" : ""}>${esc(t.stage_name)}</option>`).join("")}</select></label>
             <label class="f"><span>Luas hari ini (m²) <em>*</em></span>
-              <input type="number" step="any" min="0" data-p="actual_qty" data-i="${i}" value="${p.actual_qty}"></label>
+              <input type="text" inputmode="decimal" autocomplete="off" data-p="actual_qty" data-i="${i}"
+                placeholder="mis. 9,34" value="${esc(String(p.actual_qty == null ? "" : p.actual_qty))}"></label>
           </div>
-          <div class="tiny ${lebih ? "" : "muted"}" ${lebih ? `style="color:var(--red);font-weight:700"` : ""}>
+          <div class="tiny ${lebih ? "" : "muted"}" id="batas${i}" ${lebih ? `style="color:var(--red);font-weight:700"` : ""}>
             ${lebih ? `Melebihi batas. ` : ""}Maksimal yang masih boleh diisi di baris ini: <b>${fmt(maks, 2)} m²</b>.
             ${seb ? `Dibatasi juga oleh tahap sebelumnya (${esc(seb.stage_name)}).` : ""}
           </div>
@@ -1775,13 +1977,34 @@ VIEWS["daily-new"] = {
 
       $$("#progList [data-p]").forEach(el => el.oninput = () => {
         const i = +el.dataset.i, k = el.dataset.p;
-        d.progress[i][k] = (k === "actual_qty") ? el.value : el.value;
+        d.progress[i][k] = el.value;
+        if (k === "actual_qty") {
+          /* JANGAN menggambar ulang daftar di sini. Menggambar ulang akan
+             mengganti kotak isian dengan yang baru di tengah orang mengetik,
+             sehingga "9,34" terpotong menjadi "9" begitu titik ditekan.
+             Cukup perbarui keterangan batas dan papan sisa saja. */
+          segarkanBatas(i); drawSisa();
+          return;
+        }
         if (k === "part" || k === "stage_id") {
           const t = tahapOf(d.progress[i].stage_id);
           d.progress[i].work_package = (t ? t.stage_name : "") + " — " + bagianLabel(d.progress[i].part);
           d.progress[i].pct_complete = 0;
         }
-        if (k === "part" || k === "stage_id" || k === "activity" || k === "actual_qty") { drawProg(); drawSisa(); }
+        if (k === "part" || k === "stage_id" || k === "activity") { drawProg(); drawSisa(); }
+      });
+      /* Kotak luas sengaja bertipe teks, bukan number: papan tombol HP di
+         Indonesia mengetik koma, dan kotak number membuang isinya sendiri saat
+         titik desimal baru ditekan. Pembersihannya dilakukan di sini. */
+      $$('#progList [data-p="actual_qty"]').forEach(el => el.onblur = () => {
+        const i = +el.dataset.i;
+        /* Ambil bilangan pertama saja, supaya ketikan seperti "12,5 m2"
+           terbaca 12,5 dan bukan 12,52. */
+        const cocok = String(el.value || "").replace(",", ".").match(/\d+(?:\.\d+)?/);
+        const angka = cocok ? parseFloat(cocok[0]) : "";
+        d.progress[i].actual_qty = angka;
+        el.value = angka === "" ? "" : String(angka).replace(".", ",");
+        segarkanBatas(i); drawSisa();
       });
       $$("#progList [data-dp]").forEach(b => b.onclick = () => { d.progress.splice(+b.dataset.dp, 1); drawProg(); drawSisa(); });
       drawSisa();
@@ -1818,13 +2041,17 @@ VIEWS["daily-new"] = {
       $("#mpList").innerHTML = d.manpower.length ? d.manpower.map((m, i) => `
         <div class="entry"><div class="eh"><b>Tenaga ${i + 1}</b><button class="btn d sm" data-dm="${i}">Hapus</button></div>
           <div class="fg c2">
+            <label class="f"><span>Pihak</span><select data-m="pihak" data-i="${i}">${listOpts(PIHAK_MP, m.pihak, "— pilih pihak —")}</select></label>
             <label class="f"><span>Kategori</span><select data-m="category" data-i="${i}">${listOpts(MANPOWER_CATS, m.category, "— pilih kategori —")}</select></label>
+          </div>
+          <div class="fg c2">
             <label class="f"><span>Orang</span><input type="number" min="0" data-m="worker_count" data-i="${i}" value="${m.worker_count}"></label>
+            <label class="f"><span>Keterangan</span><input type="text" data-m="notes" data-i="${i}" value="${esc(m.notes || "")}"></label>
           </div></div>`).join("") : `<div class="empty">Belum ada data tenaga kerja.</div>`;
       $$("#mpList [data-m]").forEach(el => el.oninput = () => d.manpower[+el.dataset.i][el.dataset.m] = el.value);
       $$("#mpList [data-dm]").forEach(b => b.onclick = () => { d.manpower.splice(+b.dataset.dm, 1); drawMp(); });
     };
-    $("#addMp").onclick = () => { d.manpower.push({ category: "", worker_count: 0, notes: "" }); drawMp(); };
+    $("#addMp").onclick = () => { d.manpower.push({ pihak: "", category: "", worker_count: 0, notes: "" }); drawMp(); };
     drawMp();
 
     /* --- material --- */
@@ -1944,6 +2171,8 @@ function commitDaily(status) {
     if (!d.progress.length) return toast("Tambahkan minimal satu baris progress.", "err");
     if (d.progress.some(p => !p.part || !p.stage_id)) return toast("Setiap baris progress harus punya bagian dan tahap.", "err");
     if (d.progress.some(p => !p.activity)) return toast("Pilih aktivitas pada setiap baris progress.", "err");
+    if (d.manpower.some(m => !m.pihak || !m.category))
+      return toast("Setiap baris tenaga kerja harus menyebut pihak (HBM / Palda / Vendor) dan kategorinya.", "err");
     if (d.progress.some(p => nz(p.actual_qty) < 0)) return toast("Luas tidak boleh negatif.", "err");
     if (d.progress.every(p => nz(p.actual_qty) === 0)) return toast("Isi luas pada minimal satu baris.", "err");
     /* Kumulatif tidak boleh melebihi volume bagian, dan tahap berikutnya
@@ -1957,8 +2186,10 @@ function commitDaily(status) {
   const w = bamkOf(d.bamk_id);
   const id = d.daily_id || uid("DL");
   const wasRejected = d.status === "REJECTED";
-  const dup = DB.dailies.find(x => x.daily_id !== id && x.bamk_id === d.bamk_id && x.report_date === d.report_date && x.shift === d.shift);
-  if (dup) return toast("Laporan untuk tanki, tanggal dan shift ini sudah ada.", "err");
+  /* Satu laporan per tanki per hari — seluruh kegiatan hari itu digabung
+     dalam satu laporan, tidak dipecah per shift. */
+  const dup = DB.dailies.find(x => x.daily_id !== id && x.bamk_id === d.bamk_id && x.report_date === d.report_date);
+  if (dup) return toast("Tanki ini sudah punya laporan untuk tanggal tersebut. Ubah laporan yang sudah ada, jangan membuat baru.", "err");
 
   ["progress", "manpower", "materials", "photos", "qc", "hsse", "issues"].forEach(k => {
     const arr = DB[k]; if (!arr) return;
@@ -1987,7 +2218,7 @@ function commitDaily(status) {
     work_package: p.work_package || "", target_qty: nz(p.target_qty),
     actual_qty: nz(p.actual_qty), unit: p.unit, pct_complete: nz(p.pct_complete)
   }));
-  d.manpower.forEach(m => DB.manpower.push({ manpower_id: uid("MP"), daily_id: id, bamk_id: d.bamk_id, category: m.category, worker_count: nz(m.worker_count), notes: m.notes || "" }));
+  d.manpower.forEach(m => DB.manpower.push({ manpower_id: uid("MP"), daily_id: id, bamk_id: d.bamk_id, pihak: m.pihak || "", category: m.category, worker_count: nz(m.worker_count), notes: m.notes || "" }));
   d.materials.forEach(m => DB.materials.push({ material_id: uid("MT"), daily_id: id, bamk_id: d.bamk_id, item: m.item, qty: nz(m.qty), unit: m.unit, do_no: m.do_no, notes: m.notes || "" }));
   d.photos.forEach(p => DB.photos.push({ photo_id: uid("PH"), daily_id: id, bamk_id: d.bamk_id, tank_id: w.tank_id, photo_type: p.photo_type, file_url: p.file_url, caption: p.caption, taken_at: p.taken_at, uploaded_by: S.user.user_id }));
   if (d.qc.inspection_type || d.qc.result) DB.qc.push({ inspection_id: uid("QC"), bamk_id: d.bamk_id, daily_id: id, inspection_date: d.report_date, inspection_type: d.qc.inspection_type, result: d.qc.result, rework_required: !!d.qc.rework_required, reference_no: d.qc.reference_no, remarks: d.qc.remarks, ma4_known: !!d.qc.ma4_known, ma4_date: d.qc.ma4_date || "" });
@@ -2017,7 +2248,18 @@ VIEWS["daily-list"] = {
     if (f.st) rows = rows.filter(d => d.status === f.st);
     const ditolak = rows.filter(d => d.status === "REJECTED").length;
     return `
-    ${ditolak && isSite() ? `<div class="note warn">${ditolak} laporan dikembalikan Project Control. Buka, perbaiki sesuai catatan, lalu ajukan ulang.</div>` : ""}
+    ${ditolak && isSite() ? `<div class="note stop">
+      <b>${ditolak} laporan dikembalikan Project Control.</b> Perbaiki sesuai catatan lalu ajukan ulang.
+      Sebutkan kode kembalian bila perlu berkoordinasi lewat Pesan atau telepon.
+      ${rows.filter(d => d.status === "REJECTED").map(d => `<div class="mt8" style="padding-left:10px;border-left:3px solid var(--red)">
+        <span class="mono" style="font-weight:700">${esc(d.return_code || "—")}</span>
+        <span class="tiny muted"> · ${esc(dateID(d.report_date))} · ${esc(tankNo(d.tank_id))}
+        ${d.returned_at ? " · dikembalikan " + esc(String(d.returned_at).slice(0, 16).replace("T", " ")) : ""}</span>
+        <div class="small">${esc(d.review_note || "tanpa catatan")}</div></div>`).join("")}
+      </div>` : ""}
+    ${isSite() ? `<div class="note">Laporan yang salah <b>tidak bisa Anda hapus sendiri</b>. Selama masih Draft atau Dikembalikan,
+      perbaiki lewat tombol Ubah. Bila sudah diajukan atau memang harus dihapus, hubungi Project Control HBM —
+      penghapusan hanya boleh dilakukan dari sana agar riwayatnya tercatat.</div>` : ""}
     <div class="card mt16"><div class="body">
       <div class="filters">
         <label class="f"><span>Dari</span><input type="date" id="fFrom" value="${f.from}"></label>
@@ -2027,7 +2269,7 @@ VIEWS["daily-list"] = {
         <button class="btn sm" id="fClr">Bersihkan</button>
       </div>
       <div class="tw"><table>
-        <thead><tr><th>Tanggal</th><th>BAMK / Tanki</th><th>Shift</th><th class="n">Target</th><th class="n">Realisasi</th>
+        <thead><tr><th>Tanggal</th><th>BAMK / Tanki</th><th class="n">Target</th><th class="n">Realisasi</th>
         <th class="n">Foto</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows.length ? rows.map(d => {
       const pr = DB.progress.filter(p => p.daily_id === d.daily_id);
@@ -2038,10 +2280,14 @@ VIEWS["daily-list"] = {
       return `<tr>
             <td class="num">${esc(d.report_date)}</td>
             <td><b>${esc(bamkNo(d.bamk_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))} · ${esc(areaName(d.area_id))}</div></td>
-            <td class="tiny">${esc(d.shift)}</td><td class="n">${fmt(tg, 1)}</td><td class="n">${fmt(ac, 1)}</td>
-            <td class="n">${ph}</td><td>${statusBadge(d.status, d.revision_no)}</td>
+            <td class="n">${fmt(tg, 1)}</td><td class="n">${fmt(ac, 1)}</td>
+            <td class="n">${ph}</td>
+            <td>${statusBadge(d.status, d.revision_no)}
+              ${d.status === "REJECTED" && d.return_code
+      ? `<div class="tiny mono" style="color:var(--red);font-weight:700;margin-top:3px">${esc(d.return_code)}</div>` : ""}</td>
             <td class="right"><button class="btn sm" data-open="${d.daily_id}">Lihat</button>
-              ${editable ? `<button class="btn ${d.status === "REJECTED" ? "a" : ""} sm" data-edit="${d.daily_id}">${d.status === "REJECTED" ? "Perbaiki" : "Ubah"}</button>` : ""}</td></tr>`;
+              ${editable ? `<button class="btn ${d.status === "REJECTED" ? "a" : ""} sm" data-edit="${d.daily_id}">${d.status === "REJECTED" ? "Perbaiki" : "Ubah"}</button>` : ""}
+              ${can("master") ? `<button class="btn d sm" data-del="${d.daily_id}">Hapus</button>` : ""}</td></tr>`;
     }).join("") : `<tr><td colspan="8"><div class="empty"><b>Belum ada laporan</b>Laporan yang dibuat akan muncul di sini.</div></td></tr>`}
         </tbody></table></div>
     </div></div>`;
@@ -2052,8 +2298,43 @@ VIEWS["daily-list"] = {
     $("#fClr").onclick = () => { S.f.dl = { from: "", to: "", wo: "", st: "" }; render(); };
     $$("[data-open]").forEach(b => b.onclick = () => showDaily(b.dataset.open));
     $$("[data-edit]").forEach(b => b.onclick = () => loadDraft(b.dataset.edit));
+    $$("[data-del]").forEach(b => b.onclick = () => hapusLaporan(b.dataset.del));
   }
 };
+
+/* Menghapus satu laporan harian beserta seluruh turunannya. Hanya Project
+   Control. Penghapusan disebarkan lewat tandaiHapus supaya perangkat lain
+   tidak menghidupkannya kembali saat sinkron. */
+function hapusLaporan(id) {
+  if (!can("master")) return toast("Hanya Project Control yang boleh menghapus laporan.", "err");
+  const d = byId(DB.dailies, "daily_id", id); if (!d) return;
+
+  /* Laporan yang volumenya sudah diverifikasi tidak boleh dihapus begitu saja —
+     angkanya sudah masuk ke rantai penerimaan dan tagihan. */
+  const ver = DB.verifications.filter(v => v.daily_id === id && v.status === "VERIFIED");
+  if (ver.length) return toast("Laporan ini sudah terverifikasi (" + ver.length +
+    " baris). Batalkan verifikasinya lebih dulu sebelum bisa dihapus.", "err");
+
+  const pr = DB.progress.filter(p => p.daily_id === id).length;
+  const ph = DB.photos.filter(p => p.daily_id === id).length;
+  const rincian = [pr ? pr + " baris progress" : "", ph ? ph + " foto" : ""].filter(Boolean).join(", ");
+  if (!confirm("Hapus laporan " + dateID(d.report_date) + " untuk " + tankNo(d.tank_id) + "?\n" +
+    (rincian ? "Ikut terhapus: " + rincian + ".\n" : "") +
+    "Tindakan ini tidak bisa dibatalkan dan akan tercatat di Log Audit.")) return;
+
+  ["progress", "manpower", "materials", "photos", "qc", "hsse", "issues", "verifications", "reviews"]
+    .forEach(tab => {
+      const kunci = SYNC_KEY[tab];
+      (DB[tab] || []).filter(r => r.daily_id === id).forEach(r => tandaiHapus(tab, r[kunci]));
+      DB[tab] = (DB[tab] || []).filter(r => r.daily_id !== id);
+    });
+  tandaiHapus("dailies", id);
+  DB.dailies = DB.dailies.filter(x => x.daily_id !== id);
+
+  audit("DELETE", "10_DAILY_REPORT", id, d.report_date + " · " + tankNo(d.tank_id), "dihapus Project Control");
+  save(); render();
+  toast("Laporan dihapus.", "ok");
+}
 function showDaily(id) {
   const d = byId(DB.dailies, "daily_id", id); if (!d) return;
   const pr = DB.progress.filter(p => p.daily_id === id), mp = DB.manpower.filter(p => p.daily_id === id),
@@ -2065,7 +2346,7 @@ function showDaily(id) {
       <div><div class="eyebrow">Tanggal</div>${dateID(d.report_date)}</div>
       <div><div class="eyebrow">BAMK</div>${esc(bamkNo(d.bamk_id))}</div>
       <div><div class="eyebrow">Tanki / Area</div>${esc(tankNo(d.tank_id))} · ${esc(areaName(d.area_id))}</div>
-      <div><div class="eyebrow">Shift / Cuaca</div>${esc(d.shift)} · ${esc(d.weather)}</div>
+      <div><div class="eyebrow">Cuaca</div>${esc(d.weather)}</div>
       <div><div class="eyebrow">Penginput</div>${esc(userName(d.admin_user_id))}</div>
       <div><div class="eyebrow">Status</div>${statusBadge(d.status, d.revision_no)}</div>
     </div>
@@ -2147,6 +2428,106 @@ VIEWS.review = {
     $$("[data-rev]").forEach(b => b.onclick = () => reviewModal(b.dataset.rev));
   }
 };
+/* Memeriksa sendiri kelengkapan sebuah laporan harian dan mengembalikan
+   daftar temuan. Dipakai di layar Review supaya Project Control tidak perlu
+   mengingat sendiri apa saja yang harus dicek pada tiap laporan.
+   Tingkat: "stop" menahan persetujuan, "warn" perlu ditimbang, "info" sekadar
+   diketahui. Fungsi ini TIDAK memutuskan — keputusan tetap di tangan manusia. */
+function periksaLaporan(id) {
+  const d = byId(DB.dailies, "daily_id", id); if (!d) return [];
+  const pr = DB.progress.filter(p => p.daily_id === id);
+  const ph = DB.photos.filter(p => p.daily_id === id);
+  const mp = DB.manpower.filter(p => p.daily_id === id);
+  const mt = DB.materials.filter(p => p.daily_id === id);
+  const qc = DB.qc.find(x => x.daily_id === id);
+  const hs = DB.hsse.find(x => x.daily_id === id);
+  const kn = DB.issues.filter(x => x.daily_id === id);
+  const w = bamkOf(d.bamk_id);
+  const luas = pr.reduce((a, p) => a + nz(p.actual_qty), 0);
+  const orang = mp.reduce((a, m) => a + nz(m.worker_count), 0);
+  const jenisFoto = new Set(ph.map(p => p.photo_type));
+  const T = [];
+  const add = (tk, judul, isi) => T.push({ tk, judul, isi });
+
+  /* ---- yang menahan persetujuan ---- */
+  if (!ph.length) add("stop", "Tidak ada foto bukti",
+    "Laporan tanpa foto tidak bisa dipakai sebagai lampiran tagihan.");
+  if (qc && qc.inspection_type && !qc.ma4_known) add("stop", "Inspeksi belum diketahui pengawas Pertamina",
+    "SPK mewajibkan hasil inspeksi diketahui " + (DB.config.pertamina_supervisor || "Pengawas MA-4") +
+    ". Persetujuan akan ditolak sistem sampai ini dilengkapi.");
+  if (!hs || !hs.permit_status) add("stop", "Status izin kerja kosong",
+    "Pekerjaan tanpa PTW aktif tidak boleh diakui.");
+  const pelanggaran = periksaBatasProgress({ daily_id: id, bamk_id: d.bamk_id, progress: pr });
+  if (pelanggaran) add("stop", "Volume melanggar batas BAMK", pelanggaran);
+
+  /* ---- yang perlu ditimbang ---- */
+  if (luas > 0 && !jenisFoto.has("AFTER")) add("warn", "Belum ada foto After",
+    "Ada " + fmt(luas, 2) + " m² dilaporkan selesai, tetapi tidak ada foto hasil akhirnya.");
+  if (luas > 0 && !jenisFoto.has("BEFORE")) add("warn", "Belum ada foto Before",
+    "Tanpa foto kondisi awal, luas yang diklaim sulit dibuktikan saat verifikasi Pertamina.");
+  if (luas > 0 && orang === 0) add("warn", "Ada progress tetapi tenaga kerja nol",
+    fmt(luas, 2) + " m² dilaporkan selesai tanpa seorang pun tercatat bekerja.");
+  if (luas === 0 && orang > 0 && !kn.length) add("warn", "Tenaga hadir tetapi progress nol",
+    orang + " orang tercatat hadir tanpa hasil dan tanpa kendala tercatat. Mestinya ada alasannya.");
+  if (mp.some(m => !m.pihak)) add("warn", "Ada tenaga kerja tanpa pihak",
+    "Baris tenaga kerja yang tidak menyebut HBM atau Palda membuat rekap orang-hari tidak bisa dibelah per pihak.");
+  const tahapCat = new Set(pr.filter(p => nz(p.actual_qty) > 0)
+    .map(p => (tahapOf(p.stage_id) || {}).stage_code));
+  if (luas > 0 && !mt.length && (tahapCat.has("T2") || tahapCat.has("T3")))
+    add("warn", "Pengecatan tanpa catatan material",
+      "Ada lapis cat dikerjakan tetapi tidak ada pemakaian cat tercatat. Rekonsiliasi material akan pincang.");
+  kn.forEach(k => { if (!k.action) add("warn", "Kendala tanpa tindakan", "\"" + (k.description || "") + "\" belum diisi tindakannya."); });
+  kn.forEach(k => { if (!k.owner_side) add("warn", "Kendala tanpa pihak PIC", "\"" + (k.description || "") + "\" belum menyebut pihak mana yang menanganinya — ini yang menentukan apakah bisa jadi dasar perpanjangan waktu SPK."); });
+  if (qc && qc.result === "FAIL" && !qc.rework_required) add("warn", "Inspeksi gagal tanpa rework",
+    "Hasil inspeksi FAIL tetapi tidak ditandai perlu rework.");
+  if (!d.supervisor_name) add("warn", "Nama pengawas kosong", "Tidak ada pengawas yang menyaksikan tercatat.");
+
+  /* ---- sekadar diketahui ---- */
+  if (w) {
+    const th = targetHarian(w);
+    if (th > 0 && luas > 0) {
+      const selisih = (luas - th) / th * 100;
+      if (selisih < -40) add("info", "Jauh di bawah target harian",
+        "Realisasi " + fmt(luas, 2) + " m² terhadap target " + fmt(th, 2) + " m²/hari (" + fmt(selisih, 0) + "%).");
+      if (selisih > 60) add("info", "Jauh di atas target harian",
+        "Realisasi " + fmt(luas, 2) + " m² terhadap target " + fmt(th, 2) + " m²/hari (+" + fmt(selisih, 0) + "%). Pastikan bukan salah ketik.");
+    }
+    const sisa = sisaHariSPK(w);
+    if (sisa !== null && sisa < 0) add("info", "SPK sudah lewat batas waktu",
+      "Batas SPK terlampaui " + (-sisa) + " hari. Pekerjaan setelah tanggal itu perlu dasar perpanjangan.");
+  }
+  const lalu = DB.dailies.filter(x => x.bamk_id === d.bamk_id && x.report_date < d.report_date &&
+    x.status !== "REJECTED").sort((a, b) => b.report_date.localeCompare(a.report_date))[0];
+  if (lalu) {
+    const jeda = Math.round((new Date(d.report_date + "T00:00:00") - new Date(lalu.report_date + "T00:00:00")) / 86400000);
+    if (jeda > 2) add("info", "Ada jeda " + jeda + " hari sejak laporan terakhir",
+      "Laporan sebelumnya " + dateID(lalu.report_date) + ". Bila memang tidak bekerja, sebaiknya ada catatan kendalanya.");
+  }
+  if (d.revision_no > 0) add("info", "Laporan revisi ke-" + d.revision_no,
+    "Sudah pernah dikembalikan. Periksa apakah catatan sebelumnya sudah dijawab.");
+
+  return T;
+}
+
+/* Menggambar hasil periksaLaporan menjadi daftar temuan yang bisa dibaca. */
+function kotakPeriksa(id) {
+  const T = periksaLaporan(id);
+  const n = { stop: T.filter(x => x.tk === "stop").length, warn: T.filter(x => x.tk === "warn").length };
+  if (!T.length) return `<div class="note ok"><b>Pemeriksaan otomatis: tidak ada temuan.</b>
+    Kelengkapan laporan ini wajar. Tetap periksa fotonya sendiri sebelum menyetujui.</div>`;
+  const ikon = { stop: "✕", warn: "!", info: "i" };
+  const warna = { stop: "var(--red)", warn: "var(--amber)", info: "var(--blue)" };
+  return `<div class="note ${n.stop ? "stop" : n.warn ? "warn" : ""}">
+    <b>Pemeriksaan otomatis — ${T.length} temuan</b>
+    ${n.stop ? ` · <span style="color:var(--red)">${n.stop} menahan persetujuan</span>` : ""}
+    ${n.warn ? ` · ${n.warn} perlu ditimbang` : ""}
+    <div class="tiny muted mt8">Daftar ini hanya membantu mengingat. Keputusan tetap di tangan Anda.</div>
+    <div class="mt8">${T.map(x => `<div style="display:flex;gap:8px;margin-bottom:6px;align-items:flex-start">
+      <span style="color:${warna[x.tk]};font-weight:700;flex:0 0 14px;text-align:center">${ikon[x.tk]}</span>
+      <span class="small"><b>${esc(x.judul)}.</b> ${esc(x.isi)}</span></div>`).join("")}</div>
+  </div>`;
+}
+
 function reviewModal(id) {
   const d = byId(DB.dailies, "daily_id", id);
   const pr = DB.progress.filter(p => p.daily_id === id);
@@ -2157,6 +2538,7 @@ function reviewModal(id) {
       <div><div class="eyebrow">BAMK / Tanki</div>${esc(bamkNo(d.bamk_id))} · ${esc(tankNo(d.tank_id))}</div>
       <div><div class="eyebrow">Penginput</div>${esc(userName(d.admin_user_id))}</div>
     </div>
+    <div class="mt12">${kotakPeriksa(id)}</div>
     <div class="lines mt12"><div class="lh">Kuantitas terverifikasi</div>
     ${pr.map((p, i) => {
     const t = tahapOf(p.stage_id);
@@ -2169,16 +2551,43 @@ function reviewModal(id) {
     ${ph.length ? `<div class="photos mt12">${ph.map(p => `<div class="ph"><span class="tag">${esc(p.photo_type)}</span><img src="${p.file_url}"><div class="cap">${esc(p.caption || "")}</div></div>`).join("")}</div>`
       : `<div class="note stop mt12">Laporan ini tidak memiliki foto bukti.</div>`}
     <label class="f mt12"><span>Catatan review</span><textarea id="rvNote" placeholder="tulis apa yang perlu diperbaiki, atau catatan persetujuan"></textarea></label>
+    <div class="row"><button type="button" class="btn sm" id="rvSalin">Susun catatan dari temuan</button>
+      <span class="tiny muted">menuliskan temuan yang menahan dan yang perlu ditimbang ke kotak di atas — masih bisa Anda sunting</span></div>
     <h4 class="mt16">Riwayat koordinasi</h4>${threadHtml(reviewsOf(id))}`;
   openModal("Review laporan " + d.report_date, body,
     `<button class="btn d" id="rvRej">Kembalikan ke Admin Site</button><button class="btn g" id="rvOk">Setujui &amp; verifikasi</button>`, true);
+  if ($("#rvSalin")) $("#rvSalin").onclick = () => {
+    const T = periksaLaporan(id).filter(x => x.tk !== "info");
+    if (!T.length) return toast("Tidak ada temuan yang perlu ditulis.", "err");
+    const kotak = $("#rvNote");
+    const teks = "Mohon dilengkapi:\n" + T.map((x, i) => (i + 1) + ". " + x.judul + " — " + x.isi).join("\n");
+    kotak.value = kotak.value.trim() ? kotak.value.trim() + "\n\n" + teks : teks;
+    kotak.focus();
+  };
+
   $("#rvRej").onclick = () => {
     const note = $("#rvNote").value.trim();
     if (!note) return toast("Isi catatan review sebagai alasan penolakan.", "err");
     d.status = "REJECTED"; d.review_note = note;
+    d.revision_no = nz(d.revision_no) + 1;
+    /* Kode kembalian: satu tanda pendek yang bisa disebut di telepon atau
+       di papan pesan, supaya kedua pihak yakin sedang membicarakan laporan
+       yang sama. Bentuknya KMB-<tanggal laporan>-<tanki>-<urutan revisi>. */
+    d.return_code = "KMB-" + String(d.report_date || "").replace(/-/g, "").slice(2) +
+      "-" + String(tankNo(d.tank_id) || "?").replace(/[^A-Za-z0-9]/g, "") +
+      "-R" + d.revision_no;
+    d.returned_at = new Date().toISOString();
+    d.returned_by = S.user.user_id;
     logReview(id, "TOLAK", note);
-    audit("UPDATE", "07_DAILY_REPORT", id, "SUBMITTED", "REJECTED", note);
-    save(); closeModal(); toast("Laporan dikembalikan ke Admin Site.", "ok"); render();
+    audit("UPDATE", "07_DAILY_REPORT", id, "SUBMITTED", "REJECTED", d.return_code + " · " + note);
+    /* Pemberitahuan ke papan pesan kanal tanki yang bersangkutan, supaya
+       Admin Site melihatnya walau sedang tidak membuka Daftar Laporan. */
+    kirimPesan("BAMK:" + d.bamk_id,
+      "Laporan " + dateID(d.report_date) + " dikembalikan · kode " + d.return_code +
+      "\nCatatan: " + note, true);
+    save(); closeModal();
+    toast("Laporan dikembalikan. Kode " + d.return_code, "ok");
+    render();
   };
   $("#rvOk").onclick = () => {
     const note = $("#rvNote").value.trim();
@@ -3493,8 +3902,18 @@ async function periksaSinkron(T) {
       (hanyaL ? hanyaL + " hanya di sini" : "") + (hanyaL && hanyaS ? ", " : "") +
       (hanyaS ? hanyaS + " hanya di server" : "") + ")");
   });
+  /* Log audit bertambah sendiri setiap kali ada yang ditekan — termasuk oleh
+     pemeriksaan ini. Selisih yang HANYA pada audit adalah keadaan normal,
+     bukan tanda ada yang salah, jadi jangan ditampilkan sebagai peringatan. */
+  const bedaPenting = beda.filter(x => x.indexOf("audit (") !== 0);
+  const hanyaAudit = beda.length && !bedaPenting.length;
   if (!beda.length)
     T("Jumlah baris sama", "ok", "Server dan perangkat ini sudah sama: " + totalLokal + " baris.");
+  else if (hanyaAudit)
+    T("Jumlah baris sama, kecuali log audit", "ok", "Perangkat ini " + totalLokal + " baris, server " +
+      totalServer + " baris — selisihnya hanya pada log audit (" + beda.join("") +
+      "). Log audit bertambah sendiri setiap kali ada tombol ditekan, termasuk oleh pemeriksaan ini, " +
+      "jadi selisih kecil di sini wajar dan hilang sendiri saat Sinkronkan ditekan.");
   else
     T("Ada baris yang belum menyatu", "peringatan", "Perangkat ini " + totalLokal + " baris, server " +
       totalServer + " baris. " + beda.join(" \u00b7 ") + ". Tekan Sinkronkan sekarang untuk menyatukannya.");
@@ -3546,10 +3965,19 @@ async function periksaSinkron(T) {
   if (bedaIsi.length) {
     const hitung = {};
     bedaIsi.forEach(t => hitung[t] = (hitung[t] || 0) + 1);
-    T("Ada baris yang isinya berbeda dengan server", "peringatan",
-      Object.keys(hitung).map(t => t + ": " + hitung[t]).join(" \u00b7 ") + ". " +
-      (kalah ? kalah + " di antaranya lebih tua daripada di server, jadi akan diganti oleh data server saat Sinkronkan ditekan."
-        : "Semuanya lebih baru daripada di server, jadi punya perangkat ini yang akan dipakai."));
+    /* Kalau seluruh baris yang berbeda justru lebih baru di perangkat ini,
+       itu memang alur normal: perubahan Anda belum sempat terkirim. Yang
+       benar-benar perlu diperhatikan adalah baris yang lebih TUA di sini,
+       karena isinya akan diganti oleh data server. */
+    const rincian = Object.keys(hitung).map(t => t + ": " + hitung[t]).join(" \u00b7 ");
+    if (kalah)
+      T("Ada baris yang akan diganti data server", "peringatan", rincian + ". " + kalah +
+        " di antaranya lebih tua daripada di server, jadi isinya akan diganti saat Sinkronkan ditekan. " +
+        "Bila perubahan itu penting, catat dulu sebelum menyinkronkan.");
+    else
+      T("Ada perubahan yang belum terkirim", "ok", rincian +
+        ". Semuanya lebih baru daripada di server, jadi perubahan Anda yang akan dipakai. " +
+        "Tekan Sinkronkan sekarang untuk mengirimnya — ini keadaan biasa, bukan masalah.");
   }
 
   const antre = (DB.photos || []).filter(f => String(f.file_url || "").indexOf("data:") === 0).length;
@@ -4721,22 +5149,28 @@ VIEWS.sync = {
     const siap = syncSiap();
     return `<div class="card"><div class="body">
       <div class="note">Data yang Anda isi tersimpan lebih dulu di perangkat ini, lalu dikirim ke kantor saat
-        tombol <b>Sinkronkan sekarang</b> ditekan. Selama kata sandi di bawah belum diisi, isian Anda
-        <b>tidak akan pernah sampai</b> ke kantor.</div>
+        tombol <b>Sinkronkan sekarang</b> ditekan.</div>
 
-      <div class="fg c2 mt16">
-        <label class="f"><span>Kata sandi sinkronisasi</span>
-          <input type="text" id="spTok" value="${esc(sy.token || "")}" placeholder="minta ke Project Control HBM"></label>
-        <div class="f"><span class="small muted">Alamat kantor</span>
-          <div class="tiny muted" style="word-break:break-all;line-height:1.5;padding-top:6px">${esc(sy.url || "belum tertanam di berkas aplikasi")}</div></div>
-      </div>
-      <div class="chk"><input type="checkbox" id="spAuto" ${sy.auto ? "checked" : ""}>
+      ${siap ? `
+      <div class="note ok mt12"><b>Perangkat ini sudah tersambung ke kantor.</b>
+        Kata sandi dan alamat kantor disembunyikan supaya tidak bisa diubah orang lain
+        yang kebetulan memakai perangkat ini. Bila memang perlu diganti, tekan
+        <b>Ubah sambungan</b> dan masukkan PIN Project Control.</div>`
+      : `
+      <div class="note warn mt12"><b>Perangkat ini belum tersambung.</b> Isian Anda tersimpan di perangkat
+        tetapi <b>tidak akan pernah sampai</b> ke kantor sampai kata sandi diisi. Minta kepada Project Control HBM.
+        <div class="fg c1 mt12"><label class="f"><span>Kata sandi sinkronisasi</span>
+          <input type="password" id="spTok" value="" placeholder="minta ke Project Control HBM"></label></div>
+      </div>`}
+
+      <div class="chk mt12"><input type="checkbox" id="spAuto" ${sy.auto ? "checked" : ""}>
         <label for="spAuto">Sinkronkan sendiri setiap 5 menit selama aplikasi terbuka</label></div>
 
       <div class="row mt12">
         <button class="btn p" id="spGo">Sinkronkan sekarang</button>
         <button class="btn" id="spPeriksa">Periksa sinkron</button>
-        <button class="btn" id="spSave">Simpan kata sandi</button>
+        ${siap ? `<button class="btn" id="spUbah">Ubah sambungan</button>`
+                : `<button class="btn" id="spSave">Simpan kata sandi</button>`}
       </div>
       <div id="spMsg" class="mt12"></div>
 
@@ -4757,16 +5191,36 @@ VIEWS.sync = {
     const kabar = (m, jenis) => { $("#spMsg").innerHTML = `<div class="note ${jenis || ""}">${esc(m)}</div>`; };
     const ambil = () => {
       c.sync = c.sync || {};
-      c.sync.token = $("#spTok").value.trim();
+      /* Kolom kata sandi hanya ada saat perangkat belum tersambung. Sesudah
+         tersambung, kata sandi yang tersimpan tidak boleh tertimpa kosong. */
+      const kolom = $("#spTok");
+      if (kolom) c.sync.token = kolom.value.trim();
       c.sync.auto = $("#spAuto").checked;
       if (!c.sync.url && SYNC_BAWAAN.url) c.sync.url = SYNC_BAWAAN.url;
     };
-    const sibuk = t => { ["spGo", "spPeriksa", "spSave"].forEach(i => { if ($("#" + i)) $("#" + i).disabled = t; }); };
+    const sibuk = t => { ["spGo", "spPeriksa", "spSave", "spUbah"].forEach(i => { if ($("#" + i)) $("#" + i).disabled = t; }); };
 
-    $("#spSave").onclick = () => {
+    if ($("#spSave")) $("#spSave").onclick = () => {
       ambil(); save(); aturAutoSync();
       audit("UPDATE", "26_SYSTEM_CONFIG", "sync", "", c.sync.token ? "kata sandi diisi" : "kata sandi dikosongkan");
       render(); kabar("Kata sandi tersimpan di perangkat ini.", "");
+    };
+
+    /* Mengubah sambungan hanya boleh oleh pemegang PIN Project Control.
+       Ini menutup celah orang lain mengutak-atik perangkat Admin Site. */
+    if ($("#spUbah")) $("#spUbah").onclick = () => {
+      const pin = prompt("Mengubah sambungan hanya boleh oleh Project Control.\nMasukkan PIN Project Control:");
+      if (pin === null) return;
+      const pc = DB.users.find(u => u.role === "PROJECT_CONTROL" && u.active !== false && String(u.pin) === String(pin).trim());
+      if (!pc) {
+        audit("UPDATE", "26_SYSTEM_CONFIG", "sync", "", "percobaan ubah sambungan dengan PIN salah");
+        save();
+        return kabar("PIN tidak cocok. Percobaan ini dicatat di Log Audit.", "stop");
+      }
+      c.sync = c.sync || {}; c.sync.token = ""; save();
+      audit("UPDATE", "26_SYSTEM_CONFIG", "sync", "", "sambungan dibuka untuk diubah oleh " + pc.user_name);
+      render();
+      kabar("Sambungan dibuka. Isi kata sandi baru lalu tekan Simpan kata sandi.", "warn");
     };
     $("#spPeriksa").onclick = () => { ambil(); save(); bukaPeriksaSinkron(); };
     $("#spGo").onclick = async () => {
@@ -4787,7 +5241,8 @@ const GUARD = {
   review: ["review"], acceptance: ["accept"], billable: ["billable"],
   billing: ["billing", "billing_view"], documents: ["documents"],
   issues: ["issues", "issues_view"], meeting: ["meeting"], reports: ["reports"],
-  master: ["master"], settings: ["settings"], audit: ["audit"], sync: ["sync_panel"]
+  master: ["master"], settings: ["settings"], audit: ["audit"], sync: ["sync_panel"],
+  pesan: ["pesan"]
 };
 Object.keys(GUARD).forEach(k => {
   const v = VIEWS[k]; if (!v) return;
