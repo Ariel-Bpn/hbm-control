@@ -379,10 +379,10 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "2.3";
+const APP_VERSI = "2.4";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
-const CODEGS_VERSI = "1.9";
+const CODEGS_VERSI = "2.0";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -614,8 +614,32 @@ const DASAR_TARGET = [
 ];
 const dasarLabel = k => (DASAR_TARGET.find(x => x[0] === k) || DASAR_TARGET[0])[1];
 
+/* Estafet tagihan: tiap tahap punya pihak penanggung jawab dan target hari
+   kerja sendiri. Angka target bisa diubah di Master Data, karena kecepatan
+   Pertamina berbeda tiap periode. Baris: [kode, nama, pihak, PIC bawaan, target] */
+const TAHAP_TAGIHAN_BAWAAN = [
+  ["B01", "Tutup progress & volume disetujui", "HBM", "Project Control", 1],
+  ["B02", "Hitung & susun tagihan", "HBM", "Project Control", 2],
+  ["B03", "Jilid berkas & lampiran", "HBM", "Admin", 2],
+  ["B04", "Ajukan BAKP ke Pengawas MA-4", "PERTAMINA", "Pengawas MA-4", 3],
+  ["B05", "Proses BAKP", "PERTAMINA", "Planner", 3],
+  ["B06", "Terbit PO", "PERTAMINA", "Planner", 2],
+  ["B07", "Upload & approve i-Vendor", "PERTAMINA", "Planner", 2],
+  ["B08", "Invoice & faktur pajak", "HBM", "Finance", 2],
+  ["B09", "Upload invoice & approval", "PERTAMINA", "Planner", 1],
+  ["B10", "Menunggu pembayaran", "PERTAMINA", "Finance Pertamina", 10]
+];
+const PIHAK_TAGIHAN = ["HBM", "PERTAMINA", "VENDOR"];
+
 const STATUS_SPK = ["DRAFT", "TERBIT", "SELESAI", "BATAL"];
 const STATUS_BAMK = ["DRAFT", "AKTIF", "DITUTUP", "BATAL"];
+
+function bikinTahapTagihan() {
+  return TAHAP_TAGIHAN_BAWAAN.map((x, n) => ({
+    bstage_id: "BS-" + String(n + 1).padStart(2, "0"), code: x[0], name: x[1],
+    pic_side: x[2], pic_name: x[3], target_days: x[4], sort_order: n + 1, active: true
+  }));
+}
 
 /* ---------- SEED ---------- */
 /* Menandai seluruh baris bawaan sebagai data pabrik: penanda waktu 1,
@@ -702,7 +726,9 @@ function bangunBawaan() {
       }
     },
     areas, tanks, spk: [], spk_item: [], bamk: [], stages, scopes, targets: [],
+    bill_stages: bikinTahapTagihan(), bill_steps: [],
     dailies: [], progress: [], manpower: [], materials: [], photos: [], reviews: [], deleted: [], messages: [],
+    bill_stages: [], bill_steps: [],
     qc: [], hsse: [], issues: [], verifications: [], acceptances: [],
     billables: [], billings: [], documents: [], meetings: [], actions: [],
     users: [
@@ -733,7 +759,7 @@ function pasangSyncBawaan() {
 /* Naik versi tanpa menghapus data yang sudah ada */
 function migrate() {
   if (!DB.meta || !DB.dailies) { DB = seed(); return; }
-  if (DB.meta.version === "2.3") return;
+  if (DB.meta.version === "2.4") return;
   DB.reviews = DB.reviews || [];
   DB.deleted = DB.deleted || [];
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
@@ -758,7 +784,7 @@ function migrate() {
   if (DB.config.acc_pct == null) DB.config.acc_pct = 10;
   if (nz(DB.config.tank_target) < 13) DB.config.tank_target = 13;
   migrasiSPK();
-  DB.meta.version = "2.3";
+  DB.meta.version = "2.4";
   save();
 }
 
@@ -856,6 +882,8 @@ function migrasiSPK() {
      bisa dilengkapi, bukan ditebak sendiri oleh sistem. */
   DB.manpower.forEach(m => { if (m.pihak == null) m.pihak = ""; });
   DB.messages = DB.messages || [];
+  DB.bill_steps = DB.bill_steps || [];
+  if (!Array.isArray(DB.bill_stages) || !DB.bill_stages.length) DB.bill_stages = bikinTahapTagihan();
   /* Laporan yang sudah dikembalikan sebelum ada kode, diberi kode surut
      supaya Admin Site punya rujukan yang sama saat berkoordinasi. */
   DB.dailies.forEach(d => {
@@ -1036,7 +1064,7 @@ function totalLuasEksterior() {
 }
 
 /* ---------- SINKRONISASI: daftar tabel & penanda hapus ---------- */
-const SYNC_TABLES = ["areas", "tanks", "spk", "spk_item", "bamk", "stages", "scopes", "messages", "targets", "dailies", "progress",
+const SYNC_TABLES = ["areas", "tanks", "spk", "spk_item", "bamk", "stages", "scopes", "messages", "bill_stages", "bill_steps", "targets", "dailies", "progress",
   "manpower", "materials", "photos", "qc", "hsse", "issues", "verifications", "acceptances",
   "billables", "billings", "documents", "meetings", "actions", "reviews", "users", "audit"];
 const SYNC_KEY = {
@@ -1046,7 +1074,8 @@ const SYNC_KEY = {
   photos: "photo_id", qc: "inspection_id", hsse: "hsse_id", issues: "issue_id",
   verifications: "verification_id", acceptances: "acceptance_id", billables: "billable_id",
   billings: "billing_id", documents: "document_id", meetings: "meeting_id", actions: "action_id",
-  reviews: "review_id", messages: "msg_id", users: "user_id", audit: "audit_id"
+  reviews: "review_id", messages: "msg_id", bill_stages: "bstage_id", bill_steps: "bstep_id",
+  users: "user_id", audit: "audit_id"
 };
 /* Sidik jari isi satu baris, dipakai untuk mengenali baris mana yang berubah. */
 function sidikBaris(r) {
@@ -2332,6 +2361,7 @@ function commitDaily(status) {
   const w = bamkOf(d.bamk_id);
   const id = d.daily_id || uid("DL");
   const wasRejected = d.status === "REJECTED";
+  const wasSubmitted = d.status === "SUBMITTED";
   /* Satu laporan per tanki per hari — seluruh kegiatan hari itu digabung
      dalam satu laporan, tidak dipecah per shift. */
   const dup = DB.dailies.find(x => x.daily_id !== id && x.bamk_id === d.bamk_id && x.report_date === d.report_date);
@@ -2373,6 +2403,13 @@ function commitDaily(status) {
   if (d.qc.inspection_type || d.qc.result) DB.qc.push({ inspection_id: uid("QC"), bamk_id: d.bamk_id, daily_id: id, inspection_date: d.report_date, inspection_type: d.qc.inspection_type, result: d.qc.result, rework_required: !!d.qc.rework_required, reference_no: d.qc.reference_no, remarks: d.qc.remarks, ma4_known: !!d.qc.ma4_known, ma4_date: d.qc.ma4_date || "" });
   if (d.hsse.permit_status) DB.hsse.push({ hsse_id: uid("HS"), daily_id: id, bamk_id: d.bamk_id, permit_status: d.hsse.permit_status, toolbox_status: d.hsse.toolbox_status, fit_to_work: d.hsse.fit_to_work, critical_finding: d.hsse.critical_finding, remarks: d.hsse.remarks });
   if (d.issue.description) DB.issues.push({ issue_id: uid("IS"), daily_id: id, bamk_id: d.bamk_id, issue_date: d.report_date, category: d.issue.category || "LAINNYA", description: d.issue.description, impact: d.issue.impact, action: d.issue.action, owner_side: d.issue.owner_side, owner: d.issue.owner, status: "OPEN" });
+
+  /* Laporan yang sudah diajukan lalu disunting sendiri oleh Admin Site harus
+     memberi tahu Project Control, supaya tidak ada perubahan diam-diam pada
+     berkas yang sedang menunggu review. */
+  if (d.daily_id && wasSubmitted && status === "SUBMITTED" && !isPC())
+    logReview(id, "CATATAN", "Laporan ditarik dan disunting sendiri oleh " + S.user.user_name +
+      " sebelum direview.");
 
   /* Riwayat perubahan: apa persisnya yang berubah dari isi sebelumnya.
      Dicatat sebagai catatan koordinasi supaya tampil menyatu dengan
@@ -2436,10 +2473,12 @@ VIEWS["daily-list"] = {
       const pr = DB.progress.filter(p => p.daily_id === d.daily_id);
       const tg = pr.reduce((a, p) => a + nz(p.target_qty), 0), ac = pr.reduce((a, p) => a + nz(p.actual_qty), 0);
       const ph = DB.photos.filter(p => p.daily_id === d.daily_id).length;
-      /* Yang boleh diubah: laporan yang masih Draft atau Dikembalikan, oleh
-         siapa pun yang berwenang mengisi laporan. Sesudah Diajukan atau
-         Disetujui, hanya Project Control. */
-      const editable = (can("daily_input") && (d.status === "DRAFT" || d.status === "REJECTED")) || can("review");
+      /* Yang salah di laporan harian diperbaiki oleh yang mengisinya, bukan
+         oleh yang mereview. Admin Site boleh mengubah selama laporan belum
+         DISETUJUI — termasuk yang sudah Diajukan tetapi belum sempat direview.
+         Sesudah disetujui, isinya terkunci karena volumenya sudah masuk
+         rantai verifikasi dan tagihan. */
+      const editable = (can("daily_input") && d.status !== "APPROVED") || can("review");
       return `<tr>
             <td class="num">${esc(d.report_date)}</td>
             <td><b>${esc(bamkNo(d.bamk_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))} · ${esc(areaName(d.area_id))}</div></td>
@@ -2739,6 +2778,49 @@ function periksaLaporan(id) {
     "Hasil inspeksi FAIL tetapi tidak ditandai perlu rework.");
   if (!d.supervisor_name) add("warn", "Nama pengawas kosong", "Tidak ada pengawas yang menyaksikan tercatat.");
 
+  /* ---- kelengkapan wajib yang menjadi tanggung jawab Admin Site ---- */
+  if (!d.weather) add("warn", "Cuaca tidak diisi",
+    "Cuaca dipakai membuktikan alasan berhenti kerja dan menilai kelayakan pengecatan hari itu.");
+  if (!d.general_notes) add("warn", "Catatan umum kosong",
+    "Tidak ada ringkasan kegiatan. Laporan tanpa catatan sulit dibaca ulang berbulan-bulan kemudian.");
+  if (!d.supervisor_side) add("warn", "Pihak pengawas tidak disebut",
+    "Perlu jelas pengawas dari HBM, Palda, atau Pertamina yang menyaksikan.");
+  if (ph.some(p => !p.caption)) add("warn", "Ada foto tanpa keterangan",
+    ph.filter(p => !p.caption).length + " foto tidak diberi keterangan. Saat menyusun lampiran tagihan, foto tanpa keterangan tidak bisa dipakai.");
+  if (ph.some(p => !p.photo_type)) add("warn", "Ada foto tanpa jenis",
+    "Setiap foto harus ditandai Before, Kegiatan, After, QC, atau HSSE.");
+  if (luas > 0 && ph.length < 2) add("warn", "Foto terlalu sedikit",
+    "Hanya " + ph.length + " foto untuk " + fmt(luas, 2) + " m² pekerjaan. Sekurangnya kondisi awal dan hasil akhir.");
+  if (hs && hs.permit_status && hs.permit_status !== "AKTIF")
+    add("stop", "Izin kerja tidak aktif",
+      "Status PTW tercatat \"" + hs.permit_status + "\" tetapi pekerjaan tetap dilaporkan. Ini harus dijelaskan sebelum diakui.");
+  if (hs && !hs.toolbox_status) add("warn", "Toolbox meeting tidak dicatat",
+    "Wajib ada sebelum kerja di ketinggian dengan rope access.");
+  if (hs && !hs.fit_to_work) add("warn", "Fit to work tidak dicatat",
+    "Kelayakan kerja personel rope access wajib diperiksa tiap pagi.");
+  if (hs && hs.critical_finding && !kn.length) add("warn", "Temuan kritis HSSE tanpa kendala tercatat",
+    "Ada temuan kritis tetapi tidak ada kendala yang dibuka untuk menindaklanjutinya.");
+  if (mp.some(m => nz(m.worker_count) <= 0)) add("warn", "Ada baris tenaga kerja berisi nol orang",
+    "Hapus barisnya, atau isi jumlah orang yang benar.");
+  const rangkap = {};
+  pr.forEach(p => { const k = p.part + "|" + p.stage_id; rangkap[k] = (rangkap[k] || 0) + 1; });
+  if (Object.values(rangkap).some(n => n > 1)) add("warn", "Ada baris progress rangkap",
+    "Bagian dan tahap yang sama diisi lebih dari satu baris. Satukan supaya tidak terbaca dobel saat verifikasi.");
+  if (pr.some(p => nz(p.actual_qty) === 0)) add("warn", "Ada baris progress berisi nol",
+    "Baris tanpa luas tidak ada gunanya — hapus saja.");
+  if (luas > 0 && !mp.some(m => m.pihak === "Palda")) add("warn", "Tidak ada tenaga Palda",
+    "Pekerjaan fisik dikerjakan pelaksana, tetapi tidak ada tenaga Palda tercatat hari ini.");
+  /* Pengecatan tanpa inspeksi sama sekali sepanjang tanki adalah tanda bahaya. */
+  const adaQCdiBamk = DB.qc.some(x => x.bamk_id === d.bamk_id && x.inspection_type);
+  const persen = w ? persenBamk(d.bamk_id) : 0;
+  if (persen > 30 && !adaQCdiBamk) add("warn", "Tanki sudah " + fmt(persen, 0) + "% tanpa satu pun inspeksi",
+    "Belum ada catatan QC sama sekali pada tanki ini. Dossier serah terima akan pincang.");
+  if (d.report_date > today()) add("stop", "Tanggal laporan di masa depan",
+    "Tanggal " + dateID(d.report_date) + " belum terjadi.");
+  if (w && spkOf(w.spk_id) && spkOf(w.spk_id).start_date && d.report_date < spkOf(w.spk_id).start_date)
+    add("stop", "Tanggal laporan mendahului SPK",
+      "SPK baru berlaku " + dateID(spkOf(w.spk_id).start_date) + ". Pekerjaan sebelum itu tidak punya dasar.");
+
   /* ---- sekadar diketahui ---- */
   if (w) {
     const th = targetHarian(w);
@@ -3028,90 +3110,354 @@ VIEWS.billable = {
 /* ============================================================
    VIEW: TRACKING TAGIHAN
    ============================================================ */
-const BILL_STAGES = [["DRAFT", "Draft"], ["REVIEW", "Review"], ["APPROVAL", "Approval"], ["INVOICE", "Invoice"], ["PAID", "Paid"], ["HOLD", "Tertahan"]];
-function ageOf(b) {
-  const start = b.doc_received_date || b.review_date;
-  return businessDays(start, b.payment_date || today());
+/* ══════════════ ESTAFET TAGIHAN ══════════════
+   Satu tagihan berjalan melewati sederet tahap. Tiap tahap punya pihak
+   penanggung jawab, PIC, dan target hari kerja. Yang dicatat hanya TANGGAL
+   SELESAI tiap tahap; lama tiap tahap dan siapa yang menahan dihitung sendiri.
+   Umur selalu dalam HARI KERJA — Sabtu, Minggu, dan libur tidak dihitung. */
+
+const tahapTagihan = () => (DB.bill_stages || []).filter(t => t.active !== false)
+  .slice().sort((a, b) => nz(a.sort_order) - nz(b.sort_order));
+const bstageOf = id => byId(DB.bill_stages, "bstage_id", id);
+const langkahTagihan = bid => DB.bill_steps.filter(x => x.billing_id === bid);
+const langkahDi = (bid, sid) => DB.bill_steps.find(x => x.billing_id === bid && x.bstage_id === sid) || null;
+
+/* Menyusun keadaan sebuah tagihan: tiap tahap beserta tanggal mulai, tanggal
+   selesai, lama hari kerja, dan penilaian terhadap targetnya. */
+function estafet(b) {
+  const T = tahapTagihan();
+  const hasil = [];
+  let mulai = b.doc_received_date || b.period_start || b.created_date || today();
+  let berjalanKetemu = false;
+  T.forEach(t => {
+    const st = langkahDi(b.billing_id, t.bstage_id);
+    const selesai = st && st.date_done ? st.date_done : "";
+    const pic = (st && st.pic_name) || t.pic_name || "";
+    const target = nz(t.target_days);
+    let lama, keadaan;
+    if (selesai) {
+      lama = businessDays(mulai, selesai);
+      keadaan = lama <= target ? "CEPAT" : lama <= target + 2 ? "NORMAL" : "LAMBAT";
+    } else if (!berjalanKetemu) {
+      berjalanKetemu = true;
+      lama = businessDays(mulai, today());
+      keadaan = lama <= target ? "BERJALAN" : "TERLAMBAT";
+    } else {
+      lama = null; keadaan = "BELUM";
+    }
+    hasil.push({ t, st, pic, target, lama, keadaan, mulai, selesai, catatan: (st && st.notes) || "" });
+    if (selesai) mulai = selesai;
+  });
+  return hasil;
 }
-function ageBadge(n, paid) {
-  if (paid) return `<span class="b teal">Selesai ${n} hk</span>`;
-  if (n <= 7) return `<span class="b teal">${n} hk · cepat</span>`;
-  if (n <= 14) return `<span class="b amber">${n} hk · normal</span>`;
-  return `<span class="b red">${n} hk · lambat</span>`;
+function tahapBerjalan(b) { return estafet(b).find(x => x.keadaan === "BERJALAN" || x.keadaan === "TERLAMBAT") || null; }
+function tagihanLunas(b) { const e = estafet(b); return e.length && e[e.length - 1].selesai; }
+function umurTagihan(b) {
+  const e = estafet(b); if (!e.length) return 0;
+  const akhir = tagihanLunas(b) || today();
+  return businessDays(e[0].mulai, akhir);
 }
+function targetTotal() { return tahapTagihan().reduce((a, t) => a + nz(t.target_days), 0); }
+/* Berapa hari kerja berkas menginap di masing-masing pihak. */
+function umurPerPihak(b) {
+  const r = {};
+  estafet(b).forEach(x => {
+    if (x.lama == null) return;
+    const p = x.t.pic_side || "LAIN";
+    r[p] = (r[p] || 0) + x.lama;
+  });
+  return r;
+}
+const nilaiLunas = () => DB.billings.filter(b => tagihanLunas(b)).reduce((a, b) => a + nz(b.billing_value), 0);
+const nilaiOutstanding = () => DB.billings.filter(b => !tagihanLunas(b)).reduce((a, b) => a + nz(b.billing_value), 0);
+
+function lencanaKeadaan(k, lama, target) {
+  const m = {
+    CEPAT: ["teal", "cepat"], NORMAL: ["blue", "normal"], LAMBAT: ["red", "lambat"],
+    BERJALAN: ["amber", "berjalan"], TERLAMBAT: ["red", "lewat target"], BELUM: ["gray", "belum mulai"]
+  }[k] || ["gray", k];
+  return `<span class="b ${m[0]}">${lama == null ? m[1] : lama + " hk · " + m[1]}</span>` +
+    (target && lama != null ? `<div class="tiny muted">target ${target} hk</div>` : "");
+}
+
+/* Rapor per PIC: berapa tahap ditangani, berapa yang lewat target, berapa
+   hari kerja kelebihannya, dan apa yang sedang ditahan sekarang. */
+function raporPIC() {
+  const r = {};
+  const isi = n => r[n] = r[n] || { nama: n, selesai: 0, lambat: 0, lewat: 0, tertahan: [], pihak: "" };
+  DB.billings.forEach(b => estafet(b).forEach(x => {
+    if (!x.pic) return;
+    const o = isi(x.pic); o.pihak = x.t.pic_side || "";
+    if (x.selesai) {
+      o.selesai++;
+      if (x.lama > x.target) { o.lambat++; o.lewat += x.lama - x.target; }
+    } else if (x.keadaan === "TERLAMBAT") {
+      o.tertahan.push({ b, x });
+      o.lewat += x.lama - x.target;
+    } else if (x.keadaan === "BERJALAN") o.tertahan.push({ b, x });
+  }));
+  /* PIC yang belum pernah memegang apa pun hanya menambah baris kosong —
+     namanya baru muncul setelah benar-benar menangani satu tahap. */
+  return Object.values(r).filter(o => o.selesai || o.tertahan.length)
+    .sort((a, b) => b.lewat - a.lewat || b.lambat - a.lambat);
+}
+
 VIEWS.billing = {
   html() {
     const rw = can("billing");
-    const rows = DB.billings.slice().reverse();
-    const out = rows.filter(b => b.status !== "PAID");
-    const paid = rows.filter(b => b.status === "PAID");
+    const tab = S.tab || (S.tab = "papan");
+    const semua = DB.billings.slice().sort((a, b) => String(b.period || "").localeCompare(String(a.period || "")));
+    const jalan = semua.filter(b => !tagihanLunas(b));
+    const lunas = semua.filter(b => tagihanLunas(b));
+    const tertahan = jalan.map(b => ({ b, x: tahapBerjalan(b) })).filter(o => o.x && o.x.keadaan === "TERLAMBAT");
+    const umurRata = jalan.length ? Math.round(jalan.reduce((a, b) => a + umurTagihan(b), 0) / jalan.length) : 0;
+    const diPertamina = jalan.reduce((a, b) => a + (umurPerPihak(b).PERTAMINA || 0), 0);
+
+    const T = { papan: "Papan Tagihan", pic: "Rapor PIC", lunas: "Sudah Dibayar", tahap: "Tahapan & Target" };
+    const tabs = `<div class="tabs">${Object.keys(T).map(k =>
+      `<button class="${k === tab ? "on" : ""}" data-tb="${k}">${T[k]}</button>`).join("")}</div>`;
+
+    let isi = "";
+
+    if (tab === "papan") isi = `
+      ${tertahan.length ? `<div class="note stop"><b>${tertahan.length} tagihan lewat target di tahap yang sedang berjalan.</b>
+        ${tertahan.map(o => `<div class="mt8">· <b>${esc(o.b.billing_no || "(belum bernomor)")}</b> tertahan di
+          <b>${esc(o.x.t.name)}</b> selama <b>${o.x.lama} hari kerja</b> (target ${o.x.target}) —
+          PIC <b>${esc(o.x.pic || "belum ditunjuk")}</b>${o.x.t.pic_side ? " · " + esc(o.x.t.pic_side) : ""}
+          ${o.x.catatan ? `<div class="tiny muted" style="padding-left:12px">${esc(o.x.catatan)}</div>` : ""}</div>`).join("")}
+        </div>` : `<div class="note ok">Tidak ada tagihan yang lewat target tahap saat ini.</div>`}
+
+      <div class="card mt16"><h3>Tagihan berjalan <span class="b amber">${jalan.length}</span>
+        ${rw ? `<button class="btn a sm" id="bgNew">+ Tagihan</button>` : ""}</h3><div class="body flush">
+        ${jalan.length ? jalan.map(b => {
+      const e = estafet(b), kini = tahapBerjalan(b), pihak = umurPerPihak(b);
+      const tot = targetTotal(), umur = umurTagihan(b);
+      return `<div style="border-bottom:1px solid var(--line);padding:12px 16px">
+          <div class="row">
+            <div class="grow"><b>${esc(b.billing_no || "(belum bernomor)")}</b>
+              <span class="tiny muted"> · ${esc(b.period || "")} · ${esc(bamkNo(b.bamk_id))} · ${esc(tankNo((bamkOf(b.bamk_id) || {}).tank_id))}</span>
+              <div class="tiny muted">${fmt(b.billable_qty, 2)} m² · ${can("money") ? rupiah(b.billing_value) : "nilai disembunyikan"}</div></div>
+            <div style="text-align:right">
+              ${ageBadge(umur, false)}<div class="tiny muted">target seluruhnya ${tot} hk</div></div>
+            ${rw ? `<button class="btn sm" data-bg="${b.billing_id}">Perbarui</button>` : ""}
+          </div>
+          <div class="mt8" style="display:flex;gap:3px;flex-wrap:wrap">
+            ${e.map(x => `<span title="${esc(x.t.name)} · PIC ${esc(x.pic)}"
+              style="flex:1 1 auto;min-width:52px;text-align:center;font-size:9.5px;padding:3px 4px;border-radius:3px;
+              background:${x.keadaan === "CEPAT" ? "#DCEDEA" : x.keadaan === "NORMAL" ? "#E3EDF7"
+          : x.keadaan === "LAMBAT" || x.keadaan === "TERLAMBAT" ? "#F6DEDC"
+            : x.keadaan === "BERJALAN" ? "#FBEBD3" : "#EEF2F5"};
+              border:1px solid var(--line)">${esc(x.t.code)}<br>${x.lama == null ? "—" : x.lama}</span>`).join("")}
+          </div>
+          <div class="tiny mt8">Sedang di: <b>${kini ? esc(kini.t.name) : "—"}</b>
+            · PIC <b>${kini ? esc(kini.pic || "belum ditunjuk") : "—"}</b>
+            ${kini && kini.keadaan === "TERLAMBAT" ? `<span class="b red">lewat ${kini.lama - kini.target} hk</span>` : ""}
+            · di HBM ${pihak.HBM || 0} hk · di Pertamina ${pihak.PERTAMINA || 0} hk</div>
+        </div>`;
+    }).join("") : `<div class="empty"><b>Belum ada tagihan berjalan</b>Tagihan muncul setelah volume layak tagih dilepas ke Finance.</div>`}
+      </div></div>
+      <div class="tiny muted">Umur dihitung hari kerja. Sabtu, Minggu, dan libur pada kalender Pengaturan tidak dihitung.
+        Kotak kecil berwarna adalah tiap tahap: hijau tepat waktu, biru normal, merah lewat target, kuning sedang berjalan, abu belum mulai.</div>`;
+
+    if (tab === "pic") {
+      const R = raporPIC();
+      isi = `<div class="note">Rapor ini disusun dari tanggal yang diisi pada tiap tahap — bukan penilaian orang,
+        melainkan catatan berapa lama berkas berhenti di tangan siapa. Pakailah untuk menanyakan hambatannya, bukan untuk menyalahkan.</div>
+      <div class="card mt16"><h3>Rapor PIC</h3><div class="body flush"><div class="tw"><table>
+        <thead><tr><th>PIC</th><th>Pihak</th><th class="n">Tahap selesai</th><th class="n">Lewat target</th>
+          <th class="n">Total kelebihan</th><th>Sedang ditangani</th></tr></thead>
+        <tbody>${R.length ? R.map(o => `<tr>
+          <td><b>${esc(o.nama)}</b></td><td class="tiny">${esc(o.pihak)}</td>
+          <td class="n">${o.selesai}</td>
+          <td class="n">${o.lambat ? `<span style="color:var(--red);font-weight:700">${o.lambat}</span>` : "0"}</td>
+          <td class="n">${o.lewat > 0 ? `<span style="color:var(--red)">+${o.lewat} hk</span>` : "—"}</td>
+          <td class="tiny">${o.tertahan.length ? o.tertahan.map(z =>
+        `${esc(z.b.billing_no || "?")} — ${esc(z.x.t.name)} (${z.x.lama} hk${z.x.keadaan === "TERLAMBAT" ? ", lewat" : ""})`).join("<br>") : "—"}</td>
+        </tr>`).join("") : `<tr><td colspan="6"><div class="empty">Belum ada langkah tagihan yang tercatat.</div></td></tr>`}
+        </tbody></table></div></div></div>`;
+    }
+
+    if (tab === "lunas") isi = `
+      <div class="card"><h3>Sudah dibayar <span class="b teal">${lunas.length}</span></h3><div class="body flush"><div class="tw"><table>
+        <thead><tr><th>No. tagihan</th><th>Periode / BAMK</th><th class="n">Volume</th>
+          ${can("money") ? `<th class="n">Nilai</th>` : ""}<th class="n">Umur total</th><th>Di Pertamina</th><th></th></tr></thead>
+        <tbody>${lunas.length ? lunas.map(b => {
+      const pihak = umurPerPihak(b);
+      return `<tr><td><b>${esc(b.billing_no || "—")}</b></td>
+          <td>${esc(b.period || "")}<div class="tiny muted">${esc(bamkNo(b.bamk_id))}</div></td>
+          <td class="n">${fmt(b.billable_qty, 2)}</td>
+          ${can("money") ? `<td class="n">${rupiah(b.billing_value)}</td>` : ""}
+          <td class="n">${umurTagihan(b)} hk<div class="tiny muted">target ${targetTotal()}</div></td>
+          <td class="n">${pihak.PERTAMINA || 0} hk</td>
+          <td class="right">${rw ? `<button class="btn sm" data-bg="${b.billing_id}">Lihat</button>` : ""}</td></tr>`;
+    }).join("") : `<tr><td colspan="7"><div class="empty">Belum ada tagihan yang dibayar.</div></td></tr>`}
+        </tbody></table></div></div></div>`;
+
+    if (tab === "tahap") isi = `
+      <div class="note">Urutan dan target hari kerja tiap tahap. Ubah bila kenyataannya berbeda —
+        target yang tidak masuk akal membuat rapor PIC ikut tidak berguna.
+        Total target seluruh tahap saat ini <b>${targetTotal()} hari kerja</b>.</div>
+      <div class="card mt16"><h3>Tahapan tagihan
+        ${rw ? `<button class="btn a sm" id="btNew">+ Tahap</button>` : ""}</h3><div class="body flush"><div class="tw"><table>
+        <thead><tr><th class="n">Urut</th><th>Kode</th><th>Nama tahap</th><th>Pihak</th><th>PIC bawaan</th>
+          <th class="n">Target (hk)</th><th></th></tr></thead>
+        <tbody>${tahapTagihan().map(t => `<tr>
+          <td class="n tiny">${nz(t.sort_order)}</td><td><b>${esc(t.code)}</b></td><td>${esc(t.name)}</td>
+          <td><span class="b ${t.pic_side === "PERTAMINA" ? "blue" : "gray"}">${esc(t.pic_side)}</span></td>
+          <td class="tiny">${esc(t.pic_name || "—")}</td><td class="n">${nz(t.target_days)}</td>
+          <td class="right">${rw ? `<button class="btn sm" data-bt="${t.bstage_id}">Ubah</button>` : ""}</td></tr>`).join("")}
+        </tbody></table></div></div></div>`;
+
     return `
     <div class="grid g4">
-      <div class="kpi amber"><div class="eyebrow">Tagihan berjalan</div><div class="v">${out.length}</div><div class="sub">belum dibayar</div></div>
-      <div class="kpi red"><div class="eyebrow">Nilai outstanding</div><div class="v" style="font-size:18px">${rupiah(out.reduce((a, b) => a + nz(b.billing_value), 0))}</div><div class="sub">akumulasi</div></div>
-      <div class="kpi teal"><div class="eyebrow">Sudah dibayar</div><div class="v" style="font-size:18px">${rupiah(paid.reduce((a, b) => a + nz(b.billing_value), 0))}</div><div class="sub">${paid.length} tagihan</div></div>
-      <div class="kpi blue"><div class="eyebrow">Umur rata-rata</div><div class="v">${out.length ? Math.round(out.reduce((a, b) => a + ageOf(b), 0) / out.length) : 0}</div><div class="sub">hari kerja</div></div>
+      <div class="kpi amber"><div class="eyebrow">Tagihan berjalan</div><div class="v">${jalan.length}</div>
+        <div class="sub">${tertahan.length} lewat target</div></div>
+      ${can("money") ? `<div class="kpi red"><div class="eyebrow">Nilai outstanding</div>
+        <div class="v" style="font-size:18px">${rupiah(nilaiOutstanding())}</div><div class="sub">belum dibayar</div></div>
+      <div class="kpi teal"><div class="eyebrow">Sudah dibayar</div>
+        <div class="v" style="font-size:18px">${rupiah(nilaiLunas())}</div><div class="sub">${lunas.length} tagihan</div></div>`
+        : `<div class="kpi teal"><div class="eyebrow">Sudah dibayar</div><div class="v">${lunas.length}</div><div class="sub">tagihan</div></div>
+           <div class="kpi gray"><div class="eyebrow">Nilai</div><div class="v" style="font-size:15px">disembunyikan</div><div class="sub">peran ini tanpa akses nilai</div></div>`}
+      <div class="kpi blue"><div class="eyebrow">Umur rata-rata</div><div class="v">${umurRata}</div>
+        <div class="sub">hari kerja · target ${targetTotal()} · di Pertamina ${diPertamina} hk</div></div>
     </div>
-    <div class="card mt16"><h3>Estafet tagihan
-      ${rw ? `<button class="btn a sm" id="bgNew">+ Tagihan manual</button>` : ""}</h3>
-      <div class="body flush"><div class="tw"><table>
-      <thead><tr><th>No. tagihan</th><th>Periode / BAMK</th><th class="n">Volume</th><th class="n">Nilai</th>
-      <th>Tahapan</th><th>Umur</th><th>PIC</th><th></th></tr></thead>
-      <tbody>${rows.length ? rows.map(b => {
-      const i = BILL_STAGES.findIndex(s => s[0] === b.status);
-      return `<tr>
-          <td><b>${esc(b.billing_no || "(belum bernomor)")}</b><div class="tiny muted">${esc(b.remarks || "")}</div></td>
-          <td>${esc(b.period)}<div class="tiny muted">${esc(bamkNo(b.bamk_id))}</div></td>
-          <td class="n">${fmt(b.billable_qty, 1)}</td><td class="n">${rupiah(b.billing_value)}</td>
-          <td><div class="gate">${BILL_STAGES.slice(0, 5).map((s, k) => `<span class="${k <= i && b.status !== "HOLD" ? "on" : ""}">${s[1]}</span>`).join('<i>›</i>')}
-            ${b.status === "HOLD" ? `<span class="b red">Tertahan</span>` : ""}</div></td>
-          <td>${ageBadge(ageOf(b), b.status === "PAID")}</td>
-          <td class="tiny">${esc(b.current_pic || "—")}</td>
-          <td class="right">${rw ? `<button class="btn sm" data-bg="${b.billing_id}">Perbarui</button>` : ""}</td></tr>`;
-    }).join("") : `<tr><td colspan="8"><div class="empty"><b>Belum ada tagihan</b>Tagihan muncul setelah volume layak tagih dilepas ke Finance.</div></td></tr>`}
-      </tbody></table></div></div></div>
-    <div class="tiny muted">Umur tagihan dihitung dalam hari kerja. Sabtu, Minggu dan hari libur pada kalender Pengaturan tidak dihitung.</div>`;
+    <div class="mt16">${tabs}</div>
+    <div class="mt12">${isi}</div>`;
   },
   bind() {
+    $$("[data-tb]").forEach(b => b.onclick = () => { S.tab = b.dataset.tb; render(); });
     if ($("#bgNew")) $("#bgNew").onclick = () => billModal(null);
+    if ($("#btNew")) $("#btNew").onclick = () => tahapTagihanModal(null);
     $$("[data-bg]").forEach(b => b.onclick = () => billModal(b.dataset.bg));
+    $$("[data-bt]").forEach(b => b.onclick = () => tahapTagihanModal(b.dataset.bt));
   }
 };
+
+function ageBadge(n, paid) {
+  const t = targetTotal() || 30;
+  if (paid) return `<span class="b teal">Selesai ${n} hk</span>`;
+  if (n <= t * 0.6) return `<span class="b teal">${n} hk · cepat</span>`;
+  if (n <= t) return `<span class="b amber">${n} hk · normal</span>`;
+  return `<span class="b red">${n} hk · lewat target</span>`;
+}
+
 function billModal(id) {
   const b = id ? byId(DB.billings, "billing_id", id) : {
-    billing_id: uid("BG"), billing_no: "", period: monthOf(today()), bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "",
-    billable_qty: 0, billing_value: 0, doc_received_date: today(), review_date: "", approval_date: "",
-    invoice_date: "", payment_date: "", status: "DRAFT", current_pic: "", remarks: ""
+    billing_id: uid("BG"), billing_no: "", period: monthOf(today()),
+    bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "",
+    billable_qty: 0, billing_value: 0, doc_received_date: today(),
+    status: "JALAN", current_pic: "", remarks: ""
   };
-  openModal(id ? "Perbarui tagihan" : "Tagihan baru", `
+  const e = estafet(b);
+  const rw = can("billing");
+
+  openModal(id ? "Tagihan " + (b.billing_no || "") : "Tagihan baru", `
     <div class="fg c3">
       <label class="f"><span>Nomor tagihan</span><input type="text" id="bgNo" value="${esc(b.billing_no)}"></label>
-      <label class="f"><span>Periode</span><input type="text" id="bgPer" value="${esc(b.period)}"></label>
-      <label class="f"><span>BAMK</span><select id="bgWo">${opts(DB.bamk, b.bamk_id, w => w.bamk_id, w => w.bamk_no)}</select></label>
-      <label class="f"><span>Volume</span><input type="number" step="any" id="bgQty" value="${b.billable_qty}"></label>
-      <label class="f"><span>Nilai tagihan (Rp)</span><input type="number" step="any" id="bgVal" value="${b.billing_value}"></label>
-      <label class="f"><span>Tahapan</span><select id="bgSt">${opts(BILL_STAGES.map(s => ({ k: s[0], v: s[1] })), b.status, o => o.k, o => o.v)}</select></label>
-      <label class="f"><span>Dokumen diterima</span><input type="date" id="bgD1" value="${esc(b.doc_received_date)}"></label>
-      <label class="f"><span>Review</span><input type="date" id="bgD2" value="${esc(b.review_date)}"></label>
-      <label class="f"><span>Approval / BA</span><input type="date" id="bgD3" value="${esc(b.approval_date)}"></label>
-      <label class="f"><span>Invoice</span><input type="date" id="bgD4" value="${esc(b.invoice_date)}"></label>
-      <label class="f"><span>Pembayaran</span><input type="date" id="bgD5" value="${esc(b.payment_date)}"></label>
-      <label class="f"><span>PIC saat ini</span><input type="text" id="bgPic" value="${esc(b.current_pic)}"></label>
+      <label class="f"><span>Periode</span><input type="text" id="bgPer" value="${esc(b.period)}" placeholder="2026-09"></label>
+      <label class="f"><span>BAMK / tanki</span><select id="bgWo">${opts(DB.bamk, b.bamk_id, w => w.bamk_id, w => w.bamk_no + " — " + tankNo(w.tank_id))}</select></label>
+      <label class="f"><span>Volume (m²)</span><input type="number" step="any" id="bgQty" value="${b.billable_qty}"></label>
+      ${can("money") ? `<label class="f"><span>Nilai tagihan (Rp)</span><input type="number" step="any" id="bgVal" value="${b.billing_value}"></label>` : ""}
+      <label class="f"><span>Tanggal mulai estafet</span><input type="date" id="bgD1" value="${esc(b.doc_received_date)}"></label>
     </div>
-    <label class="f"><span>Kendala / catatan</span><input type="text" id="bgRem" value="${esc(b.remarks)}"></label>`,
-    `<button class="btn p" id="bgSave">Simpan</button>`);
+    <label class="f"><span>Catatan umum</span><input type="text" id="bgRem" value="${esc(b.remarks)}"></label>
+
+    <h4 class="mt16">Estafet tahapan <span class="tiny muted">isi tanggal selesai tiap tahap; lama dan keterlambatan dihitung sendiri</span></h4>
+    ${id ? `<div class="tw" style="max-height:46vh;overflow:auto"><table>
+      <thead><tr><th style="width:26%">Tahap</th><th style="width:12%">Pihak</th><th style="width:18%">PIC</th>
+        <th style="width:15%">Tanggal selesai</th><th style="width:13%">Lama</th><th>Catatan</th></tr></thead>
+      <tbody>${e.map(x => `<tr>
+        <td><b>${esc(x.t.code)}</b> ${esc(x.t.name)}<div class="tiny muted">target ${x.target} hk</div></td>
+        <td class="tiny">${esc(x.t.pic_side)}</td>
+        <td><input type="text" class="bgPic" data-s="${x.t.bstage_id}" value="${esc(x.pic)}" style="width:100%"></td>
+        <td><input type="date" class="bgDt" data-s="${x.t.bstage_id}" value="${esc(x.selesai)}" style="width:100%"></td>
+        <td>${lencanaKeadaan(x.keadaan, x.lama, 0)}</td>
+        <td><input type="text" class="bgNote" data-s="${x.t.bstage_id}" value="${esc(x.catatan)}" placeholder="hambatan, bila ada" style="width:100%"></td>
+      </tr>`).join("")}</tbody></table></div>
+      <div class="note mt8">Isi tanggal <b>berurutan</b>. Tahap yang tanggalnya dikosongkan dianggap belum selesai,
+        dan tahap pertama yang kosong itulah yang dihitung sedang berjalan.</div>`
+      : `<div class="note warn">Simpan dulu tagihannya, baru daftar tahapan bisa diisi.</div>`}`,
+    rw ? `<button class="btn p" id="bgSave">Simpan</button>` : "");
+
+  if (!rw) return;
   $("#bgSave").onclick = () => {
-    const old = b.status;
     Object.assign(b, {
-      billing_no: $("#bgNo").value, period: $("#bgPer").value, bamk_id: $("#bgWo").value,
-      billable_qty: nz($("#bgQty").value), billing_value: nz($("#bgVal").value), status: $("#bgSt").value,
-      doc_received_date: $("#bgD1").value, review_date: $("#bgD2").value, approval_date: $("#bgD3").value,
-      invoice_date: $("#bgD4").value, payment_date: $("#bgD5").value,
-      current_pic: $("#bgPic").value, remarks: $("#bgRem").value
+      billing_no: $("#bgNo").value.trim(), period: $("#bgPer").value, bamk_id: $("#bgWo").value,
+      billable_qty: nz($("#bgQty").value), doc_received_date: $("#bgD1").value,
+      remarks: $("#bgRem").value
     });
+    if ($("#bgVal")) b.billing_value = nz($("#bgVal").value);
+    if (!b.billing_no) return toast("Nomor tagihan wajib diisi.", "err");
+    if (DB.billings.some(x => x.billing_id !== b.billing_id && x.billing_no === b.billing_no))
+      return toast("Nomor tagihan sudah dipakai.", "err");
+
+    if (id) {
+      /* Simpan langkah per tahap. Urutan tanggal diperiksa: tanggal yang
+         mendahului tahap sebelumnya membuat hitungan lama menjadi negatif
+         dan rapor PIC ikut salah, jadi ditolak di sini. */
+      let sebelum = b.doc_received_date, galat = "";
+      const isian = [];
+      tahapTagihan().forEach(t => {
+        const dt = $(`.bgDt[data-s="${t.bstage_id}"]`);
+        if (!dt) return;
+        const pc = $(`.bgPic[data-s="${t.bstage_id}"]`), nt = $(`.bgNote[data-s="${t.bstage_id}"]`);
+        const tgl = dt.value;
+        if (tgl && sebelum && tgl < sebelum && !galat)
+          galat = t.name + ": tanggal " + dateID(tgl) + " mendahului tahap sebelumnya (" + dateID(sebelum) + ").";
+        isian.push({ t: t, tgl: tgl, pic: pc ? pc.value : "", note: nt ? nt.value : "" });
+        if (tgl) sebelum = tgl;
+      });
+      if (galat) return toast(galat, "err");
+
+      isian.forEach(o => {
+        let st = langkahDi(b.billing_id, o.t.bstage_id);
+        if (!o.tgl && !o.pic && !o.note) {
+          if (st) { tandaiHapus("bill_steps", st.bstep_id); DB.bill_steps = DB.bill_steps.filter(z => z !== st); }
+          return;
+        }
+        if (!st) { st = { bstep_id: uid("BP"), billing_id: b.billing_id, bstage_id: o.t.bstage_id }; DB.bill_steps.push(st); }
+        const berubah = st.date_done !== o.tgl;
+        st.date_done = o.tgl; st.pic_name = o.pic; st.notes = o.note;
+        if (berubah && o.tgl) st.recorded_at = new Date().toISOString();
+      });
+      const kini = tahapBerjalan(b);
+      b.current_pic = kini ? (kini.pic || "") : "";
+      b.status = tagihanLunas(b) ? "PAID" : "JALAN";
+    }
     if (!id) DB.billings.push(b);
-    audit(id ? "UPDATE" : "CREATE", "19_BILLING_TRACKING", b.billing_id, old, b.status);
-    save(); closeModal(); toast("Tagihan diperbarui.", "ok"); render();
+    audit(id ? "UPDATE" : "CREATE", "19_BILLING_TRACKING", b.billing_id, "", b.billing_no);
+    save(); closeModal(); render();
+    toast(id ? "Estafet tagihan diperbarui." : "Tagihan dibuat. Buka lagi untuk mengisi tahapannya.", "ok");
+  };
+}
+
+function tahapTagihanModal(id) {
+  const urut = (DB.bill_stages || []).reduce((a, t) => Math.max(a, nz(t.sort_order)), 0) + 1;
+  const t = id ? bstageOf(id) : {
+    bstage_id: uid("BS"), code: "B" + String(urut).padStart(2, "0"), name: "",
+    pic_side: "HBM", pic_name: "", target_days: 2, sort_order: urut, active: true
+  };
+  openModal(id ? "Ubah tahap tagihan" : "Tahap tagihan baru", `
+    <div class="fg c2">
+      <label class="f"><span>Kode</span><input type="text" id="btCode" value="${esc(t.code)}"></label>
+      <label class="f"><span>Nama tahap</span><input type="text" id="btName" value="${esc(t.name)}"></label>
+      <label class="f"><span>Pihak penanggung jawab</span><select id="btSide">${opts(PIHAK_TAGIHAN.map(v => ({ v })), t.pic_side, o => o.v, o => o.v)}</select></label>
+      <label class="f"><span>PIC bawaan</span><input type="text" id="btPic" value="${esc(t.pic_name || "")}"></label>
+      <label class="f"><span>Target (hari kerja)</span><input type="number" id="btTgt" value="${nz(t.target_days)}"></label>
+      <label class="f"><span>Urutan</span><input type="number" id="btOrd" value="${nz(t.sort_order)}"></label>
+    </div>
+    <div class="chk"><input type="checkbox" id="btAct" ${t.active !== false ? "checked" : ""}><label for="btAct">Tahap dipakai</label></div>`,
+    `<button class="btn p" id="btSave">Simpan</button>`);
+  $("#btSave").onclick = () => {
+    Object.assign(t, {
+      code: $("#btCode").value.trim(), name: $("#btName").value.trim(), pic_side: $("#btSide").value,
+      pic_name: $("#btPic").value, target_days: nz($("#btTgt").value),
+      sort_order: nz($("#btOrd").value), active: $("#btAct").checked
+    });
+    if (!t.code || !t.name) return toast("Kode dan nama tahap wajib diisi.", "err");
+    if (!id) DB.bill_stages.push(t);
+    audit(id ? "UPDATE" : "CREATE", "19_BILL_STAGE", t.bstage_id, "", t.name);
+    save(); closeModal(); render(); toast("Tahap tersimpan.", "ok");
   };
 }
 
