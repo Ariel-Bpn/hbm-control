@@ -380,10 +380,10 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "2.5";
+const APP_VERSI = "2.6";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
-const CODEGS_VERSI = "2.1";
+const CODEGS_VERSI = "2.2";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -713,6 +713,10 @@ function bangunBawaan() {
       alarm_waspada: 80, alarm_kritis: 90, logo: null, holidays: [],
       roof_factor: { CRT: 1.05, FRT: 1.00, DRT: 1.12 }, acc_pct: 10,
       target_basis: "KALENDER",
+      /* Baseline proyek 24 bulan menurut Blueprint V2.9 §6 */
+      baseline_start: "2026-08-01", baseline_end: "2028-07-31",
+      /* Ambang peringatan mesin notifikasi (Blueprint V2.9 §14) */
+      notif_verify_jam: 24, notif_daily_jam: 36, notif_invoice_h: 7,
       kota: "Balikpapan", kop_url: null,
       sign1_label: "Disiapkan oleh", sign1_name: "", sign1_title: "Project Control HBM",
       sign2_label: "Diperiksa oleh", sign2_name: "", sign2_title: "Site Manager HBM",
@@ -727,6 +731,9 @@ function bangunBawaan() {
       }
     },
     areas, tanks, spk: [], spk_item: [], bamk: [], stages, scopes, targets: [],
+    /* V2.6 — tabel Blueprint V2.9 */
+    boq: [], coatings: bikinCoatingBawaan(), jobs: [], engineering: [], calendar: [],
+    equipment: [], bakp_item: [], billing_item: [], payments: [], notifs: [], baselines: [],
     bill_stages: bikinTahapTagihan(), bill_steps: [],
     dailies: [], progress: [], manpower: [], materials: [], photos: [], reviews: [], deleted: [], messages: [],
     bill_stages: [], bill_steps: [],
@@ -760,7 +767,7 @@ function pasangSyncBawaan() {
 /* Naik versi tanpa menghapus data yang sudah ada */
 function migrate() {
   if (!DB.meta || !DB.dailies) { DB = seed(); return; }
-  if (DB.meta.version === "2.5") return;
+  if (DB.meta.version === "2.6") return;
   DB.reviews = DB.reviews || [];
   DB.deleted = DB.deleted || [];
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
@@ -785,7 +792,8 @@ function migrate() {
   if (DB.config.acc_pct == null) DB.config.acc_pct = 10;
   if (nz(DB.config.tank_target) < 13) DB.config.tank_target = 13;
   migrasiSPK();
-  DB.meta.version = "2.5";
+  migrasiV26();
+  DB.meta.version = "2.6";
   save();
 }
 
@@ -906,6 +914,188 @@ function migrasiSPK() {
   });
 }
 
+
+/* ============================================================
+   V2.6 — MIGRASI & BAWAAN TAMBAHAN (Master Blueprint V2.9)
+   Semua tabel baru dibangun dari data yang sudah ada. Tidak satu pun
+   baris lama dihapus atau ditimpa; yang belum punya induk diberi induk,
+   yang belum punya kolom diberi nilai awal yang jujur (kosong/nol),
+   bukan tebakan.
+   ============================================================ */
+
+/* Sistem cat bawaan. Nilai DFT sengaja nol sampai spesifikasi cat yang
+   disetujui Pertamina dimasukkan — angka karangan di kolom DFT berbahaya
+   karena dipakai sebagai acuan terima/tolak inspeksi. */
+function bikinCoatingBawaan() {
+  return [
+    { coating_id: "CT-01", layer_no: 1, layer_name: "Primer", product: "", spec_std: "SSPC-SP10 / ISO Sa 2½",
+      dft_min: 0, dft_max: 0, interval_min_jam: 0, interval_max_jam: 0, active: true, notes: "" },
+    { coating_id: "CT-02", layer_no: 2, layer_name: "Intermediate", product: "", spec_std: "",
+      dft_min: 0, dft_max: 0, interval_min_jam: 0, interval_max_jam: 0, active: true, notes: "" },
+    { coating_id: "CT-03", layer_no: 3, layer_name: "Finish / Top Coat", product: "", spec_std: "",
+      dft_min: 0, dft_max: 0, interval_min_jam: 0, interval_max_jam: 0, active: true, notes: "" }
+  ];
+}
+
+/* Baris yang LAHIR dari data pabrik harus ikut setua data pabrik.
+   Kalau tidak, perangkat yang baru pertama kali dibuka akan membuat baris
+   berpenanda waktu hari ini, lalu menimpa data kantor yang sebenarnya —
+   misalnya harga BOQ asli tertimpa nol. Ini persis jenis kejadian yang
+   dulu membuat Master Data kembali menjadi CONTOH-01. */
+function turunanPabrik(sumber) {
+  if (!sumber) return true;
+  const daftar = Array.isArray(sumber) ? sumber : [sumber];
+  if (!daftar.length) return true;
+  return daftar.every(r => r && (r._ts == null || Number(r._ts) <= TS_BAWAAN));
+}
+function beriUsia(baris, dariPabrik) {
+  if (dariPabrik) baris._ts = TS_BAWAAN;
+  return baris;
+}
+
+function migrasiV26() {
+  const kosong = ["boq", "coatings", "jobs", "engineering", "calendar", "equipment",
+    "bakp_item", "billing_item", "payments", "notifs", "baselines"];
+  kosong.forEach(t => { if (!Array.isArray(DB[t])) DB[t] = []; });
+  /* Sistem cat bawaan selalu data pabrik, jadi selalu ditua-kan. */
+  if (!DB.coatings.length) DB.coatings = bikinCoatingBawaan().map(c => beriUsia(c, true));
+
+  const C = DB.config;
+  if (!C.baseline_start) C.baseline_start = "2026-08-01";
+  if (!C.baseline_end) C.baseline_end = "2028-07-31";
+  if (C.notif_verify_jam == null) C.notif_verify_jam = 24;
+  if (C.notif_daily_jam == null) C.notif_daily_jam = 36;
+  if (C.notif_invoice_h == null) C.notif_invoice_h = 7;
+
+  /* --- Kalender kerja: hari libur yang selama ini tersimpan di Pengaturan
+     dipindahkan menjadi baris kalender, supaya bisa diberi keterangan dan
+     ikut tersinkron antar perangkat. Daftar lama tetap dibiarkan agar
+     perangkat yang belum naik versi tidak kehilangan apa pun. --- */
+  (C.holidays || []).forEach(d => {
+    if (!DB.calendar.some(x => x.cal_date === d)) {
+      DB.calendar.push({ cal_id: "CAL-" + String(d).replace(/-/g, ""), cal_date: d,
+        day_type: "LIBUR", description: "Dipindahkan dari daftar libur versi sebelumnya" });
+    }
+  });
+
+  /* --- Job register: kunci permanen JOB-HBM-YYYY-NNNN. Tank Tag bukan kunci
+     utama, karena satu tanki bisa punya lebih dari satu Job kalau terjadi
+     re-scope. Job dibentuk dari pasangan SPK+tanki yang sudah ada. --- */
+  let noJob = DB.jobs.length;
+  const jobKunci = {};
+  DB.jobs.forEach(j => { jobKunci[(j.spk_id || "") + "|" + j.tank_id] = j.job_id; });
+  const bikinJob = (spk_id, tank_id, sumber) => {
+    if (!tank_id) return "";
+    const k = (spk_id || "") + "|" + tank_id;
+    if (jobKunci[k]) return jobKunci[k];
+    const sp = (DB.spk || []).filter(x => x.spk_id === spk_id)[0];
+    const th = String((sp && (sp.issue_date || sp.start_date)) || today()).slice(0, 4);
+    noJob++;
+    /* Kunci dibuat dari pasangan SPK + tanki, bukan dari nomor urut, supaya
+       setiap perangkat yang menjalankan migrasi ini menghasilkan kunci yang
+       persis sama. Kalau memakai nomor urut, dua HP bisa membuat dua Job
+       berbeda untuk tanki yang sama, lalu keduanya terkirim ke server. */
+    const id = "JOB-" + (spk_id || "NOSPK") + "-" + tank_id;
+    const nomor = "JOB-HBM-" + th + "-" + String(noJob).padStart(4, "0");
+    const indukBamk = (DB.bamk || []).filter(x => x.spk_id === spk_id && x.tank_id === tank_id);
+    DB.jobs.push(beriUsia({
+      job_id: id, spk_id: spk_id || "", tank_id: tank_id, job_no: nomor,
+      target_basis: "BAMK_VOLUME", target_qty: 0, unit: "m2",
+      status: "ON_PROGRESS", rescope_of: "", revision: "R0",
+      created_from: sumber, created_at: new Date().toISOString(), notes: ""
+    }, turunanPabrik(indukBamk)));
+    jobKunci[k] = id;
+    return id;
+  };
+  (DB.bamk || []).forEach(b => {
+    if (!b.job_id) b.job_id = bikinJob(b.spk_id, b.tank_id, "BAMK " + (b.bamk_no || ""));
+    if (b.status === "DITUTUP" || b.status === "BATAL") {
+      const j = DB.jobs.filter(x => x.job_id === b.job_id)[0];
+      if (j && j.status === "ON_PROGRESS") j.status = b.status === "BATAL" ? "BATAL" : "SELESAI";
+    }
+  });
+  /* Target Job diisi dari volume BAMK-nya, sehingga Active Tank Control
+     punya angka pembanding sejak hari pertama. */
+  DB.jobs.forEach(j => {
+    if (nz(j.target_qty) > 0) return;
+    const b = (DB.bamk || []).filter(x => x.job_id === j.job_id)[0];
+    if (b) j.target_qty = nz(b.vol_shell) + nz(b.vol_acc) + nz(b.vol_roof);
+  });
+  /* Laporan harian menempel ke Job lewat BAMK-nya. */
+  (DB.dailies || []).forEach(d => {
+    if (d.job_id) return;
+    const b = (DB.bamk || []).filter(x => x.bamk_id === d.bamk_id)[0];
+    d.job_id = (b && b.job_id) || "";
+  });
+
+  /* --- Baseline bobot aktivitas: tahapan yang sudah dipakai selama ini
+     dibekukan sebagai baseline R0 berikut bobotnya, supaya revisi
+     berikutnya punya pembanding dan riwayat. --- */
+  if (!DB.baselines.length && (DB.stages || []).length) {
+    DB.baselines.push(beriUsia({
+      baseline_id: "BL-R0", revision: "R0", baseline_date: today(),
+      weights_json: JSON.stringify((DB.stages || []).map(x => ({ stage_id: x.stage_id, weight_pct: nz(x.weight_pct) }))),
+      total_weight: (DB.stages || []).reduce((a, x) => a + nz(x.weight_pct), 0),
+      reason: "Baseline awal, dibekukan otomatis saat naik ke V2.6",
+      created_by: "SISTEM", active: true
+    }, turunanPabrik(DB.stages)));
+  }
+
+  /* --- BAKP: baris penerimaan volume yang sudah ada dinaikkan menjadi
+     dokumen BAKP bernomor dengan rantai status. Qty yang dulu tercatat
+     diperlakukan sebagai qty yang sudah disetujui, karena memang itulah
+     yang selama ini dipakai sebagai dasar layak tagih. --- */
+  let noBakp = 0;
+  (DB.acceptances || []).forEach(a => {
+    noBakp++;
+    if (!a.bakp_no) a.bakp_no = "BAKP/HBM/" + String(a.acceptance_date || today()).slice(0, 4) + "/" + String(noBakp).padStart(3, "0");
+    if (a.submitted_qty == null) a.submitted_qty = nz(a.accepted_qty);
+    if (a.approved_qty == null) a.approved_qty = a.status === "ACCEPTED" ? nz(a.accepted_qty) : 0;
+    if (!a.bakp_status) a.bakp_status = a.status === "ACCEPTED" ? "APPROVED" : (a.status === "REJECTED" ? "RETURNED" : "SUBMITTED");
+    a.job_id = a.job_id || ((DB.bamk || []).filter(x => x.bamk_id === a.bamk_id)[0] || {}).job_id || "";
+    a.scan_url = a.scan_url || "";
+    a.submitted_date = a.submitted_date || a.acceptance_date || "";
+    a.approved_date = a.approved_date || (a.bakp_status === "APPROVED" ? a.acceptance_date : "");
+    a.approved_by = a.approved_by || "";
+    a.return_reason = a.return_reason || "";
+  });
+
+  /* --- BOQ master: dibentuk dari paket scope yang sudah dipakai, tanpa
+     harga. Harga satuan dan qty kontrak diisi Ariel — sistem tidak
+     mengarang angka komersial. --- */
+  if (!DB.boq.length) {
+    const seen = {};
+    (DB.scopes || []).forEach(sc => {
+      const k = sc.scope_code || "";
+      if (!k || seen[k]) return;
+      seen[k] = 1;
+      DB.boq.push(beriUsia({
+        /* Deterministik, dengan alasan yang sama seperti Job di atas. */
+        boq_id: "BQ-" + String(k).replace(/[^A-Za-z0-9]/g, ""), boq_code: k, description: sc.scope_description || "",
+        unit: sc.unit || "m2", contract_qty: 0, unit_price: nz(sc.contract_rate),
+        palda_price: nz(sc.palda_rate), category: "UTAMA", active: true,
+        revision: "R0", notes: "Qty kontrak dan harga satuan menunggu data BOQ resmi."
+      }, turunanPabrik(sc)));
+    });
+  }
+
+  /* --- Tagihan lama diberi baris detail agar plafon dapat dihitung per
+     baris BOQ, bukan hanya per BAMK. Kalau BOQ-nya belum dikenali,
+     baris detail dibiarkan kosong supaya tidak salah bebankan. --- */
+  (DB.billings || []).forEach(b => { if (b.invoice_no == null) b.invoice_no = ""; if (b.invoice_value == null) b.invoice_value = nz(b.billing_value); });
+
+  /* --- Kolom baru pada kendala dan baris SPK. Dikosongkan, bukan ditebak:
+     tenggat yang dikarang sistem akan memicu peringatan palsu. --- */
+  (DB.issues || []).forEach(i => { if (i.target_date == null) i.target_date = ""; });
+  (DB.spk_item || []).forEach(i => { if (i.volume_qty == null) i.volume_qty = 0; });
+  /* Dasar durasi SPK (Blueprint §3). SPK lama diisi KALENDER, karena itulah
+     yang tertulis pada SPK G-1: "30 hari kalender". */
+  (DB.spk || []).forEach(x => { if (!x.duration_type) x.duration_type = "KALENDER"; });
+
+  /* --- Peralatan harian: submodul baru, tidak ada data lama untuk dipindah. --- */
+  DB.progress.forEach(p => { if (p.job_id == null) p.job_id = ""; });
+}
+
 /* Peran Super Admin sudah dihapus dari sistem. Akun lama yang tersisa dari versi
    sebelumnya dibereskan di sini: kalau Project Control HBM sudah ada, akun Super Admin
    ikut dihapus beserta penanda hapusnya agar hilang juga di perangkat lain; kalau
@@ -942,9 +1132,12 @@ const PERM = {
   ADMIN_SITE: ["daily_input", "daily_own", "sync_panel", "pesan"],
   PROJECT_CONTROL: ["dash", "daily_input", "daily_all", "daily_edit_all", "review", "verify", "accept",
     "billable", "billing", "documents", "issues", "reports", "master", "money", "audit",
-    "settings", "users", "meeting", "pesan"],
-  MANAGEMENT: ["dash", "reports", "money", "billing_view", "issues_view", "meeting", "sync_panel", "pesan"],
-  FINANCE: ["dash", "billable", "billing", "reports", "money", "documents", "audit", "sync_panel", "pesan"]
+    "settings", "users", "meeting", "pesan",
+    /* V2.6 */ "kendali", "scurve", "boq", "finance", "notif"],
+  MANAGEMENT: ["dash", "reports", "money", "billing_view", "issues_view", "meeting", "sync_panel", "pesan",
+    /* V2.6 */ "kendali", "scurve", "boq_view", "finance_view", "notif"],
+  FINANCE: ["dash", "billable", "billing", "reports", "money", "documents", "audit", "sync_panel", "pesan",
+    /* V2.6 */ "boq_view", "finance", "notif"]
 };
 function can(p) { return S.user ? (PERM[S.user.role] || []).indexOf(p) >= 0 : false; }
 function isSite() { return S.user && S.user.role === "ADMIN_SITE"; }
@@ -976,6 +1169,14 @@ const QC_TYPES = ["Visual inspection", "Surface preparation (Sa 2.5 / St 3)",
 const PIHAK = ["HBM", "Palda", "Pertamina", "Vendor / Supplier", "Lainnya"];
 const PENGAWAS = ["Pengawas HBM", "Project Control HBM", "Pengawas Pertamina", "Representatif Palda"];
 const DECISION_BY = ["Project Control", "Operasional", "Finance", "Marketing", "Direktur", "Site / Lapangan"];
+
+/* ---------- PERALATAN HARIAN (Blueprint V2.9 sheet 21) ----------
+   Dicatat agar klaim standby dan alasan keterlambatan punya bukti, bukan
+   sekadar keterangan lisan saat rapat. */
+const ALAT_JENIS = ["Kompresor", "Blasting pot", "Airless sprayer", "Genset", "Scaffolding",
+  "Peralatan rope access", "Dehumidifier", "Pompa", "Kendaraan angkut", "Lainnya"];
+const ALAT_STATUS = ["OPERASI", "STANDBY", "RUSAK", "PERBAIKAN"];
+const ALAT_PIHAK = ["HBM", "Palda", "Sewa"];
 
 /* ---------- AUDIT ---------- */
 function audit(action, table, record_id, oldv, newv, reason) {
@@ -1076,7 +1277,10 @@ function totalLuasEksterior() {
 /* ---------- SINKRONISASI: daftar tabel & penanda hapus ---------- */
 const SYNC_TABLES = ["areas", "tanks", "spk", "spk_item", "bamk", "stages", "scopes", "messages", "bill_stages", "bill_steps", "targets", "dailies", "progress",
   "manpower", "materials", "photos", "qc", "hsse", "issues", "verifications", "acceptances",
-  "billables", "billings", "documents", "meetings", "actions", "reviews", "users", "audit"];
+  "billables", "billings", "documents", "meetings", "actions", "reviews", "users", "audit",
+  /* V2.6 — tabel tambahan dari Master Blueprint V2.9 */
+  "boq", "coatings", "jobs", "engineering", "calendar", "equipment",
+  "bakp_item", "billing_item", "payments", "notifs", "baselines"];
 const SYNC_KEY = {
   areas: "area_id", tanks: "tank_id", spk: "spk_id", spk_item: "spk_item_id",
   bamk: "bamk_id", stages: "stage_id", scopes: "scope_id", targets: "target_id",
@@ -1085,7 +1289,10 @@ const SYNC_KEY = {
   verifications: "verification_id", acceptances: "acceptance_id", billables: "billable_id",
   billings: "billing_id", documents: "document_id", meetings: "meeting_id", actions: "action_id",
   reviews: "review_id", messages: "msg_id", bill_stages: "bstage_id", bill_steps: "bstep_id",
-  users: "user_id", audit: "audit_id"
+  users: "user_id", audit: "audit_id",
+  boq: "boq_id", coatings: "coating_id", jobs: "job_id", engineering: "eng_id",
+  calendar: "cal_id", equipment: "equipment_id", bakp_item: "bitem_id",
+  billing_item: "bgitem_id", payments: "payment_id", notifs: "notif_id", baselines: "baseline_id"
 };
 /* Sidik jari isi satu baris, dipakai untuk mengenali baris mana yang berubah. */
 function sidikBaris(r) {
@@ -1273,6 +1480,448 @@ function sisaHariSPK(b) {
   return Math.round((z - n) / 86400000);
 }
 
+
+/* ============================================================
+   V2.6 — MESIN KENDALI (Master Blueprint V2.9 §3, §4, §6)
+   Dibangun di atas data yang sudah berjalan: Job berdiri di atas
+   pasangan SPK + tanki, dan seluruh angka di bawah ini dihitung dari
+   laporan harian yang sudah ada — tidak ada input ulang.
+   ============================================================ */
+
+/* ---------- KALENDER KERJA (sheet 14) ---------- */
+/* Satu tempat untuk menentukan hari mana yang dihitung sebagai hari kerja.
+   LIBUR mengeluarkan satu tanggal dari hitungan; KERJA_TAMBAHAN
+   memasukkan kembali tanggal yang biasanya libur (misalnya Minggu saat
+   ada perintah kerja akhir pekan dari Pertamina). */
+function kalenderPeta() {
+  const m = {};
+  (DB.calendar || []).forEach(c => { if (c.cal_date) m[c.cal_date] = c.day_type || "LIBUR"; });
+  (DB.config.holidays || []).forEach(d => { if (!m[d]) m[d] = "LIBUR"; });
+  return m;
+}
+function hariKerjaEfektif(iso, peta) {
+  peta = peta || kalenderPeta();
+  const t = peta[iso];
+  if (t === "KERJA_TAMBAHAN") return true;
+  if (t === "LIBUR") return false;
+  const dw = new Date(iso + "T00:00:00").getDay();
+  return dw !== 0;                         /* Minggu libur; Sabtu tetap hari kerja lapangan */
+}
+function hitungHariKerja(dari, sampai) {
+  if (!dari || !sampai) return 0;
+  const a = new Date(dari + "T00:00:00"), z = new Date(sampai + "T00:00:00");
+  if (z < a) return 0;
+  const peta = kalenderPeta();
+  let n = 0, c = new Date(a);
+  while (c <= z) {
+    const iso = c.getFullYear() + "-" + String(c.getMonth() + 1).padStart(2, "0") + "-" + String(c.getDate()).padStart(2, "0");
+    if (hariKerjaEfektif(iso, peta)) n++;
+    c.setDate(c.getDate() + 1);
+  }
+  return n;
+}
+function hitungHariKalender(dari, sampai) {
+  if (!dari || !sampai) return 0;
+  const a = new Date(dari + "T00:00:00"), z = new Date(sampai + "T00:00:00");
+  return z < a ? 0 : Math.round((z - a) / 86400000) + 1;
+}
+/* Tanggal selesai bila mulai hari ini dan sanggup n hari kerja lagi. */
+function majuHariKerja(mulai, n) {
+  if (!mulai || n <= 0) return mulai || "";
+  const peta = kalenderPeta();
+  let c = new Date(mulai + "T00:00:00"), sisa = Math.ceil(n), tahan = 0;
+  while (sisa > 0 && tahan < 3650) {
+    c.setDate(c.getDate() + 1); tahan++;
+    const iso = c.getFullYear() + "-" + String(c.getMonth() + 1).padStart(2, "0") + "-" + String(c.getDate()).padStart(2, "0");
+    if (hariKerjaEfektif(iso, peta)) sisa--;
+  }
+  return c.getFullYear() + "-" + String(c.getMonth() + 1).padStart(2, "0") + "-" + String(c.getDate()).padStart(2, "0");
+}
+
+/* ---------- JOB REGISTER (sheet 08) ---------- */
+const jobOf = id => byId(DB.jobs, "job_id", id);
+const jobNo = id => { const j = jobOf(id); return j ? j.job_no : "—"; };
+const jobsOfTank = id => DB.jobs.filter(j => j.tank_id === id);
+const jobsAktif = () => DB.jobs.filter(j => j.status === "ON_PROGRESS");
+const bamkOfJob = id => DB.bamk.filter(b => b.job_id === id);
+const TARGET_BASIS = [
+  { k: "ENGINEERING", t: "Engineering Survey" },
+  { k: "SPK_VOLUME", t: "SPK Volume" },
+  { k: "BAMK_VOLUME", t: "BAMK Volume" },
+  { k: "ALLOCATION", t: "Approved Allocation" }
+];
+/* Active Target — luas yang dikejar Job ini, menurut dasar yang dipilih. */
+function targetJob(j) {
+  if (!j) return 0;
+  const bs = bamkOfJob(j.job_id);
+  if (j.target_basis === "ENGINEERING") {
+    const e = DB.engineering.filter(x => x.job_id === j.job_id || x.tank_id === j.tank_id);
+    const v = e.reduce((a, x) => a + nz(x.shell_m2) + nz(x.roof_m2) + nz(x.acc_m2), 0);
+    if (v > 0) return v;
+  }
+  if (j.target_basis === "SPK_VOLUME") {
+    const it = DB.spk_item.filter(i => i.spk_id === j.spk_id && i.tank_id === j.tank_id);
+    const v = it.reduce((a, i) => a + nz(i.volume_qty) + nz(i.qty), 0);
+    if (v > 0) return v;
+  }
+  if (j.target_basis === "ALLOCATION" && nz(j.target_qty) > 0) return nz(j.target_qty);
+  const v = bs.reduce((a, b) => a + volBamk(b), 0);
+  return v > 0 ? v : nz(j.target_qty);
+}
+/* Luas terbobot yang sudah dikerjakan (m² setara selesai) pada satu Job. */
+function earnedJob(job_id) { return bamkOfJob(job_id).reduce((a, b) => a + earnedBamk(b.bamk_id), 0); }
+function verifiedJob(job_id) { return bamkOfJob(job_id).reduce((a, b) => a + verifiedEarnedBamk(b.bamk_id), 0); }
+/* Volume terverifikasi yang sudah ditimbang bobot tahapnya, sehingga
+   sebanding dengan target luas tanki. verifiedQtyOfBamk() yang lama tetap
+   dipakai apa adanya oleh gerbang BAKP dan tagihan, karena di sana yang
+   ditagihkan memang luas per tahap, bukan luas setara selesai. */
+function verifiedEarnedBamk(bamk_id) {
+  const pStage = {};
+  DB.progress.forEach(p => pStage[p.progress_id] = p.stage_id);
+  return DB.verifications.filter(v => v.bamk_id === bamk_id && v.status === "VERIFIED")
+    .reduce((a, v) => a + nz(v.verified_qty) * bobotTahap(pStage[v.progress_id]) / 100, 0);
+}
+function jendelaJob(j) {
+  const sp = spkOf(j && j.spk_id);
+  const b = bamkOfJob(j ? j.job_id : "")[0] || {};
+  return {
+    mulai: (sp && sp.start_date) || b.planned_start || "",
+    selesai: (sp && sp.finish_date) || b.planned_finish || ""
+  };
+}
+
+/* ---------- ACTIVE TANK CONTROL (Blueprint §4) ----------
+   Semua angka di bawah ini dihitung ulang setiap layar dibuka, tidak
+   disimpan, sehingga tidak pernah basi terhadap laporan harian terbaru. */
+function kendaliTanki(j) {
+  const w = jendelaJob(j), hari = today();
+  const target = targetJob(j);
+  const earned = earnedJob(j.job_id);
+  const verified = verifiedJob(j.job_id);
+  const sisaTarget = Math.max(0, target - earned);
+
+  const sisaKalender = w.selesai ? Math.round((new Date(w.selesai + "T00:00:00") - new Date(hari + "T00:00:00")) / 86400000) : null;
+  const sisaKerja = w.selesai && sisaKalender !== null && sisaKalender >= 0 ? hitungHariKerja(hari, w.selesai) : 0;
+  const totalKerja = w.mulai && w.selesai ? hitungHariKerja(w.mulai, w.selesai) : 0;
+  const lewatKerja = w.mulai ? hitungHariKerja(w.mulai, hari < (w.selesai || hari) ? hari : (w.selesai || hari)) : 0;
+
+  /* Garis rencana mengikuti dasar durasi yang tertulis di SPK (Blueprint §3).
+     SPK berhari kalender berarti target jalan terus walau hari libur; SPK
+     berhari kerja berarti libur tidak menambah tuntutan. Laju wajib tetap
+     dihitung per hari kerja, karena hari libur memang tidak bisa dipakai. */
+  const sp26 = spkOf(j && j.spk_id);
+  const pakaiKalender = sp26 && sp26.duration_type === "KALENDER";
+  const totalDur = pakaiKalender ? hitungHariKalender(w.mulai, w.selesai) : totalKerja;
+  const lewatDur = pakaiKalender
+    ? hitungHariKalender(w.mulai, hari < (w.selesai || hari) ? hari : (w.selesai || hari))
+    : lewatKerja;
+
+  const plan = totalDur > 0 ? target * Math.min(1, lewatDur / totalDur) : 0;
+  const variance = earned - plan;
+  const rateWajib = sisaKerja > 0 ? sisaTarget / sisaKerja : (sisaTarget > 0 ? Infinity : 0);
+  const rataAktual = lewatKerja > 0 ? earned / lewatKerja : 0;
+  const forecast = rataAktual > 0 && sisaTarget > 0 ? majuHariKerja(hari, sisaTarget / rataAktual)
+    : (sisaTarget <= 0 ? hari : "");
+
+  let status = "ON_TRACK";
+  if (plan > 0) {
+    if (earned >= plan * 1.02) status = "AHEAD";
+    else if (earned < plan * 0.98) status = "BEHIND";
+  } else if (sisaTarget > 0 && sisaKerja === 0 && w.selesai) status = "BEHIND";
+
+  return {
+    target, earned, verified, sisaTarget, sisaKalender, sisaKerja, totalKerja, lewatKerja,
+    dasarDurasi: pakaiKalender ? "KALENDER" : "KERJA",
+    plan, variance, rateWajib, rataAktual, forecast, status,
+    mulai: w.mulai, selesai: w.selesai,
+    persen: target > 0 ? Math.min(100, earned / target * 100) : 0
+  };
+}
+const STATUS_KENDALI = {
+  AHEAD: { t: "Lebih cepat", c: "teal" },
+  ON_TRACK: { t: "Sesuai rencana", c: "blue" },
+  BEHIND: { t: "Tertinggal", c: "red" }
+};
+
+/* ---------- BASELINE BOBOT (Blueprint §6) ---------- */
+/* Total bobot aktivitas yang disetujui wajib 100%. Selisih sekecil apa pun
+   membuat seluruh kurva-S salah, jadi disediakan pemeriksa tersendiri. */
+function bobotSah() { return Math.abs(totalBobot() - 100) < 0.01; }
+function baselineAktif() { return (DB.baselines || []).filter(b => b.active)[0] || null; }
+function simpanBaseline(alasan) {
+  (DB.baselines || []).forEach(b => b.active = false);
+  const rev = "R" + (DB.baselines || []).length;
+  const bl = {
+    baseline_id: uid("BL"), revision: rev, baseline_date: today(),
+    weights_json: JSON.stringify(tahapAktif().map(x => ({ stage_id: x.stage_id, weight_pct: nz(x.weight_pct) }))),
+    total_weight: totalBobot(), reason: alasan || "",
+    created_by: S.user ? S.user.user_name : "", active: true
+  };
+  DB.baselines.push(bl);
+  audit("CREATE", "17_SCURVE_BASELINE", bl.baseline_id, "", rev + " · " + (alasan || ""));
+  return bl;
+}
+
+/* ---------- KURVA S 5 SERI (Blueprint §6) ----------
+   Plan · Actual · Verified · Forecast · BAKP Accepted, pada level
+   Job/Tank, SPK, atau seluruh proyek 24 bulan. */
+function bulanAntara(dari, sampai) {
+  const out = [];
+  if (!dari || !sampai) return out;
+  let c = new Date(dari.slice(0, 7) + "-01T00:00:00");
+  const z = new Date(sampai.slice(0, 7) + "-01T00:00:00");
+  while (c <= z && out.length < 120) {
+    out.push(c.getFullYear() + "-" + String(c.getMonth() + 1).padStart(2, "0"));
+    c.setMonth(c.getMonth() + 1);
+  }
+  return out;
+}
+/* lingkup: {jenis:"PROYEK"} | {jenis:"SPK", id} | {jenis:"JOB", id} */
+function seriKurvaS(lingkup) {
+  lingkup = lingkup || { jenis: "PROYEK" };
+  let jobs = DB.jobs.slice();
+  if (lingkup.jenis === "SPK") jobs = jobs.filter(j => j.spk_id === lingkup.id);
+  if (lingkup.jenis === "JOB") jobs = jobs.filter(j => j.job_id === lingkup.id);
+
+  let mulai = DB.config.baseline_start, akhir = DB.config.baseline_end;
+  if (lingkup.jenis !== "PROYEK") {
+    const w = jobs.map(jendelaJob).filter(x => x.mulai && x.selesai);
+    if (w.length) {
+      mulai = w.map(x => x.mulai).sort()[0];
+      akhir = w.map(x => x.selesai).sort().slice(-1)[0];
+    }
+  }
+  const bulan = bulanAntara(mulai, akhir);
+  const target = jobs.reduce((a, j) => a + targetJob(j), 0);
+
+  /* Rencana: sebaran linier atas hari kerja efektif tiap bulan dalam
+     jendela masing-masing Job, bukan dibagi rata per bulan — bulan yang
+     banyak liburnya memang seharusnya menanggung target lebih kecil. */
+  const planBulan = {};
+  jobs.forEach(j => {
+    const w = jendelaJob(j); if (!w.mulai || !w.selesai) return;
+    const tot = hitungHariKerja(w.mulai, w.selesai); if (tot <= 0) return;
+    const tj = targetJob(j);
+    bulanAntara(w.mulai, w.selesai).forEach(m => {
+      const a = m + "-01";
+      const akhirBulan = new Date(+m.slice(0, 4), +m.slice(5, 7), 0);
+      const z = akhirBulan.getFullYear() + "-" + String(akhirBulan.getMonth() + 1).padStart(2, "0") + "-" + String(akhirBulan.getDate()).padStart(2, "0");
+      const d1 = a < w.mulai ? w.mulai : a, d2 = z > w.selesai ? w.selesai : z;
+      const hk = hitungHariKerja(d1, d2);
+      planBulan[m] = nz(planBulan[m]) + tj * hk / tot;
+    });
+  });
+
+  const jobIds = new Set(jobs.map(j => j.job_id));
+  const bamkIds = new Set(DB.bamk.filter(b => jobIds.has(b.job_id)).map(b => b.bamk_id));
+  const dOk = DB.dailies.filter(d => bamkIds.has(d.bamk_id) && d.status !== "REJECTED");
+  const tglDaily = {}; dOk.forEach(d => tglDaily[d.daily_id] = d.report_date);
+
+  const aktualBulan = {}, verBulan = {}, bakpBulan = {};
+  DB.progress.forEach(p => {
+    const tg = tglDaily[p.daily_id]; if (!tg) return;
+    const m = tg.slice(0, 7);
+    aktualBulan[m] = nz(aktualBulan[m]) + nz(p.actual_qty) * bobotTahap(p.stage_id) / 100;
+  });
+  const pStage = {}; DB.progress.forEach(p => pStage[p.progress_id] = p.stage_id);
+  DB.verifications.filter(v => v.status === "VERIFIED" && bamkIds.has(v.bamk_id)).forEach(v => {
+    const m = String(v.verified_date || today()).slice(0, 7);
+    verBulan[m] = nz(verBulan[m]) + nz(v.verified_qty) * bobotTahap(pStage[v.progress_id]) / 100;
+  });
+  DB.acceptances.filter(a => a.bakp_status === "APPROVED" && bamkIds.has(a.bamk_id)).forEach(a => {
+    const m = String(a.approved_date || a.acceptance_date || today()).slice(0, 7);
+    bakpBulan[m] = nz(bakpBulan[m]) + nz(a.approved_qty);
+  });
+
+  const bulanIni = monthOf(today());
+  let cp = 0, ca = 0, cv = 0, cb = 0;
+  const rows = bulan.map(m => {
+    cp += nz(planBulan[m]); ca += nz(aktualBulan[m]); cv += nz(verBulan[m]); cb += nz(bakpBulan[m]);
+    return {
+      bulan: m, plan: cp,
+      aktual: m <= bulanIni ? ca : null,
+      verified: m <= bulanIni ? cv : null,
+      bakp: m <= bulanIni ? cb : null
+    };
+  });
+
+  /* Forecast: melanjutkan dari aktual terakhir dengan produktivitas nyata
+     rata-rata, bukan dengan garis rencana. Inilah bedanya dengan Plan. */
+  const lewat = rows.filter(r => r.aktual !== null);
+  const akhirAktual = lewat.length ? lewat[lewat.length - 1].aktual : 0;
+  const bulanJalan = Math.max(1, lewat.length);
+  const laju = akhirAktual / bulanJalan;
+  let f = akhirAktual;
+  rows.forEach((r, i) => {
+    if (r.aktual !== null) { r.forecast = r.aktual; return; }
+    f = Math.min(target || f + laju, f + laju);
+    r.forecast = f;
+  });
+  return { rows, target, mulai, akhir, jumlahJob: jobs.length };
+}
+
+/* ---------- BOQ, PLAFON & KLAIM (Blueprint §9) ---------- */
+const boqOf = id => byId(DB.boq, "boq_id", id);
+function boqRollup(b) {
+  const qtyKontrak = nz(b.contract_qty);
+  const bakp = DB.bakp_item.filter(x => x.boq_id === b.boq_id).reduce((a, x) => a + nz(x.approved_qty), 0);
+  const klaim = DB.billing_item.filter(x => x.boq_id === b.boq_id).reduce((a, x) => a + nz(x.qty), 0);
+  const tersedia = Math.max(0, bakp - klaim);
+  return {
+    qtyKontrak, bakp, klaim, tersedia,
+    sisaQty: Math.max(0, qtyKontrak - klaim),
+    nilaiKontrak: qtyKontrak * nz(b.unit_price),
+    nilaiKlaim: klaim * nz(b.unit_price),
+    sisaNilai: Math.max(0, (qtyKontrak - klaim) * nz(b.unit_price)),
+    persen: qtyKontrak > 0 ? klaim / qtyKontrak * 100 : 0
+  };
+}
+/* Penjaga plafon: satu-satunya pintu yang boleh menambah klaim.
+   Mengembalikan pesan penolakan, atau "" bila boleh lewat. */
+function cekPlafon(boq_id, qty) {
+  const b = boqOf(boq_id);
+  if (!b) return "Baris BOQ tidak dikenali.";
+  const r = boqRollup(b);
+  if (nz(qty) <= 0) return "Qty klaim harus lebih dari nol.";
+  if (nz(qty) > r.tersedia + 0.0001)
+    return "Melebihi BAKP yang disetujui dan belum diklaim (tersedia " + fmt(r.tersedia, 2) + " " + b.unit + ").";
+  if (r.qtyKontrak > 0 && r.klaim + nz(qty) > r.qtyKontrak + 0.0001)
+    return "Melebihi plafon kontrak baris " + b.boq_code + " (sisa " + fmt(r.sisaQty, 2) + " " + b.unit + ").";
+  return "";
+}
+
+/* ---------- BAKP (Blueprint §8) ---------- */
+const STATUS_BAKP = ["DRAFT", "PREPARED", "SUBMITTED", "APPROVED", "RETURNED"];
+const BAKP_LABEL = {
+  DRAFT: { t: "Draft", c: "gray" }, PREPARED: { t: "Disiapkan", c: "blue" },
+  SUBMITTED: { t: "Diajukan", c: "amber" }, APPROVED: { t: "Disetujui", c: "teal" },
+  RETURNED: { t: "Dikembalikan", c: "red" }
+};
+/* Available for BAKP = Verified Cumulative − Previous BAKP Cumulative */
+function tersediaBakp(bamk_id) {
+  const v = verifiedQtyOfBamk(bamk_id);
+  const sudah = DB.acceptances.filter(a => a.bamk_id === bamk_id &&
+    (a.bakp_status === "APPROVED" || a.bakp_status === "SUBMITTED" || a.bakp_status === "PREPARED"))
+    .reduce((a2, x) => a2 + nz(x.submitted_qty), 0);
+  return Math.max(0, v - sudah);
+}
+function bakpDisetujui(bamk_id) {
+  return DB.acceptances.filter(a => a.bamk_id === bamk_id && a.bakp_status === "APPROVED")
+    .reduce((a, x) => a + nz(x.approved_qty), 0);
+}
+
+/* ---------- FINANCE & PEMBAYARAN (Blueprint §10) ---------- */
+function terbayar(billing_id) {
+  return DB.payments.filter(p => p.billing_id === billing_id).reduce((a, p) => a + nz(p.amount), 0);
+}
+function outstanding(b) { return Math.max(0, nz(b.invoice_value || b.billing_value) - terbayar(b.billing_id)); }
+function corongKomersial() {
+  const bakp = DB.acceptances.filter(a => a.bakp_status === "APPROVED").reduce((a, x) => a + nz(x.approved_qty), 0);
+  const layak = DB.billables.reduce((a, b) => a + nz(b.billable_qty), 0);
+  const nilaiTagih = DB.billings.reduce((a, b) => a + nz(b.invoice_value || b.billing_value), 0);
+  const dibayar = DB.payments.reduce((a, p) => a + nz(p.amount), 0);
+  return { bakp, layak, nilaiTagih, dibayar, outstanding: Math.max(0, nilaiTagih - dibayar) };
+}
+
+/* ---------- MESIN NOTIFIKASI (Blueprint §14) ----------
+   Peringatan dihitung ulang dari keadaan data, bukan disimpan saat
+   kejadian — sehingga peringatan yang penyebabnya sudah dibereskan
+   hilang dengan sendirinya, tanpa perlu ditutup satu per satu. */
+const SEVERITY = {
+  INFO: { t: "Info", c: "gray", u: 0 },
+  ATTENTION: { t: "Perhatian", c: "blue", u: 1 },
+  WARNING: { t: "Peringatan", c: "amber", u: 2 },
+  CRITICAL: { t: "Kritis", c: "red", u: 3 }
+};
+function hitungNotifikasi() {
+  const out = [], C = DB.config, hari = today();
+  const tambah = (sev, judul, isi, view, kunci) => out.push({ sev, judul, isi, view, kunci });
+
+  /* SPK mendekati / melewati tanggal selesai */
+  DB.spk.filter(x => x.status === "TERBIT" && x.finish_date).forEach(x => {
+    const sisa = Math.round((new Date(x.finish_date + "T00:00:00") - new Date(hari + "T00:00:00")) / 86400000);
+    if (sisa < 0) tambah("CRITICAL", "SPK " + x.spk_no + " sudah lewat tanggal selesai",
+      "Berakhir " + dateID(x.finish_date) + ", " + Math.abs(sisa) + " hari lalu. Perlu perpanjangan atau penutupan.", "master", "spk-" + x.spk_id);
+    else if (sisa <= nz(C.spk_alarm_h)) tambah("ATTENTION", "SPK " + x.spk_no + " mendekati tanggal selesai",
+      "Tersisa " + sisa + " hari kalender sampai " + dateID(x.finish_date) + ".", "master", "spk-" + x.spk_id);
+  });
+
+  /* Tanki tertinggal target & required rate melampaui produktivitas nyata */
+  jobsAktif().forEach(j => {
+    const k = kendaliTanki(j);
+    if (k.status === "BEHIND" && k.target > 0)
+      tambah("WARNING", "Tanki " + tankNo(j.tank_id) + " tertinggal dari rencana",
+        "Selisih " + fmt(Math.abs(k.variance), 1) + " m² di bawah garis rencana.", "tanks-status", "job-" + j.job_id);
+    if (k.rateWajib === Infinity && k.sisaTarget > 0)
+      tambah("CRITICAL", "Tanki " + tankNo(j.tank_id) + " tidak punya sisa hari kerja",
+        "Masih ada " + fmt(k.sisaTarget, 1) + " m² belum dikerjakan sementara jendela SPK sudah habis.", "tanks-status", "rate-" + j.job_id);
+    else if (k.rataAktual > 0 && k.rateWajib > k.rataAktual * 1.25)
+      tambah("CRITICAL", "Laju wajib tanki " + tankNo(j.tank_id) + " melampaui produktivitas nyata",
+        "Perlu " + fmt(k.rateWajib, 1) + " m²/hari, sementara rata-rata nyata baru " + fmt(k.rataAktual, 1) + " m²/hari.", "tanks-status", "rate-" + j.job_id);
+  });
+
+  /* Laporan harian tidak diisi */
+  bamkAktif().forEach(b => {
+    const d = DB.dailies.filter(x => x.bamk_id === b.bamk_id).map(x => x.report_date).sort();
+    const akhir = d.length ? d[d.length - 1] : "";
+    const jeda = akhir ? Math.round((new Date(hari + "T00:00:00") - new Date(akhir + "T00:00:00")) / 3600000) : null;
+    if (jeda !== null && jeda > nz(C.notif_daily_jam))
+      tambah("WARNING", "Belum ada laporan harian tanki " + tankNo(b.tank_id),
+        "Laporan terakhir " + dateID(akhir) + ".", "daily-list", "daily-" + b.bamk_id);
+  });
+
+  /* Verifikasi tertunda */
+  DB.dailies.filter(d => d.status === "SUBMITTED").forEach(d => {
+    const jam = d.submitted_at ? (Date.now() - new Date(d.submitted_at).getTime()) / 3600000 : null;
+    if (jam !== null && jam > nz(C.notif_verify_jam))
+      tambah("WARNING", "Verifikasi tertunda — " + tankNo(d.tank_id) + " " + dateID(d.report_date),
+        "Sudah " + Math.round(jam) + " jam menunggu di meja Project Control.", "review", "ver-" + d.daily_id);
+  });
+
+  /* QC perlu perbaikan */
+  DB.qc.filter(q => q.rework_required).forEach(q =>
+    tambah("WARNING", "Inspeksi menuntut perbaikan", (q.inspection_type || "Inspeksi") + " pada " + dateID(q.inspection_date) + ".", "review", "qc-" + q.inspection_id));
+
+  /* Kendala & action rapat lewat tenggat */
+  DB.issues.filter(i => i.status !== "CLOSED" && i.target_date && i.target_date < hari).forEach(i =>
+    tambah("WARNING", "Kendala melewati tenggat", (i.description || "").slice(0, 80) + " — target " + dateID(i.target_date) + ".", "issues", "iss-" + i.issue_id));
+  DB.actions.filter(a => ["DONE", "CANCELLED"].indexOf(a.status) < 0 && a.due_date && a.due_date < hari).forEach(a =>
+    tambah("WARNING", "Action rapat overdue", (a.action || a.description || "").slice(0, 80) + " — jatuh tempo " + dateID(a.due_date) + ".", "meeting", "act-" + a.action_id));
+
+  /* BAKP menunggu & peringatan plafon */
+  DB.acceptances.filter(a => a.bakp_status === "SUBMITTED").forEach(a =>
+    tambah("ATTENTION", "BAKP " + a.bakp_no + " menunggu persetujuan", "Diajukan " + dateID(a.submitted_date) + ".", "acceptance", "bakp-" + a.acceptance_id));
+  DB.boq.forEach(b => {
+    const r = boqRollup(b);
+    if (r.qtyKontrak <= 0) return;
+    if (r.persen >= nz(C.alarm_kritis)) tambah("CRITICAL", "Plafon BOQ " + b.boq_code + " hampir habis", fmt(r.persen, 1) + "% dari qty kontrak sudah diklaim.", "boq", "boq-" + b.boq_id);
+    else if (r.persen >= nz(C.alarm_waspada)) tambah("WARNING", "Plafon BOQ " + b.boq_code + " perlu diwaspadai", fmt(r.persen, 1) + "% dari qty kontrak sudah diklaim.", "boq", "boq-" + b.boq_id);
+  });
+
+  /* Invoice jatuh tempo */
+  DB.billings.filter(b => b.invoice_date && outstanding(b) > 0).forEach(b => {
+    const umur = businessDays(b.invoice_date, hari);
+    if (umur > nz(C.notif_invoice_h)) tambah("ATTENTION", "Tagihan " + (b.billing_no || b.billing_id) + " belum lunas",
+      "Umur " + umur + " hari kerja sejak invoice, sisa " + rupiah(outstanding(b)) + ".", "finance", "inv-" + b.billing_id);
+  });
+
+  /* Bobot baseline tidak 100% — akar dari semua kurva-S yang salah */
+  if (!bobotSah()) tambah("CRITICAL", "Total bobot tahapan bukan 100%",
+    "Sekarang " + fmt(totalBobot(), 2) + "%. Seluruh persentase progress dan kurva-S ikut melenceng sampai ini dibetulkan.", "master", "bobot");
+
+  out.sort((a, b) => SEVERITY[b.sev].u - SEVERITY[a.sev].u);
+  return out;
+}
+function notifTerbaca() { try { return JSON.parse(localStorage.getItem("hbm_notif_baca") || "[]"); } catch (e) { return []; } }
+function tandaiNotifBaca(kunci) {
+  const b = notifTerbaca(); kunci.forEach(k => { if (b.indexOf(k) < 0) b.push(k); });
+  try { localStorage.setItem("hbm_notif_baca", JSON.stringify(b.slice(-400))); } catch (e) { }
+}
+function jumlahNotifBaru() {
+  const b = new Set(notifTerbaca());
+  return hitungNotifikasi().filter(n => !b.has(n.kunci)).length;
+}
+
 /* ---------- LOGIN ---------- */
 function paintLogo(node) {
   const custom = !!DB.config.logo;
@@ -1347,19 +1996,26 @@ const NAV = [
   { g: "Kendali" },
   { v: "dashboard", t: "Dashboard", i: "▤", p: "dash" },
   { v: "tanks-status", t: "Status Tanki", i: "⬢", p: "dash" },
+  { v: "kendali", t: "Active Tank Control", i: "◎", p: "kendali" },
+  { v: "scurve", t: "Kurva S & Baseline", i: "∿", p: "scurve" },
   { g: "Lapangan" },
   { v: "daily-new", t: "Buat Laporan Harian", i: "✎", p: "daily_input" },
   { v: "daily-list", t: "Daftar Laporan", i: "☰", p: "daily_input", badge: "dikembalikan" },
   { v: "daily-list", t: "Laporan Harian", i: "☰", p: "daily_all", hideIf: "daily_input" },
   { g: "Verifikasi" },
   { v: "review", t: "Review & Verifikasi", i: "✓", p: "review", badge: "review" },
-  { v: "acceptance", t: "Penerimaan Volume", i: "⊕", p: "accept" },
+  { v: "acceptance", t: "BAKP", i: "⊕", p: "accept" },
   { v: "billable", t: "Gerbang Layak Tagih", i: "⛁", p: "billable" },
   { g: "Komersial" },
+  { v: "boq", t: "BOQ & Plafon", i: "⊞", p: "boq" },
+  { v: "boq", t: "BOQ & Plafon", i: "⊞", p: "boq_view", hideIf: "boq" },
   { v: "billing", t: "Tracking Tagihan", i: "₹", p: "billing" },
   { v: "billing", t: "Tracking Tagihan", i: "₹", p: "billing_view", hideIf: "billing" },
+  { v: "finance", t: "Invoice & Pembayaran", i: "₪", p: "finance" },
+  { v: "finance", t: "Invoice & Pembayaran", i: "₪", p: "finance_view", hideIf: "finance" },
   { v: "documents", t: "Register Dokumen", i: "❑", p: "documents" },
   { g: "Kendali Lain" },
+  { v: "notif", t: "Pusat Peringatan", i: "◉", p: "notif", badge: "notif" },
   { v: "issues", t: "Kendala & Delay", i: "⚠", p: "issues" },
   { v: "issues", t: "Kendala & Delay", i: "⚠", p: "issues_view", hideIf: "issues" },
   { v: "meeting", t: "Rapat & Tindak Lanjut", i: "◷", p: "meeting" },
@@ -1383,6 +2039,7 @@ function navCount(k) {
     return r.length;
   }
   if (k === "pesan") return pesanBelumDibaca();
+  if (k === "notif") return jumlahNotifBaru();
   return 0;
 }
 function paintNav() {
@@ -1422,20 +2079,26 @@ function boot() {
 const TITLES = {
   dashboard: ["Dashboard", "Ringkasan kendali proyek"],
   "tanks-status": ["Status Tanki", "Siklus hidup 12 tanki program"],
+  kendali: ["Active Tank Control", "Sisa waktu, laju wajib, dan perkiraan selesai per tanki"],
+  scurve: ["Kurva S & Baseline", "Rencana · Realisasi · Terverifikasi · BAKP · Forecast"],
+  boq: ["BOQ & Plafon", "Plafon kontrak, serapan, dan sisa yang boleh diklaim"],
+  finance: ["Invoice & Pembayaran", "Nilai tagihan, pembayaran sebagian, dan outstanding"],
+  notif: ["Pusat Peringatan", "Dihitung ulang dari keadaan data, bukan daftar lama"],
   "daily-new": ["Buat Laporan Harian", "Satu input untuk rekap harian, mingguan, bulanan"],
   "daily-list": ["Laporan Harian", "Riwayat dan status laporan"],
   review: ["Review & Verifikasi", "Gerbang: realisasi menjadi terverifikasi"],
-  acceptance: ["Penerimaan Volume", "Gerbang: terverifikasi menjadi diterima"],
+  acceptance: ["BAKP — Penerimaan Volume", "Gerbang: terverifikasi menjadi disetujui lewat dokumen BAKP"],
   billable: ["Gerbang Layak Tagih", "Gerbang: volume diterima menjadi layak tagih"],
   billing: ["Tracking Tagihan", "Umur tagihan dihitung hari kerja"],
   documents: ["Register Dokumen", "Kelengkapan dokumen dasar tagihan"],
   issues: ["Kendala & Delay", "Hambatan, dampak dan tindakan"],
   meeting: ["Rapat & Tindak Lanjut", "Notulen dan action tracker"],
   reports: ["Rekap & Laporan", "Harian, mingguan, bulanan"],
-  master: ["Master Data", "Area, tanki, SPK, BAMK, tahapan, scope, target"],
+  master: ["Master Data", "Area, tanki, SPK, Job, BAMK, engineering, tahapan, scope, sistem cat, kalender, target"],
   settings: ["Pengaturan", "Proyek, pengguna, kalender, cadangan"],
   audit: ["Log Audit", "Jejak perubahan data penting"],
-  sync: ["Sinkronisasi", "Menyatukan data perangkat ini dengan kantor"]
+  sync: ["Sinkronisasi", "Menyatukan data perangkat ini dengan kantor"],
+  pesan: ["Pesan", "Koordinasi antar peran, per tanki dan umum"]
 };
 function render() {
   const t = TITLES[S.view] || ["—", ""];
@@ -1717,6 +2380,24 @@ VIEWS.dashboard = {
       return { t, base, v, p: pct(v, base) };
     }).filter(r => r.base > 0 || r.v > 0).sort((a, b) => b.p - a.p);
 
+
+    /* V2.6 — Ringkasan eksekutif satu layar (Blueprint §11).
+       Angka yang sama dengan Active Tank Control, hanya diringkas ke
+       tingkat proyek supaya Management tidak perlu membuka per tanki. */
+    const K26 = jobsAktif().map(j => ({ j, k: kendaliTanki(j) }));
+    const sisaKal26 = DB.config.baseline_end
+      ? Math.round((new Date(DB.config.baseline_end + "T00:00:00") - new Date(today() + "T00:00:00")) / 86400000) : null;
+    const rateWajib26 = K26.reduce((a, x) => a + (x.k.rateWajib === Infinity ? 0 : x.k.rateWajib), 0);
+    const rataNyata26 = K26.reduce((a, x) => a + x.k.rataAktual, 0);
+    const plan26 = K26.reduce((a, x) => a + x.k.plan, 0);
+    const aktual26 = K26.reduce((a, x) => a + x.k.earned, 0);
+    const ver26 = K26.reduce((a, x) => a + x.k.verified, 0);
+    const beresiko26 = K26.filter(x => x.k.status === "BEHIND");
+    const forecast26 = K26.map(x => x.k.forecast).filter(Boolean).sort().slice(-1)[0] || "";
+    const corong26 = corongKomersial();
+    const notif26 = hitungNotifikasi();
+    const kritis26 = notif26.filter(n => n.sev === "CRITICAL").length;
+
     const money = can("money");
     return `
     <div class="grid g4">
@@ -1731,6 +2412,58 @@ VIEWS.dashboard = {
       ${money ? `<div class="kpi red"><div class="eyebrow">Outstanding tagihan</div><div class="v" style="font-size:18px">${rupiah(outstanding)}</div><div class="sub">${DB.billings.filter(b => b.status !== "PAID").length} tagihan berjalan</div></div>` : ""}
       <div class="kpi red"><div class="eyebrow">Kendala terbuka</div><div class="v">${openIssue}</div><div class="sub">belum ditutup</div></div>
     </div>
+
+
+    <div class="card mt16"><h3>Ringkasan eksekutif
+      <span class="tiny muted">periode kontrak ${esc(monthID(String(DB.config.baseline_start).slice(0, 7)))} – ${esc(monthID(String(DB.config.baseline_end).slice(0, 7)))}</span>
+      <button class="btn sm" data-dash="kendali">Buka Active Tank Control</button></h3>
+      <div class="body">
+        <div class="grid g4">
+          <div><div class="eyebrow">Sisa waktu kontrak</div>
+            <div class="num" style="font-size:19px;font-weight:700">${sisaKal26 === null ? "—" : (sisaKal26 < 0 ? "lewat " + Math.abs(sisaKal26) + " hari" : fmt0(sisaKal26) + " hari")}</div>
+            <div class="tiny muted">${K26.length} tanki sedang berjalan</div></div>
+          <div><div class="eyebrow">Rencana / realisasi</div>
+            <div class="num" style="font-size:19px;font-weight:700">${fmt(aktual26, 0)} / ${fmt(plan26, 0)}</div>
+            <div class="tiny muted">m² setara selesai · terverifikasi ${fmt(ver26, 0)}</div></div>
+          <div><div class="eyebrow">Deviasi</div>
+            <div class="num" style="font-size:19px;font-weight:700;color:${aktual26 - plan26 < 0 ? "var(--red)" : "var(--teal)"}">${aktual26 - plan26 >= 0 ? "+" : ""}${fmt(aktual26 - plan26, 0)}</div>
+            <div class="tiny muted">m² terhadap garis rencana</div></div>
+          <div><div class="eyebrow">Laju wajib vs nyata</div>
+            <div class="num" style="font-size:19px;font-weight:700;color:${rateWajib26 > rataNyata26 * 1.25 && rataNyata26 > 0 ? "var(--red)" : "inherit"}">${fmt(rateWajib26, 1)} / ${fmt(rataNyata26, 1)}</div>
+            <div class="tiny muted">m² per hari kerja</div></div>
+        </div>
+        <div class="grid g2 mt16">
+          <div><div class="eyebrow">Perkiraan seluruh tanki berjalan selesai</div>
+            <div class="num" style="font-size:16px;font-weight:700">${forecast26 ? dateID(forecast26) : "belum dapat dihitung"}</div></div>
+          <div><div class="eyebrow">Risiko</div>
+            <div style="font-size:13px">${beresiko26.length
+              ? beresiko26.map(x => `<span class="b red" style="margin:2px 4px 2px 0">${esc(tankNo(x.j.tank_id))}</span>`).join("")
+              : `<span class="b teal">Tidak ada tanki yang tertinggal</span>`}
+              ${kritis26 ? `<span class="b red" style="margin-left:6px">${kritis26} peringatan kritis</span>` : ""}</div></div>
+        </div>
+      </div></div>
+
+    ${money ? `<div class="card"><h3>Corong komersial
+      <span class="tiny muted">BAKP → layak tagih → invoice → dibayar → outstanding</span>
+      <button class="btn sm" data-dash="finance">Buka Invoice &amp; Pembayaran</button></h3>
+      <div class="body"><div class="grid g4">
+        <div><div class="eyebrow">BAKP disetujui</div><div class="num" style="font-size:18px;font-weight:700">${fmt(corong26.bakp, 1)}</div><div class="tiny muted">m²</div></div>
+        <div><div class="eyebrow">Layak tagih</div><div class="num" style="font-size:18px;font-weight:700">${fmt(corong26.layak, 1)}</div><div class="tiny muted">m²</div></div>
+        <div><div class="eyebrow">Nilai tagihan</div><div class="num" style="font-size:16px;font-weight:700">${rupiah(corong26.nilaiTagih)}</div><div class="tiny muted">${DB.billings.length} tagihan</div></div>
+        <div><div class="eyebrow">Outstanding</div><div class="num" style="font-size:16px;font-weight:700;color:var(--red)">${rupiah(corong26.outstanding)}</div>
+          <div class="tiny muted">sudah dibayar ${rupiah(corong26.dibayar)}</div></div>
+      </div>
+      <div class="mt16">${barHtml(corong26.nilaiTagih > 0 ? corong26.dibayar / corong26.nilaiTagih * 100 : 0)}</div>
+      <div class="tiny muted mt8">Batang di atas adalah bagian tagihan yang sudah benar-benar masuk, bukan yang sudah dikirim.</div>
+      </div></div>` : ""}
+
+    ${notif26.length ? `<div class="card"><h3>Peringatan teratas
+      <button class="btn sm" data-dash="notif">Buka Pusat Peringatan</button></h3>
+      <div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Tingkat</th><th>Hal</th><th>Keterangan</th></tr></thead>
+      <tbody>${notif26.slice(0, 6).map(n => `<tr><td><span class="b ${SEVERITY[n.sev].c}">${SEVERITY[n.sev].t}</span></td>
+        <td><b>${esc(n.judul)}</b></td><td class="tiny">${esc(n.isi)}</td></tr>`).join("")}
+      </tbody></table></div></div></div>` : ""}
 
     ${spkGenting.length ? `<div class="card mt16"><h3>SPK mendekati batas waktu
       <span class="tiny muted">ambang ${nz(DB.config.spk_alarm_h)} hari, diatur di Pengaturan › Proyek</span></h3>
@@ -1781,6 +2514,10 @@ VIEWS.dashboard = {
     }).join("") || `<tr><td colspan="4"><div class="empty">Belum ada laporan harian.</div></td></tr>`}
         </tbody></table></div></div></div>
     </div>`;
+  },
+  bind() {
+    /* Drill-down dua arah: dari KPI ke layar rincinya, sesuai Blueprint §11. */
+    $$("[data-dash]").forEach(b => b.onclick = () => go(b.dataset.dash));
   }
 };
 function statusBadge(s, rev) {
@@ -1850,7 +2587,7 @@ function newDraft() {
     daily_id: null, report_date: today(), bamk_id: w ? w.bamk_id : "", weather: "Cerah", shift: "Harian",
     general_notes: "", status: "DRAFT", revision_no: 0,
     supervisor_side: PENGAWAS[0], supervisor_name: "",
-    progress: [], manpower: [], materials: [], photos: [],
+    progress: [], manpower: [], materials: [], equipment: [], photos: [],
     qc: { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "", ma4_known: false, ma4_date: "" },
     hsse: { permit_status: "", toolbox_status: "", fit_to_work: "", critical_finding: "", remarks: "" },
     issue: { category: "", description: "", impact: "", action: "", owner_side: "", owner: "" }
@@ -1867,6 +2604,7 @@ function loadDraft(id) {
     progress: DB.progress.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
     manpower: DB.manpower.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
     materials: DB.materials.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
+    equipment: (DB.equipment || []).filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
     photos: DB.photos.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
     qc: q ? Object.assign({ ma4_known: false, ma4_date: "" }, q) : { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "", ma4_known: false, ma4_date: "" },
     hsse: h ? Object.assign({}, h) : { permit_status: "", toolbox_status: "", fit_to_work: "", critical_finding: "", remarks: "" },
@@ -1952,9 +2690,14 @@ VIEWS["daily-new"] = {
     <div class="grid g2">
       <div class="card"><h3>3 · Tenaga kerja <button class="btn a sm" id="addMp">+ Tambah</button></h3>
         <div class="body"><div id="mpList"></div></div></div>
-      <div class="card"><h3>4 · Material & peralatan <button class="btn a sm" id="addMt">+ Tambah</button></h3>
+      <div class="card"><h3>4 · Material <button class="btn a sm" id="addMt">+ Tambah</button></h3>
         <div class="body"><div id="mtList"></div></div></div>
     </div>
+
+    <div class="card"><h3>4b · Peralatan <button class="btn a sm" id="addEq">+ Tambah</button></h3>
+      <div class="body"><div id="eqList"></div>
+        <div class="tiny muted mt8">Alat berstatus <b>Standby</b> atau <b>Rusak</b> adalah bukti tertulis saat
+          keterlambatan dipersoalkan, dan dasar bila ada klaim waktu tunggu.</div></div></div>
 
     <div class="card"><h3>5 · Foto bukti <span class="tiny muted">Before · Kegiatan · After · QC/HSSE</span></h3><div class="body">
       <div class="row">
@@ -2032,6 +2775,11 @@ VIEWS["daily-new"] = {
       d.hsse = { permit_status: $("#hPermit").value, toolbox_status: $("#hTool").value, fit_to_work: $("#hFtw").value, critical_finding: $("#hCrit").value, remarks: $("#hRem").value };
       d.issue = { category: $("#iCat").value, description: $("#iDesc").value, impact: $("#iImp").value, action: $("#iAct").value, owner_side: $("#iSide").value, owner: $("#iOwn").value };
     };
+    /* V2.6 — perbaikan: pada basis data yang masih kosong (belum ada BAMK
+       aktif), layar ini hanya menampilkan pesan tanpa borang, sehingga
+       seluruh pengait di bawah tidak punya sasaran. Sebelumnya hal itu
+       membuat layar Buat Laporan Harian gagal terbuka sama sekali. */
+    if (!$("#dWo")) return;
     $("#dWo").onchange = () => { pull(); d.progress = []; render(); };
 
     /* --- progress: bagian + tahap, isi luas hari ini saja --- */
@@ -2207,6 +2955,28 @@ VIEWS["daily-new"] = {
     $("#addMt").onclick = () => { d.materials.push({ item: "", qty: 0, unit: "", do_no: "", notes: "" }); drawMt(); };
     drawMt();
 
+    /* --- peralatan --- */
+    d.equipment = d.equipment || [];
+    const drawEq = () => {
+      $("#eqList").innerHTML = d.equipment.length ? d.equipment.map((m, i) => `
+        <div class="entry"><div class="eh"><b>Alat ${i + 1}</b><button class="btn d sm" data-de="${i}">Hapus</button></div>
+          <div class="fg c3">
+            <label class="f"><span>Jenis alat</span><select data-e="equipment_name" data-i="${i}">${listOpts(ALAT_JENIS, m.equipment_name, "— pilih alat —")}</select></label>
+            <label class="f"><span>Pemilik</span><select data-e="pihak" data-i="${i}">${listOpts(ALAT_PIHAK, m.pihak, "— pilih pihak —")}</select></label>
+            <label class="f"><span>Status</span><select data-e="status" data-i="${i}">${listOpts(ALAT_STATUS, m.status, "— pilih status —")}</select></label>
+          </div>
+          <div class="fg c3">
+            <label class="f"><span>Jumlah unit</span><input type="number" min="0" step="1" data-e="qty" data-i="${i}" value="${nz(m.qty)}"></label>
+            <label class="f"><span>Jam operasi</span><input type="number" min="0" step="any" data-e="hours" data-i="${i}" value="${nz(m.hours)}"></label>
+            <label class="f"><span>Keterangan</span><input type="text" data-e="notes" data-i="${i}" value="${esc(m.notes || "")}"></label>
+          </div></div>`).join("") : `<div class="empty">Belum ada peralatan tercatat.</div>`;
+      $$("#eqList [data-e]").forEach(el => el.oninput = () => d.equipment[+el.dataset.i][el.dataset.e] = el.value);
+      $$("#eqList [data-e]").forEach(el => el.onchange = () => d.equipment[+el.dataset.i][el.dataset.e] = el.value);
+      $$("#eqList [data-de]").forEach(b => b.onclick = () => { d.equipment.splice(+b.dataset.de, 1); drawEq(); });
+    };
+    $("#addEq").onclick = () => { d.equipment.push({ equipment_name: "", pihak: "", status: "OPERASI", qty: 1, hours: 0, notes: "" }); drawEq(); };
+    drawEq();
+
     /* --- foto --- */
     const drawPh = () => {
       $("#phList").innerHTML = d.photos.map((p, i) => `
@@ -2380,7 +3150,7 @@ function commitDaily(status) {
   /* Potret isi laporan sebelum ditimpa, untuk menyusun riwayat perubahan. */
   const sebelum = d.daily_id ? ringkasLaporan(id) : null;
 
-  ["progress", "manpower", "materials", "photos", "qc", "hsse", "issues"].forEach(k => {
+  ["progress", "manpower", "materials", "equipment", "photos", "qc", "hsse", "issues"].forEach(k => {
     const arr = DB[k]; if (!arr) return;
     for (let i = arr.length - 1; i >= 0; i--) if (arr[i].daily_id === id) {
       if (k === "issues" && arr[i].status === "CLOSED") continue;
@@ -2409,6 +3179,11 @@ function commitDaily(status) {
   }));
   d.manpower.forEach(m => DB.manpower.push({ manpower_id: uid("MP"), daily_id: id, bamk_id: d.bamk_id, pihak: m.pihak || "", category: m.category, worker_count: nz(m.worker_count), notes: m.notes || "" }));
   d.materials.forEach(m => DB.materials.push({ material_id: uid("MT"), daily_id: id, bamk_id: d.bamk_id, item: m.item, qty: nz(m.qty), unit: m.unit, do_no: m.do_no, notes: m.notes || "" }));
+  (d.equipment || []).forEach(m => DB.equipment.push({
+    equipment_id: uid("EQ"), daily_id: id, bamk_id: d.bamk_id, job_id: d.job_id || (w && w.job_id) || "",
+    equipment_name: m.equipment_name, pihak: m.pihak || "", status: m.status || "OPERASI",
+    qty: nz(m.qty), hours: nz(m.hours), notes: m.notes || ""
+  }));
   d.photos.forEach(p => DB.photos.push({ photo_id: uid("PH"), daily_id: id, bamk_id: d.bamk_id, tank_id: w.tank_id, photo_type: p.photo_type, file_url: p.file_url, caption: p.caption, taken_at: p.taken_at, uploaded_by: S.user.user_id }));
   if (d.qc.inspection_type || d.qc.result) DB.qc.push({ inspection_id: uid("QC"), bamk_id: d.bamk_id, daily_id: id, inspection_date: d.report_date, inspection_type: d.qc.inspection_type, result: d.qc.result, rework_required: !!d.qc.rework_required, reference_no: d.qc.reference_no, remarks: d.qc.remarks, ma4_known: !!d.qc.ma4_known, ma4_date: d.qc.ma4_date || "" });
   if (d.hsse.permit_status) DB.hsse.push({ hsse_id: uid("HS"), daily_id: id, bamk_id: d.bamk_id, permit_status: d.hsse.permit_status, toolbox_status: d.hsse.toolbox_status, fit_to_work: d.hsse.fit_to_work, critical_finding: d.hsse.critical_finding, remarks: d.hsse.remarks });
@@ -2534,7 +3309,7 @@ function hapusLaporan(id) {
     (rincian ? "Ikut terhapus: " + rincian + ".\n" : "") +
     "Tindakan ini tidak bisa dibatalkan dan akan tercatat di Log Audit.")) return;
 
-  ["progress", "manpower", "materials", "photos", "qc", "hsse", "issues", "verifications", "reviews"]
+  ["progress", "manpower", "materials", "equipment", "photos", "qc", "hsse", "issues", "verifications", "reviews"]
     .forEach(tab => {
       const kunci = SYNC_KEY[tab];
       (DB[tab] || []).filter(r => r.daily_id === id).forEach(r => tandaiHapus(tab, r[kunci]));
@@ -2975,54 +3750,172 @@ function reviewModal(id) {
    ============================================================ */
 VIEWS.acceptance = {
   html() {
-    const rows = DB.bamk.map(w => {
-      const v = verifiedQtyOfBamk(w.bamk_id), a = acceptedQtyOfBamk(w.bamk_id);
-      return { w, v, a, sisa: v - a };
-    }).filter(r => r.v > 0);
+    const siap = DB.bamk.map(w => ({ w, v: verifiedQtyOfBamk(w.bamk_id), t: tersediaBakp(w.bamk_id), d: bakpDisetujui(w.bamk_id) }))
+      .filter(r => r.v > 0);
+    const daftar = DB.acceptances.slice().reverse();
+    const adaBoq = DB.boq.length > 0;
     return `
-    <div class="note">Volume terverifikasi tidak otomatis menjadi diterima. Catat dasar penerimaan (BA, hasil inspeksi atau approval).</div>
-    <div class="card mt16"><h3>Volume siap diterima</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>BAMK</th><th>Tanki</th><th class="n">Terverifikasi</th><th class="n">Diterima</th><th class="n">Belum diterima</th><th></th></tr></thead>
-      <tbody>${rows.length ? rows.map(r => `<tr>
-        <td><b>${esc(r.w.bamk_no)}</b><div class="tiny muted">${esc(r.w.work_package)}</div></td>
-        <td>${esc(tankNo(r.w.tank_id))}</td><td class="n">${fmt(r.v, 1)}</td><td class="n">${fmt(r.a, 1)}</td>
-        <td class="n"><b>${fmt(r.sisa, 1)}</b></td>
-        <td class="right"><button class="btn p sm" data-acc="${r.w.bamk_id}" ${r.sisa <= 0 ? "disabled" : ""}>Terima</button></td></tr>`).join("")
-        : `<tr><td colspan="6"><div class="empty"><b>Belum ada volume terverifikasi</b>Selesaikan review laporan harian terlebih dahulu.</div></td></tr>`}
+    <div class="note">BAKP adalah dokumen penerimaan volume antara HBM dan pelaksana, dan menjadi satu-satunya
+      dasar yang boleh ditarik ke tagihan. Rumusnya tetap: <b>tersedia = terverifikasi kumulatif − BAKP sebelumnya</b>.
+      Qty yang diajukan dan qty yang disetujui disimpan terpisah, sehingga koreksi tidak menghapus angka yang pernah diajukan.</div>
+    ${adaBoq ? "" : `<div class="note warn mt12">Belum ada baris BOQ. BAKP tetap bisa dibuat, tetapi tanpa rincian per baris BOQ
+      penjagaan plafon kontrak di tahap tagihan tidak punya pegangan. Isi BOQ di menu <b>BOQ &amp; Plafon</b>.</div>`}
+
+    <div class="card mt16"><h3>Volume siap di-BAKP-kan</h3><div class="body flush"><div class="tw"><table>
+      <thead><tr><th>BAMK / tanki</th><th>Job</th><th class="n">Terverifikasi</th><th class="n">Sudah di-BAKP</th>
+        <th class="n">Disetujui</th><th class="n">Tersedia</th><th></th></tr></thead>
+      <tbody>${siap.length ? siap.map(r => `<tr>
+        <td><b>${esc(r.w.bamk_no)}</b><div class="tiny muted">${esc(tankNo(r.w.tank_id))}</div></td>
+        <td class="tiny">${esc(r.w.job_id ? jobNo(r.w.job_id) : "—")}</td>
+        <td class="n">${fmt(r.v, 1)}</td><td class="n">${fmt(r.v - r.t, 1)}</td>
+        <td class="n">${fmt(r.d, 1)}</td><td class="n"><b>${fmt(r.t, 1)}</b></td>
+        <td class="right">${can("accept") ? `<button class="btn p sm" data-bakp="${r.w.bamk_id}" ${r.t <= 0 ? "disabled" : ""}>Buat BAKP</button>` : ""}</td></tr>`).join("")
+        : `<tr><td colspan="7"><div class="empty"><b>Belum ada volume terverifikasi</b>Selesaikan review laporan harian terlebih dahulu.</div></td></tr>`}
       </tbody></table></div></div></div>
 
-    <div class="card"><h3>Riwayat penerimaan</h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Tanggal</th><th>BAMK</th><th class="n">Diterima</th><th>Referensi</th><th>Status</th><th>Catatan</th></tr></thead>
-      <tbody>${DB.acceptances.slice().reverse().map(a => `<tr><td class="num">${esc(a.acceptance_date)}</td>
-        <td>${esc(bamkNo(a.bamk_id))}</td><td class="n">${fmt(a.accepted_qty, 1)}</td><td>${esc(a.reference_no || "—")}</td>
-        <td><span class="b ${a.status === "ACCEPTED" ? "teal" : a.status === "REJECTED" ? "red" : "amber"}">${a.status === "ACCEPTED" ? "Diterima" : a.status === "REJECTED" ? "Ditolak" : "Menunggu"}</span></td>
-        <td class="tiny">${esc(a.remarks || "")}</td></tr>`).join("")
-      || `<tr><td colspan="6"><div class="empty">Belum ada penerimaan tercatat.</div></td></tr>`}
+    <div class="card"><h3>Daftar BAKP</h3><div class="body flush"><div class="tw"><table>
+      <thead><tr><th>No. BAKP</th><th>BAMK / tanki</th><th>Tanggal</th><th class="n">Diajukan</th><th class="n">Disetujui</th>
+        <th>Status</th><th>Rincian BOQ</th><th></th></tr></thead>
+      <tbody>${daftar.length ? daftar.map(a => {
+        const it = DB.bakp_item.filter(x => x.acceptance_id === a.acceptance_id);
+        const L = BAKP_LABEL[a.bakp_status] || BAKP_LABEL.DRAFT;
+        return `<tr>
+        <td><b class="num tiny">${esc(a.bakp_no || "—")}</b>${a.scan_url ? ` <a href="${esc(a.scan_url)}" target="_blank" class="tiny">pindaian</a>` : ""}</td>
+        <td>${esc(bamkNo(a.bamk_id))}<div class="tiny muted">${esc(tankNo((bamkOf(a.bamk_id) || {}).tank_id))}</div></td>
+        <td class="num tiny">${esc(a.acceptance_date)}</td>
+        <td class="n">${fmt(a.submitted_qty, 1)}</td>
+        <td class="n"><b>${fmt(a.approved_qty, 1)}</b></td>
+        <td><span class="b ${L.c}">${L.t}</span>${a.return_reason ? `<div class="tiny muted">${esc(a.return_reason)}</div>` : ""}</td>
+        <td class="tiny">${it.length ? it.map(x => esc((boqOf(x.boq_id) || {}).boq_code || "?") + " " + fmt(x.approved_qty || x.submitted_qty, 1)).join(" · ") : "—"}</td>
+        <td class="right">${can("accept") ? `<button class="btn sm" data-bkopen="${a.acceptance_id}">Buka</button>` : ""}</td></tr>`;
+      }).join("") : `<tr><td colspan="8"><div class="empty">Belum ada BAKP tercatat.</div></td></tr>`}
       </tbody></table></div></div></div>`;
   },
   bind() {
-    $$("[data-acc]").forEach(b => b.onclick = () => {
-      const w = bamkOf(b.dataset.acc), sisa = verifiedQtyOfBamk(w.bamk_id) - acceptedQtyOfBamk(w.bamk_id);
-      openModal("Penerimaan — " + w.bamk_no, `
-        <div class="fg c2">
-          <label class="f"><span>Tanggal penerimaan <em>*</em></span><input type="date" id="acDate" value="${today()}"></label>
-          <label class="f"><span>Volume diterima <em>*</em></span><input type="number" step="any" min="0" id="acQty" value="${sisa}"></label>
-          <label class="f"><span>Referensi BA / inspeksi</span><input type="text" id="acRef" placeholder="No. BA / laporan inspeksi"></label>
-          <label class="f"><span>Status</span><select id="acSt"><option value="ACCEPTED">Diterima</option><option value="PENDING">Menunggu</option><option value="REJECTED">Ditolak</option></select></label>
+    /* ---- Buat BAKP baru ---- */
+    $$("[data-bakp]").forEach(btn => btn.onclick = () => {
+      const w = bamkOf(btn.dataset.bakp), sisa = tersediaBakp(w.bamk_id);
+      const th = String(today()).slice(0, 4);
+      const urut = DB.acceptances.filter(a => String(a.bakp_no || "").indexOf("/" + th + "/") > 0).length + 1;
+      const nomor = "BAKP/HBM/" + th + "/" + String(urut).padStart(3, "0");
+      openModal("BAKP baru — " + w.bamk_no, `
+        <div class="fg c3">
+          <label class="f"><span>Nomor BAKP <em>*</em></span><input type="text" id="bkNo" value="${esc(nomor)}"></label>
+          <label class="f"><span>Tanggal <em>*</em></span><input type="date" id="bkDate" value="${today()}"></label>
+          <label class="f"><span>Volume diajukan <em>*</em></span><input type="number" step="any" min="0" id="bkQty" value="${sisa}"></label>
         </div>
-        <label class="f"><span>Catatan</span><input type="text" id="acRem"></label>
-        <div class="note">Maksimal yang dapat diterima: <b class="num">${fmt(sisa, 2)}</b></div>`,
-        `<button class="btn p" id="acSave">Simpan penerimaan</button>`);
-      $("#acSave").onclick = () => {
-        const q = nz($("#acQty").value);
-        if (q <= 0) return toast("Volume diterima harus lebih dari nol.", "err");
-        if (q > sisa + 0.0001) return toast("Volume melebihi yang terverifikasi.", "err");
+        ${DB.boq.length ? `<div class="mt16"><div class="eyebrow">Rincian per baris BOQ</div>
+          <div class="tiny muted" style="margin:4px 0 8px">Rincian ini yang nanti dipakai menjaga plafon kontrak saat ditagihkan.
+            Boleh dikosongkan bila belum dipilah, tetapi plafon per baris tidak akan terjaga.</div>
+          <div class="tw"><table><thead><tr><th>Kode</th><th>Uraian</th><th>Sat</th><th class="n">Sisa plafon</th><th class="n">Qty BAKP</th></tr></thead>
+          <tbody>${DB.boq.map(b => { const r = boqRollup(b); return `<tr>
+            <td><b>${esc(b.boq_code)}</b></td><td class="tiny">${esc(b.description)}</td><td class="tiny">${esc(b.unit)}</td>
+            <td class="n tiny">${r.qtyKontrak ? fmt(r.sisaQty, 1) : "—"}</td>
+            <td class="n"><input type="number" step="any" min="0" data-bq2="${b.boq_id}" value="0" style="width:110px;text-align:right"></td></tr>`; }).join("")}
+          </tbody></table></div></div>` : ""}
+        <div class="mt12">${kotakPindaian("bkScan", "")}</div>
+        <label class="f mt12"><span>Catatan</span><input type="text" id="bkRem"></label>
+        <div class="note mt12">Tersedia untuk di-BAKP-kan: <b class="num">${fmt(sisa, 2)}</b> m².
+          Nilai ini sudah dikurangi seluruh BAKP yang masih berjalan maupun yang sudah disetujui.</div>`,
+        `<button class="btn" id="bkDraft">Simpan draft</button><button class="btn p" id="bkSave">Simpan &amp; siapkan</button>`);
+      pasangPindaian("bkScan");
+      const simpan = status => {
+        const q = nz($("#bkQty").value);
+        if (!$("#bkNo").value.trim()) return toast("Nomor BAKP wajib diisi.", "err");
+        if (q <= 0) return toast("Volume yang diajukan harus lebih dari nol.", "err");
+        if (q > sisa + 0.0001) return toast("Volume melebihi yang terverifikasi dan belum di-BAKP-kan.", "err");
+        const rinci = $$("[data-bq2]").map(el => ({ boq_id: el.dataset.bq2, qty: nz(el.value) })).filter(x => x.qty > 0);
+        const jumlahRinci = rinci.reduce((a, x) => a + x.qty, 0);
+        if (rinci.length && Math.abs(jumlahRinci - q) > 0.01)
+          return toast("Jumlah rincian BOQ (" + fmt(jumlahRinci, 2) + ") tidak sama dengan volume yang diajukan (" + fmt(q, 2) + ").", "err");
+        for (const x of rinci) {
+          const b = boqOf(x.boq_id), r = boqRollup(b);
+          if (r.qtyKontrak > 0 && r.bakp + x.qty > r.qtyKontrak + 0.0001)
+            return toast("Baris " + b.boq_code + " melebihi qty kontrak (sisa " + fmt(r.qtyKontrak - r.bakp, 2) + " " + b.unit + ").", "err");
+        }
+        const id = uid("AC");
         DB.acceptances.push({
-          acceptance_id: uid("AC"), bamk_id: w.bamk_id, acceptance_date: $("#acDate").value,
-          accepted_qty: q, reference_no: $("#acRef").value, status: $("#acSt").value, remarks: $("#acRem").value
+          acceptance_id: id, bamk_id: w.bamk_id, job_id: w.job_id || "",
+          bakp_no: $("#bkNo").value.trim(), acceptance_date: $("#bkDate").value,
+          submitted_qty: q, approved_qty: 0, accepted_qty: 0,
+          bakp_status: status, status: "PENDING",
+          submitted_date: status === "PREPARED" ? $("#bkDate").value : "",
+          approved_date: "", approved_by: "", return_reason: "",
+          reference_no: "", scan_url: ($("#bkScan") || {}).value || "",
+          remarks: $("#bkRem").value, created_by: S.user.user_name
         });
-        audit("APPROVE", "16_ACCEPTANCE", w.bamk_id, "", q);
-        save(); closeModal(); toast("Penerimaan tercatat.", "ok"); render();
+        rinci.forEach(x => DB.bakp_item.push({
+          bitem_id: uid("BI"), acceptance_id: id, boq_id: x.boq_id,
+          submitted_qty: x.qty, approved_qty: 0, unit: (boqOf(x.boq_id) || {}).unit || "m2"
+        }));
+        audit("CREATE", "28_BAKP", id, "", $("#bkNo").value + " " + fmt(q, 2));
+        save(); closeModal(); toast("BAKP tersimpan.", "ok"); render();
+      };
+      $("#bkDraft").onclick = () => simpan("DRAFT");
+      $("#bkSave").onclick = () => simpan("PREPARED");
+    });
+
+    /* ---- Buka BAKP: ajukan, setujui, kembalikan ---- */
+    $$("[data-bkopen]").forEach(btn => btn.onclick = () => {
+      const a = byId(DB.acceptances, "acceptance_id", btn.dataset.bkopen);
+      const it = DB.bakp_item.filter(x => x.acceptance_id === a.acceptance_id);
+      const L = BAKP_LABEL[a.bakp_status] || BAKP_LABEL.DRAFT;
+      const bolehAjukan = a.bakp_status === "DRAFT" || a.bakp_status === "PREPARED" || a.bakp_status === "RETURNED";
+      const bolehPutus = a.bakp_status === "SUBMITTED";
+      openModal("BAKP " + (a.bakp_no || a.acceptance_id), `
+        <div class="tw"><table><tbody>
+          <tr><td>BAMK / tanki</td><td><b>${esc(bamkNo(a.bamk_id))}</b> · ${esc(tankNo((bamkOf(a.bamk_id) || {}).tank_id))}</td></tr>
+          <tr><td>Status</td><td><span class="b ${L.c}">${L.t}</span></td></tr>
+          <tr><td>Volume diajukan</td><td class="num">${fmt(a.submitted_qty, 2)} m²</td></tr>
+          <tr><td>Volume disetujui</td><td class="num"><b>${fmt(a.approved_qty, 2)} m²</b></td></tr>
+          ${a.return_reason ? `<tr><td>Alasan dikembalikan</td><td>${esc(a.return_reason)}</td></tr>` : ""}
+          ${a.scan_url ? `<tr><td>Pindaian</td><td><a href="${esc(a.scan_url)}" target="_blank">buka berkas</a></td></tr>` : ""}
+        </tbody></table></div>
+        ${it.length ? `<div class="mt16"><div class="eyebrow">Rincian per baris BOQ</div>
+          <div class="tw mt8"><table><thead><tr><th>Kode</th><th class="n">Diajukan</th><th class="n">${bolehPutus ? "Disetujui" : "Disetujui"}</th></tr></thead>
+          <tbody>${it.map(x => `<tr><td>${esc((boqOf(x.boq_id) || {}).boq_code || "?")}</td>
+            <td class="n">${fmt(x.submitted_qty, 2)}</td>
+            <td class="n">${bolehPutus ? `<input type="number" step="any" min="0" data-bi="${x.bitem_id}" value="${nz(x.submitted_qty)}" style="width:110px;text-align:right">` : fmt(x.approved_qty, 2)}</td></tr>`).join("")}
+          </tbody></table></div></div>` : ""}
+        ${bolehPutus ? `<label class="f mt16"><span>Volume disetujui (total)</span>
+          <input type="number" step="any" min="0" id="bkApp" value="${nz(a.submitted_qty)}"></label>
+          <label class="f"><span>Disetujui oleh</span><input type="text" id="bkBy" value="${esc(a.approved_by || "")}" placeholder="nama pejabat penandatangan"></label>` : ""}
+        <div class="note mt12">Qty yang diajukan tidak pernah ditimpa. Bila Pertamina atau pelaksana mengoreksi,
+          yang berubah hanya kolom disetujui — selisihnya tetap terlihat sebagai jejak.</div>`,
+        `${bolehAjukan ? `<button class="btn p" id="bkSubmit">Ajukan</button>` : ""}
+         ${bolehPutus ? `<button class="btn" id="bkBack">Kembalikan</button><button class="btn p" id="bkOk">Setujui</button>` : ""}`);
+
+      if ($("#bkSubmit")) $("#bkSubmit").onclick = () => {
+        a.bakp_status = "SUBMITTED"; a.submitted_date = today(); a.return_reason = "";
+        audit("SUBMIT", "28_BAKP", a.acceptance_id, "", a.bakp_no);
+        save(); closeModal(); toast("BAKP diajukan.", "ok"); render();
+      };
+      if ($("#bkBack")) $("#bkBack").onclick = () => {
+        const why = window.prompt("Alasan BAKP dikembalikan:");
+        if (!why) return;
+        a.bakp_status = "RETURNED"; a.return_reason = why; a.status = "REJECTED";
+        audit("RETURN", "28_BAKP", a.acceptance_id, a.bakp_no, why);
+        save(); closeModal(); toast("BAKP dikembalikan.", "ok"); render();
+      };
+      if ($("#bkOk")) $("#bkOk").onclick = () => {
+        const tot = nz($("#bkApp").value);
+        if (tot <= 0) return toast("Volume disetujui harus lebih dari nol.", "err");
+        if (tot > nz(a.submitted_qty) + 0.0001) return toast("Volume disetujui tidak boleh melebihi yang diajukan.", "err");
+        const rinci = $$("[data-bi]").map(el => ({ id: el.dataset.bi, q: nz(el.value) }));
+        if (rinci.length) {
+          const jml = rinci.reduce((x, y) => x + y.q, 0);
+          if (Math.abs(jml - tot) > 0.01)
+            return toast("Jumlah rincian BOQ (" + fmt(jml, 2) + ") tidak sama dengan total disetujui (" + fmt(tot, 2) + ").", "err");
+          for (const r of rinci) {
+            const x = byId(DB.bakp_item, "bitem_id", r.id), b = boqOf(x.boq_id);
+            if (x.submitted_qty + 0.0001 < r.q) return toast("Rincian " + (b ? b.boq_code : "?") + " melebihi yang diajukan.", "err");
+          }
+          rinci.forEach(r => { byId(DB.bakp_item, "bitem_id", r.id).approved_qty = r.q; });
+        }
+        a.bakp_status = "APPROVED"; a.approved_qty = tot; a.accepted_qty = tot;
+        a.status = "ACCEPTED"; a.approved_date = today(); a.approved_by = ($("#bkBy") || {}).value || "";
+        audit("APPROVE", "28_BAKP", a.acceptance_id, a.bakp_no, tot);
+        save(); closeModal(); toast("BAKP disetujui dan masuk pool layak tagih.", "ok"); render();
       };
     });
   }
@@ -3103,19 +3996,87 @@ VIEWS.billable = {
         save(); closeModal(); toast("Volume layak tagih dicatat.", "ok"); render();
       };
     });
+    /* V2.6 — pelepasan ke Finance sekarang lewat penjagaan plafon.
+       Klaim dipilah ke baris BOQ, dan setiap baris diperiksa terhadap dua
+       batas sekaligus: BAKP yang sudah disetujui tapi belum diklaim, dan
+       plafon qty kontrak. Klaim ganda tidak mungkin lolos karena yang
+       dihitung adalah seluruh baris billing_item yang pernah dibuat. */
     $$("[data-rel]").forEach(b => b.onclick = () => {
       const bl = byId(DB.billables, "billable_id", b.dataset.rel);
       const w = bamkOf(bl.bamk_id), sc = scopesOfBamk(bl.bamk_id)[0];
       const rate = sc ? nz(sc.contract_rate) : 0;
-      bl.released_date = today();
-      DB.billings.push({
-        billing_id: uid("BG"), billing_no: "", period: bl.period, bamk_id: bl.bamk_id,
-        billable_qty: bl.billable_qty, billing_value: rate * nz(bl.billable_qty),
-        doc_received_date: today(), review_date: "", approval_date: "", invoice_date: "", payment_date: "",
-        status: "DRAFT", current_pic: "Project Control", remarks: ""
-      });
-      audit("CREATE", "19_BILLING_TRACKING", bl.billable_id, "", "released");
-      save(); toast("Dilepas ke Finance dan masuk tracking tagihan.", "ok"); render();
+
+      if (!DB.boq.length) {
+        /* Tanpa BOQ tidak ada plafon yang bisa dijaga. Jalur lama tetap
+           dibuka supaya pekerjaan tidak berhenti, tetapi dikatakan apa
+           adanya bahwa penjagaan plafon belum aktif. */
+        if (!confirmBox("Belum ada baris BOQ, jadi plafon kontrak belum bisa dijaga untuk tagihan ini. Lanjutkan?")) return;
+        bl.released_date = today();
+        DB.billings.push({
+          billing_id: uid("BG"), billing_no: "", period: bl.period, bamk_id: bl.bamk_id,
+          spk_id: (w && w.spk_id) || "",
+          billable_qty: bl.billable_qty, billing_value: rate * nz(bl.billable_qty),
+          invoice_no: "", invoice_value: rate * nz(bl.billable_qty),
+          doc_received_date: today(), review_date: "", approval_date: "", invoice_date: "", payment_date: "",
+          status: "DRAFT", current_pic: "Project Control", remarks: ""
+        });
+        audit("CREATE", "30_BILLING", bl.billable_id, "", "dilepas tanpa BOQ");
+        save(); toast("Dilepas ke Finance. Plafon belum dijaga karena BOQ kosong.", "ok"); render();
+        return;
+      }
+
+      openModal("Lepas ke Finance — " + w.bamk_no, `
+        <div class="note">Pilah volume layak tagih <b class="num">${fmt(bl.billable_qty, 2)}</b> ke baris BOQ.
+          Kolom <b>siap klaim</b> adalah BAKP yang sudah disetujui dan belum pernah ditagihkan.</div>
+        <div class="tw mt12"><table><thead><tr><th>Kode</th><th>Uraian</th><th class="n">Siap klaim</th>
+          <th class="n">Sisa plafon</th><th class="n">Harga sat.</th><th class="n">Qty klaim</th></tr></thead>
+        <tbody>${DB.boq.map(q => { const r = boqRollup(q); return `<tr>
+          <td><b>${esc(q.boq_code)}</b></td><td class="tiny">${esc(q.description)}</td>
+          <td class="n">${fmt(r.tersedia, 2)}</td>
+          <td class="n tiny">${r.qtyKontrak ? fmt(r.sisaQty, 2) : "—"}</td>
+          <td class="n tiny">${nz(q.unit_price) ? rupiah(q.unit_price) : "—"}</td>
+          <td class="n"><input type="number" step="any" min="0" data-cl="${q.boq_id}" value="0" style="width:110px;text-align:right"></td></tr>`; }).join("")}
+        </tbody></table></div>
+        <div class="row mt12"><span class="small muted grow">Nilai tagihan dihitung dari harga satuan BOQ &times; qty klaim.</span>
+          <b class="num" id="clTotal">Rp 0</b></div>`,
+        `<button class="btn p" id="clOk">Lepas ke Finance</button>`);
+
+      const hitung = () => {
+        let v = 0;
+        $$("[data-cl]").forEach(el => v += nz(el.value) * nz((boqOf(el.dataset.cl) || {}).unit_price));
+        $("#clTotal").textContent = rupiah(v);
+        return v;
+      };
+      $$("[data-cl]").forEach(el => el.oninput = hitung);
+
+      $("#clOk").onclick = () => {
+        const baris = $$("[data-cl]").map(el => ({ boq_id: el.dataset.cl, qty: nz(el.value) })).filter(x => x.qty > 0);
+        if (!baris.length) return toast("Isi qty klaim minimal pada satu baris BOQ.", "err");
+        const jml = baris.reduce((a, x) => a + x.qty, 0);
+        if (jml > nz(bl.billable_qty) + 0.0001)
+          return toast("Jumlah klaim (" + fmt(jml, 2) + ") melebihi volume layak tagih (" + fmt(bl.billable_qty, 2) + ").", "err");
+        for (const x of baris) {
+          const tolak = cekPlafon(x.boq_id, x.qty);
+          if (tolak) return toast((boqOf(x.boq_id) || {}).boq_code + ": " + tolak, "err");
+        }
+        const nilai = hitung();
+        const bid = uid("BG");
+        bl.released_date = today();
+        DB.billings.push({
+          billing_id: bid, billing_no: "", period: bl.period, bamk_id: bl.bamk_id,
+          spk_id: (w && w.spk_id) || "", billable_qty: jml,
+          billing_value: nilai, invoice_no: "", invoice_value: nilai,
+          doc_received_date: today(), review_date: "", approval_date: "", invoice_date: "", payment_date: "",
+          status: "DRAFT", current_pic: "Project Control", remarks: ""
+        });
+        baris.forEach(x => DB.billing_item.push({
+          bgitem_id: uid("BX"), billing_id: bid, boq_id: x.boq_id, billable_id: bl.billable_id,
+          qty: x.qty, unit_price: nz((boqOf(x.boq_id) || {}).unit_price),
+          amount: x.qty * nz((boqOf(x.boq_id) || {}).unit_price)
+        }));
+        audit("CREATE", "30_BILLING", bid, "", fmt(jml, 2) + " · " + rupiah(nilai));
+        save(); closeModal(); toast("Dilepas ke Finance dan masuk tracking tagihan.", "ok"); render();
+      };
     });
   }
 };
@@ -3511,7 +4472,12 @@ function tahapTagihanModal(id) {
 /* ============================================================
    VIEW: REGISTER DOKUMEN
    ============================================================ */
-const DOC_TYPES = ["Laporan Harian", "Laporan Mingguan", "Laporan Bulanan", "Berita Acara", "Laporan QC", "Sertifikat Material / MTC", "CoC", "DO / Surat Material Masuk", "Foto Dokumentasi", "Lainnya"];
+/* Mengikuti struktur folder dokumen pada Blueprint V2.9 §13, supaya nama
+   jenis di aplikasi sama persis dengan nama folder di Google Drive. */
+const DOC_TYPES = ["Kontrak / KAK", "Master BOQ", "SPK", "Job / Engineering", "BAMK", "Schedule",
+  "Laporan Harian", "Laporan Mingguan", "Laporan Bulanan", "Laporan QC", "HSSE",
+  "Foto Dokumentasi", "BAKP", "Dokumen Tagihan", "Dokumen Finance", "Notulen Rapat",
+  "Berita Acara", "Sertifikat Material / MTC", "CoC", "DO / Surat Material Masuk", "Lainnya"];
 VIEWS.documents = {
   html() {
     const rw = can("documents") && !isSite();
@@ -3632,7 +4598,8 @@ VIEWS.issues = {
 function issueModal(id) {
   const i = id ? byId(DB.issues, "issue_id", id) : {
     issue_id: uid("IS"), daily_id: "", bamk_id: DB.bamk[0] ? DB.bamk[0].bamk_id : "", issue_date: today(),
-    category: "TEKNIS", description: "", impact: "", action: "", owner_side: "", owner: "", status: "OPEN"
+    category: "TEKNIS", description: "", impact: "", action: "", owner_side: "", owner: "",
+    target_date: "", status: "OPEN"
   };
   openModal(id ? "Ubah kendala" : "Kendala baru", `
     <div class="fg c3">
@@ -3643,7 +4610,10 @@ function issueModal(id) {
       <label class="f"><span>PIC dari pihak</span><select id="isSide">${listOpts(PIHAK, i.owner_side, "—")}</select></label>
       <label class="f"><span>Nama PIC</span><input type="text" id="isOwn" value="${esc(i.owner)}"></label>
       <label class="f"><span>Status</span><select id="isSt">${opts(["OPEN", "ON PROGRESS", "CLOSED"].map(x => ({ x })), i.status, o => o.x, o => o.x)}</select></label>
+      <label class="f"><span>Target penyelesaian</span><input type="date" id="isTgt" value="${esc(i.target_date || "")}"></label>
     </div>
+    <div class="note">Tanggal target inilah yang membuat kendala muncul sebagai peringatan di Pusat Peringatan
+      begitu terlampaui. Dikosongkan berarti kendala tidak pernah dianggap terlambat.</div>
     <label class="f"><span>Uraian</span><textarea id="isDesc">${esc(i.description)}</textarea></label>
     <label class="f"><span>Tindakan</span><textarea id="isAct">${esc(i.action)}</textarea></label>`,
     `<button class="btn p" id="isSave">Simpan</button>`);
@@ -3652,6 +4622,7 @@ function issueModal(id) {
     Object.assign(i, {
       issue_date: $("#isDt").value, bamk_id: $("#isWo").value, category: $("#isCat").value,
       impact: $("#isImp").value, owner_side: $("#isSide").value, owner: $("#isOwn").value, status: $("#isSt").value,
+      target_date: $("#isTgt").value,
       description: $("#isDesc").value, action: $("#isAct").value
     });
     if (!i.description) return toast("Isi uraian kendala.", "err");
@@ -3677,6 +4648,9 @@ VIEWS.meeting = {
       <div class="kpi teal"><div class="eyebrow">Selesai</div><div class="v">${DB.actions.length - openAct}</div><div class="sub">sudah ditutup</div></div>
     </div>
 
+    <div class="note mt16">Notulen tidak meminta pengisian ulang progress. Saat notulen dibuat, sistem memotret sendiri
+      angka rencana, realisasi, sisa target, laju wajib, kendala, BAKP, dan tagihan pada saat itu — dan angka itu
+      dibekukan, sehingga notulen lama tetap menunjukkan angka yang memang dibahas hari itu.</div>
     <div class="card mt16"><h3>Notulen rapat ${rw ? `<button class="btn a sm" id="mtNew">+ Notulen</button>` : ""}</h3>
       <div class="body flush"><div class="tw"><table>
       <thead><tr><th>Tanggal</th><th>Jenis</th><th>Peserta</th><th>Pokok bahasan &amp; penanggung jawab</th><th>Keputusan oleh</th><th>Status</th><th></th></tr></thead>
@@ -3688,7 +4662,7 @@ VIEWS.meeting = {
         : `<div class="small">${esc(m.summary || "—")}</div>`}</td>
         <td class="tiny">${esc(m.decision_by || "—")}</td>
         <td><span class="b ${m.status === "CLOSED" ? "teal" : "amber"}">${esc(m.status)}</span></td>
-        <td class="right">${rw ? `<button class="btn sm" data-mt="${m.meeting_id}">Ubah</button>` : ""}</td></tr>`).join("")
+        <td class="right">${m.snapshot && m.snapshot.diambil_pada ? `<button class="btn sm" data-snap="${m.meeting_id}">Angka rapat</button> ` : ""}${rw ? `<button class="btn sm" data-mt="${m.meeting_id}">Ubah</button>` : ""}</td></tr>`).join("")
         : `<tr><td colspan="7"><div class="empty"><b>Belum ada notulen</b>Catat pokok bahasan per baris berikut penanggung jawabnya.</div></td></tr>`}
       </tbody></table></div></div></div>
 
@@ -3746,6 +4720,10 @@ VIEWS.meeting = {
           action_required: draft.filter(p => p.topic).map(p => p.topic).join("; ")
         });
         if (!m.points.length && !m.summary) return toast("Isi minimal satu pokok bahasan.", "err");
+        /* V2.6 — potret angka dibekukan sekali, saat notulen dibuat.
+           Mengubah notulen lama tidak menulis ulang potretnya, supaya
+           angka yang dibahas hari itu tidak berubah belakangan. */
+        if (!m.snapshot) m.snapshot = snapshotRapat();
         if (!id) DB.meetings.push(m);
         audit(id ? "UPDATE" : "CREATE", "21_MEETING_LOG", m.meeting_id, "", m.status);
         save(); closeModal(); render();
@@ -3753,6 +4731,13 @@ VIEWS.meeting = {
     };
     if ($("#mtNew")) $("#mtNew").onclick = () => meetModal(null);
     $$("[data-mt]").forEach(b => b.onclick = () => meetModal(b.dataset.mt));
+    $$("[data-snap]").forEach(b => b.onclick = () => {
+      const m = byId(DB.meetings, "meeting_id", b.dataset.snap);
+      openModal("Angka pada saat rapat " + dateID(m.meeting_date),
+        `<div class="note">Potret ini dibekukan ${esc(waktuLokal(m.snapshot.diambil_pada))} dan tidak ikut berubah
+          walau data hari ini sudah maju. Itulah gunanya: notulen lama tetap dapat dipertanggungjawabkan.</div>
+        <div class="mt12">${snapshotHtml(m.snapshot)}</div>`, "");
+    });
 
     const actModal = id => {
       const a = id ? byId(DB.actions, "action_id", id) : {
@@ -3971,6 +4956,483 @@ function laporanKemajuanPengawas() {
     " &middot; posisi data " + esc(dateID(sampai)),
     bagian);
 }
+
+
+/* ---------- SNAPSHOT RAPAT (Blueprint V2.9 §12) ----------
+   Tidak ada pengisian ulang progress di modul rapat. Angka diambil dari
+   keadaan sistem pada saat rapat berlangsung dan dibekukan di situ,
+   sehingga notulen lama tetap memperlihatkan angka yang dibahas hari itu,
+   bukan angka hari ini. */
+function snapshotRapat() {
+  const K = jobsAktif().map(j => ({ j, k: kendaliTanki(j) }));
+  const c = corongKomersial();
+  const mingguIni = weekKey(today()).key;
+  const dMinggu = DB.dailies.filter(d => d.status !== "REJECTED" && d.report_date >= mingguIni);
+  const idMinggu = new Set(dMinggu.map(d => d.daily_id));
+  const qtyMinggu = DB.progress.filter(p => idMinggu.has(p.daily_id))
+    .reduce((a, p) => a + nz(p.actual_qty) * bobotTahap(p.stage_id) / 100, 0);
+  const notif = hitungNotifikasi();
+  return {
+    diambil_pada: new Date().toISOString(),
+    plan: K.reduce((a, x) => a + x.k.plan, 0),
+    aktual: K.reduce((a, x) => a + x.k.earned, 0),
+    verified: K.reduce((a, x) => a + x.k.verified, 0),
+    variance: K.reduce((a, x) => a + x.k.variance, 0),
+    progres_minggu_ini: qtyMinggu,
+    tanki_aktif: K.length,
+    tanki_tertinggal: K.filter(x => x.k.status === "BEHIND").map(x => tankNo(x.j.tank_id)),
+    sisa_target: K.reduce((a, x) => a + x.k.sisaTarget, 0),
+    sisa_hari_kerja: K.length ? Math.min.apply(null, K.map(x => x.k.sisaKerja)) : 0,
+    rate_wajib: K.reduce((a, x) => a + (x.k.rateWajib === Infinity ? 0 : x.k.rateWajib), 0),
+    rata_aktual: K.reduce((a, x) => a + x.k.rataAktual, 0),
+    forecast: K.map(x => x.k.forecast).filter(Boolean).sort().slice(-1)[0] || "",
+    issue_terbuka: DB.issues.filter(i => i.status !== "CLOSED").length,
+    qc_rework: DB.qc.filter(q => q.rework_required).length,
+    bakp_menunggu: DB.acceptances.filter(a => a.bakp_status === "SUBMITTED").length,
+    bakp_disetujui: c.bakp,
+    nilai_tagihan: c.nilaiTagih, dibayar: c.dibayar, outstanding: c.outstanding,
+    peringatan_kritis: notif.filter(n => n.sev === "CRITICAL").length
+  };
+}
+function snapshotHtml(sn) {
+  if (!sn) return "";
+  const b = (l, v, t) => `<tr><td>${l}</td><td class="n"><b>${v}</b></td><td class="tiny muted">${t || ""}</td></tr>`;
+  return `<div class="tw"><table><tbody>
+    ${b("Rencana s/d rapat", fmt(sn.plan, 1) + " m²")}
+    ${b("Realisasi setara selesai", fmt(sn.aktual, 1) + " m²", "terverifikasi " + fmt(sn.verified, 1) + " m²")}
+    ${b("Deviasi", (sn.variance >= 0 ? "+" : "") + fmt(sn.variance, 1) + " m²")}
+    ${b("Progres minggu berjalan", fmt(sn.progres_minggu_ini, 1) + " m²")}
+    ${b("Tanki aktif", sn.tanki_aktif, (sn.tanki_tertinggal || []).length ? "tertinggal: " + sn.tanki_tertinggal.join(", ") : "semua sesuai rencana")}
+    ${b("Sisa target", fmt(sn.sisa_target, 1) + " m²", "sisa hari kerja tersempit " + sn.sisa_hari_kerja)}
+    ${b("Laju wajib vs nyata", fmt(sn.rate_wajib, 1) + " / " + fmt(sn.rata_aktual, 1), "m² per hari kerja")}
+    ${b("Perkiraan selesai", sn.forecast ? dateID(sn.forecast) : "—")}
+    ${b("Kendala terbuka", sn.issue_terbuka, sn.qc_rework + " inspeksi menuntut perbaikan")}
+    ${b("BAKP", fmt(sn.bakp_disetujui, 1) + " m² disetujui", sn.bakp_menunggu + " menunggu persetujuan")}
+    ${b("Tagihan", rupiah(sn.nilai_tagihan), "dibayar " + rupiah(sn.dibayar) + " · outstanding " + rupiah(sn.outstanding))}
+  </tbody></table></div>`;
+}
+
+/* ============================================================
+   V2.6 — VIEW: ACTIVE TANK CONTROL (Blueprint V2.9 §4)
+   Satu layar untuk menjawab pertanyaan yang paling sering ditanyakan
+   di rapat: masih sanggup atau tidak. Semua angka dihitung dari
+   laporan harian yang sudah masuk, tanpa input tambahan.
+   ============================================================ */
+VIEWS.kendali = {
+  html() {
+    const jobs = jobsAktif();
+    if (!jobs.length) return `<div class="card"><div class="body"><div class="empty">
+      <b>Belum ada Job berjalan</b>Job terbentuk dari pasangan SPK + tanki. Buka Master Data &rsaquo; Job Register.</div></div></div>`;
+
+    const K = jobs.map(j => ({ j, k: kendaliTanki(j) }));
+    const tertinggal = K.filter(x => x.k.status === "BEHIND").length;
+    const totTarget = K.reduce((a, x) => a + x.k.target, 0);
+    const totEarned = K.reduce((a, x) => a + x.k.earned, 0);
+    const totSisa = K.reduce((a, x) => a + x.k.sisaTarget, 0);
+    const rataWajib = K.reduce((a, x) => a + (x.k.rateWajib === Infinity ? 0 : x.k.rateWajib), 0);
+    const rataNyata = K.reduce((a, x) => a + x.k.rataAktual, 0);
+
+    return `
+    <div class="grid g4">
+      <div class="kpi blue"><div class="eyebrow">Tanki berjalan</div><div class="v">${jobs.length}</div>
+        <div class="sub">${tertinggal ? tertinggal + " tertinggal dari rencana" : "semua sesuai atau lebih cepat"}</div></div>
+      <div class="kpi olive"><div class="eyebrow">Sisa target operasional</div><div class="v">${fmt(totSisa, 0)}</div>
+        <div class="sub">m² dari total ${fmt(totTarget, 0)} m²</div></div>
+      <div class="kpi ${rataWajib > rataNyata * 1.25 && rataNyata > 0 ? "red" : "teal"}"><div class="eyebrow">Laju wajib gabungan</div>
+        <div class="v">${fmt(rataWajib, 1)}</div><div class="sub">m²/hari kerja</div></div>
+      <div class="kpi teal"><div class="eyebrow">Produktivitas nyata</div><div class="v">${fmt(rataNyata, 1)}</div>
+        <div class="sub">m²/hari kerja, rata-rata sejak mulai</div></div>
+    </div>
+
+    <div class="note mt16">Hari kerja efektif mengikuti <b>Kalender Kerja</b> di Master Data: Minggu libur,
+      Sabtu tetap dihitung, kecuali tanggal yang Anda tandai sendiri. Laju wajib = sisa target ÷ sisa hari kerja efektif.</div>
+
+    ${K.map(x => {
+      const j = x.j, k = x.k, st = STATUS_KENDALI[k.status];
+      const kritis = k.rateWajib === Infinity || (k.rataAktual > 0 && k.rateWajib > k.rataAktual * 1.25);
+      return `
+      <div class="card mt16"><h3>Tanki ${esc(tankNo(j.tank_id))}
+        <span class="tiny muted">${esc(j.job_no)} · ${esc(spkNo(j.spk_id))}</span>
+        <span class="b ${st.c}">${st.t}</span></h3>
+        <div class="body">
+          <div class="grid g4">
+            <div><div class="eyebrow">Sisa hari kalender</div>
+              <div class="num" style="font-size:19px;font-weight:700">${k.sisaKalender === null ? "—" : (k.sisaKalender < 0 ? "lewat " + Math.abs(k.sisaKalender) : k.sisaKalender)}</div>
+              <div class="tiny muted">${k.selesai ? "sampai " + dateID(k.selesai) : "jendela SPK belum diisi"}</div></div>
+            <div><div class="eyebrow">Sisa hari kerja efektif</div>
+              <div class="num" style="font-size:19px;font-weight:700">${k.sisaKerja}</div>
+              <div class="tiny muted">dari ${k.totalKerja} hari kerja seluruh jendela</div></div>
+            <div><div class="eyebrow">Laju wajib per hari</div>
+              <div class="num" style="font-size:19px;font-weight:700;color:${kritis ? "var(--red)" : "inherit"}">${k.rateWajib === Infinity ? "∞" : fmt(k.rateWajib, 1)}</div>
+              <div class="tiny muted">produktivitas nyata ${fmt(k.rataAktual, 1)} m²/hari</div></div>
+            <div><div class="eyebrow">Perkiraan selesai</div>
+              <div class="num" style="font-size:19px;font-weight:700">${k.forecast ? dateID(k.forecast) : "—"}</div>
+              <div class="tiny muted">${k.forecast && k.selesai ? (k.forecast > k.selesai ? "melewati batas SPK" : "masih di dalam batas SPK") : "belum dapat dihitung"}</div></div>
+          </div>
+          <div class="mt16">${barHtml(k.persen)}</div>
+          <div class="tw mt12"><table><tbody>
+            <tr><td>Active Target</td><td class="n">${fmt(k.target, 2)} m²</td>
+                <td>Realisasi setara selesai</td><td class="n">${fmt(k.earned, 2)} m²</td></tr>
+            <tr><td>Sisa target operasional</td><td class="n"><b>${fmt(k.sisaTarget, 2)} m²</b></td>
+                <td>Terverifikasi setara selesai</td><td class="n">${fmt(k.verified, 2)} m²</td></tr>
+            <tr><td>Rencana s/d hari ini</td><td class="n">${fmt(k.plan, 2)} m²</td>
+                <td>Deviasi terhadap rencana</td><td class="n" style="color:${k.variance < 0 ? "var(--red)" : "var(--teal)"}"><b>${k.variance >= 0 ? "+" : ""}${fmt(k.variance, 2)} m²</b></td></tr>
+          </tbody></table></div>
+          ${kritis ? `<div class="note warn mt12">Laju yang dibutuhkan sudah melampaui kecepatan kerja yang terbukti di lapangan.
+            Yang bisa diubah hanya tiga: tambah hari kerja lewat kalender, tambah tenaga, atau ajukan perpanjangan SPK.</div>` : ""}
+        </div></div>`;
+    }).join("")}`;
+  },
+  bind() { }
+};
+
+/* ============================================================
+   V2.6 — VIEW: KURVA S (Blueprint V2.9 §6)
+   Lima seri: Rencana, Realisasi, Terverifikasi, Forecast, BAKP.
+   ============================================================ */
+function svgKurvaS(seri) {
+  const rows = seri.rows;
+  if (!rows.length) return `<div class="empty">Belum ada jendela waktu yang bisa digambar. Isi tanggal mulai dan selesai pada SPK.</div>`;
+  const W = 720, H = 260, pl = 56, pr = 14, pt = 14, pb = 32;
+  const semua = [];
+  rows.forEach(r => ["plan", "aktual", "verified", "bakp", "forecast"].forEach(k => { if (r[k] != null) semua.push(r[k]); }));
+  const max = Math.max(1, seri.target, ...semua);
+  const x = i => pl + (rows.length === 1 ? (W - pl - pr) / 2 : i * (W - pl - pr) / (rows.length - 1));
+  const y = v => pt + (H - pt - pb) * (1 - v / max);
+  const garis = k => {
+    let d = "", mulai = true;
+    rows.forEach((r, i) => {
+      if (r[k] == null) return;
+      d += (mulai ? "M" : "L") + x(i).toFixed(1) + " " + y(r[k]).toFixed(1) + " "; mulai = false;
+    });
+    return d.trim();
+  };
+  const grid = [0, .25, .5, .75, 1].map(f => {
+    const yy = pt + (H - pt - pb) * (1 - f);
+    return `<line x1="${pl}" y1="${yy}" x2="${W - pr}" y2="${yy}" stroke="#E4E9EE"/>
+      <text x="${pl - 6}" y="${yy + 4}" font-size="9" fill="#7A8B99" text-anchor="end">${fmt0(max * f)}</text>`;
+  }).join("");
+  const step = rows.length > 14 ? 3 : rows.length > 8 ? 2 : 1;
+  const labs = rows.map((r, i) => i % step ? "" :
+    `<text x="${x(i).toFixed(1)}" y="${H - 10}" font-size="9" fill="#7A8B99" text-anchor="middle">${r.bulan.slice(2)}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}${labs}
+    <path d="${garis("plan")}" fill="none" stroke="#1F5C99" stroke-width="2" stroke-dasharray="5 4"/>
+    <path d="${garis("forecast")}" fill="none" stroke="#7B5AA6" stroke-width="2" stroke-dasharray="2 3"/>
+    <path d="${garis("bakp")}" fill="none" stroke="#B5761F" stroke-width="2"/>
+    <path d="${garis("verified")}" fill="none" stroke="#0E6E6B" stroke-width="2.5"/>
+    <path d="${garis("aktual")}" fill="none" stroke="#B01C22" stroke-width="2.5"/></svg>
+    <div class="row tiny muted mt8">
+      <span style="color:#1F5C99">▬ Rencana</span>
+      <span style="color:#B01C22">▬ Realisasi</span>
+      <span style="color:#0E6E6B">▬ Terverifikasi</span>
+      <span style="color:#B5761F">▬ BAKP disetujui</span>
+      <span style="color:#7B5AA6">▬ Forecast</span></div>`;
+}
+VIEWS.scurve = {
+  html() {
+    const f = S.f.sc = S.f.sc || { jenis: "PROYEK", id: "" };
+    const seri = seriKurvaS({ jenis: f.jenis, id: f.id });
+    const akhir = seri.rows.filter(r => r.aktual !== null).slice(-1)[0] || null;
+    const dev = akhir ? akhir.aktual - akhir.plan : 0;
+    const sah = bobotSah();
+    const bl = baselineAktif();
+    return `
+    ${sah ? "" : `<div class="note warn">Total bobot tahapan sekarang <b>${fmt(totalBobot(), 2)}%</b>, bukan 100%.
+      Seluruh kurva di bawah ikut melenceng sampai bobotnya dibetulkan di Master Data &rsaquo; Tahapan.</div>`}
+    <div class="card ${sah ? "" : "mt16"}"><h3>Tingkat agregasi</h3><div class="body">
+      <div class="fg c3">
+        <label class="f"><span>Level</span><select id="scJenis">
+          <option value="PROYEK" ${f.jenis === "PROYEK" ? "selected" : ""}>Proyek 24 bulan</option>
+          <option value="SPK" ${f.jenis === "SPK" ? "selected" : ""}>Per SPK</option>
+          <option value="JOB" ${f.jenis === "JOB" ? "selected" : ""}>Per Job / tanki</option>
+        </select></label>
+        ${f.jenis === "SPK" ? `<label class="f"><span>SPK</span><select id="scId">
+          <option value="">— semua —</option>${opts(DB.spk, f.id, x => x.spk_id, x => x.spk_no)}</select></label>` : ""}
+        ${f.jenis === "JOB" ? `<label class="f"><span>Job</span><select id="scId">
+          <option value="">— semua —</option>${opts(DB.jobs, f.id, j => j.job_id, j => j.job_no + " · " + tankNo(j.tank_id))}</select></label>` : ""}
+      </div>
+    </div></div>
+
+    <div class="grid g4">
+      <div class="kpi blue"><div class="eyebrow">Target lingkup ini</div><div class="v">${fmt(seri.target, 0)}</div><div class="sub">m² dari ${seri.jumlahJob} Job</div></div>
+      <div class="kpi red"><div class="eyebrow">Realisasi kumulatif</div><div class="v">${fmt(akhir ? akhir.aktual : 0, 0)}</div>
+        <div class="sub">${seri.target > 0 ? fmt((akhir ? akhir.aktual : 0) / seri.target * 100, 1) + "% dari target" : "target belum diisi"}</div></div>
+      <div class="kpi ${dev < 0 ? "red" : "teal"}"><div class="eyebrow">Deviasi terhadap rencana</div>
+        <div class="v">${dev >= 0 ? "+" : ""}${fmt(dev, 0)}</div><div class="sub">m² pada bulan berjalan</div></div>
+      <div class="kpi olive"><div class="eyebrow">Jendela baseline</div><div class="v" style="font-size:15px">${esc(monthID(String(seri.mulai).slice(0, 7)))}</div>
+        <div class="sub">sampai ${esc(monthID(String(seri.akhir).slice(0, 7)))}</div></div>
+    </div>
+
+    <div class="card mt16"><h3>Kurva S — lima seri</h3><div class="body">${svgKurvaS(seri)}
+      <div class="tiny muted mt8"><b>Rencana</b> disebar menurut jumlah hari kerja efektif tiap bulan, bukan dibagi rata —
+        bulan yang banyak liburnya memang menanggung target lebih kecil. <b>Forecast</b> melanjutkan garis realisasi
+        dengan kecepatan nyata yang sudah terbukti, bukan dengan garis rencana.</div></div></div>
+
+    <div class="card"><h3>Baseline bobot tahapan
+      <span class="tiny muted">${bl ? "revisi aktif " + esc(bl.revision) + " · " + esc(dateID(bl.baseline_date)) : "belum ada baseline tersimpan"}</span>
+      ${can("master") ? `<button class="btn a sm" id="scBl">Bekukan baseline baru</button>` : ""}</h3>
+      <div class="body flush"><div class="tw"><table>
+        <thead><tr><th>Revisi</th><th>Tanggal</th><th class="n">Total bobot</th><th>Alasan revisi</th><th>Oleh</th><th></th></tr></thead>
+        <tbody>${(DB.baselines || []).slice().reverse().map(b => `<tr>
+          <td><b>${esc(b.revision)}</b></td><td class="num tiny">${esc(dateID(b.baseline_date))}</td>
+          <td class="n">${fmt(b.total_weight, 2)}%</td><td class="tiny">${esc(b.reason || "—")}</td>
+          <td class="tiny">${esc(b.created_by || "—")}</td>
+          <td>${b.active ? `<span class="b teal">Aktif</span>` : ""}</td></tr>`).join("")
+        || `<tr><td colspan="6"><div class="empty">Belum ada baseline tersimpan.</div></td></tr>`}
+        </tbody></table></div></div></div>`;
+  },
+  bind() {
+    const f = S.f.sc;
+    if ($("#scJenis")) $("#scJenis").onchange = e => { f.jenis = e.target.value; f.id = ""; render(); };
+    if ($("#scId")) $("#scId").onchange = e => { f.id = e.target.value; render(); };
+    if ($("#scBl")) $("#scBl").onclick = () => {
+      if (!bobotSah()) return toast("Total bobot harus 100% sebelum baseline dapat dibekukan.", "err");
+      openModal("Bekukan baseline baru", `
+        <div class="note">Baseline lama tidak dihapus — tetap tersimpan sebagai riwayat, sebagaimana diminta blueprint.</div>
+        <label class="f mt12"><span>Alasan revisi <em>*</em></span><input type="text" id="blWhy" placeholder="mis. perubahan lingkup setelah SPK G-3 terbit"></label>`,
+        `<button class="btn p" id="blOk">Bekukan</button>`);
+      $("#blOk").onclick = () => {
+        const why = $("#blWhy").value.trim();
+        if (!why) return toast("Alasan revisi wajib diisi.", "err");
+        simpanBaseline(why); save(); closeModal(); toast("Baseline dibekukan.", "ok"); render();
+      };
+    };
+  }
+};
+
+/* ============================================================
+   V2.6 — VIEW: BOQ & PLAFON (Blueprint V2.9 §9)
+   Harga satuan dan nilai kontrak adalah data komersial: tidak ikut
+   terkirim ke layar Admin Site, dan tidak ditampilkan di sini bila
+   perannya tidak berhak.
+   ============================================================ */
+VIEWS.boq = {
+  html() {
+    const lihatHarga = can("money");
+    const rows = DB.boq.map(b => ({ b, r: boqRollup(b) }));
+    const totKontrak = rows.reduce((a, x) => a + x.r.nilaiKontrak, 0);
+    const totKlaim = rows.reduce((a, x) => a + x.r.nilaiKlaim, 0);
+    const adaPlafon = rows.some(x => x.r.qtyKontrak > 0);
+    return `
+    <div class="note">Plafon dijaga di sini, bukan di layar tagihan. Klaim yang melebihi BAKP yang disetujui,
+      atau melebihi qty kontrak, ditolak sebelum tersimpan — bukan ditemukan belakangan saat Pertamina mengoreksi.</div>
+    ${adaPlafon ? "" : `<div class="note warn mt12">Qty kontrak seluruh baris masih nol, jadi penjagaan plafon kontrak belum aktif.
+      Isi qty kontrak dari BOQ resmi supaya batas atasnya punya arti.</div>`}
+
+    ${lihatHarga ? `<div class="grid g4 mt16">
+      <div class="kpi blue"><div class="eyebrow">Nilai kontrak</div><div class="v" style="font-size:17px">${rupiah(totKontrak)}</div><div class="sub">${rows.length} baris BOQ</div></div>
+      <div class="kpi teal"><div class="eyebrow">Sudah diklaim</div><div class="v" style="font-size:17px">${rupiah(totKlaim)}</div>
+        <div class="sub">${totKontrak > 0 ? fmt(totKlaim / totKontrak * 100, 1) + "% dari plafon" : "plafon belum diisi"}</div></div>
+      <div class="kpi olive"><div class="eyebrow">Sisa plafon</div><div class="v" style="font-size:17px">${rupiah(Math.max(0, totKontrak - totKlaim))}</div><div class="sub">belum diklaim</div></div>
+      <div class="kpi violet"><div class="eyebrow">Siap diklaim</div><div class="v">${fmt(rows.reduce((a, x) => a + x.r.tersedia, 0), 1)}</div><div class="sub">BAKP disetujui, belum ditagihkan</div></div>
+    </div>` : ""}
+
+    <div class="card mt16"><h3>Baris BOQ ${can("master") ? `<button class="btn a sm" id="bqNew">+ Baris BOQ</button>` : ""}</h3>
+      <div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Kode</th><th>Uraian</th><th>Sat</th><th class="n">Qty kontrak</th>
+        ${lihatHarga ? `<th class="n">Harga satuan</th><th class="n">Nilai kontrak</th>` : ""}
+        <th class="n">BAKP disetujui</th><th class="n">Diklaim</th><th class="n">Siap klaim</th><th class="n">Sisa qty</th><th>Serapan</th>${can("master") ? "<th></th>" : ""}</tr></thead>
+      <tbody>${rows.length ? rows.map(x => {
+        const b = x.b, r = x.r;
+        const warna = r.persen >= nz(DB.config.alarm_kritis) ? "red" : r.persen >= nz(DB.config.alarm_waspada) ? "amber" : "teal";
+        return `<tr>
+        <td><b>${esc(b.boq_code)}</b></td><td class="tiny">${esc(b.description)}</td><td class="tiny">${esc(b.unit)}</td>
+        <td class="n">${r.qtyKontrak ? fmt(r.qtyKontrak, 1) : `<span class="muted tiny">belum diisi</span>`}</td>
+        ${lihatHarga ? `<td class="n">${nz(b.unit_price) ? rupiah(b.unit_price) : "—"}</td><td class="n">${r.nilaiKontrak ? rupiah(r.nilaiKontrak) : "—"}</td>` : ""}
+        <td class="n">${fmt(r.bakp, 1)}</td><td class="n">${fmt(r.klaim, 1)}</td>
+        <td class="n"><b>${fmt(r.tersedia, 1)}</b></td>
+        <td class="n">${r.qtyKontrak ? fmt(r.sisaQty, 1) : "—"}</td>
+        <td>${r.qtyKontrak ? `<span class="b ${warna}">${fmt(r.persen, 1)}%</span>` : `<span class="b gray">—</span>`}</td>
+        ${can("master") ? `<td class="right"><button class="btn sm" data-bq="${b.boq_id}">Ubah</button></td>` : ""}</tr>`;
+      }).join("") : `<tr><td colspan="12"><div class="empty"><b>Belum ada baris BOQ</b>Masukkan BOQ resmi kontrak supaya plafon punya batas atas.</div></td></tr>`}
+      </tbody></table></div></div></div>`;
+  },
+  bind() {
+    const buka = id => {
+      const b = id ? boqOf(id) : {
+        boq_id: uid("BQ"), boq_code: "", description: "", unit: "m2", contract_qty: 0,
+        unit_price: 0, palda_price: 0, category: "UTAMA", active: true, revision: "R0", notes: ""
+      };
+      openModal(id ? "Ubah baris BOQ" : "Baris BOQ baru", `
+        <div class="fg c3">
+          <label class="f"><span>Kode <em>*</em></span><input type="text" id="qCode" value="${esc(b.boq_code)}"></label>
+          <label class="f"><span>Satuan</span><input type="text" id="qUnit" value="${esc(b.unit)}"></label>
+          <label class="f"><span>Qty kontrak</span><input type="number" step="any" id="qQty" value="${nz(b.contract_qty)}"></label>
+          <label class="f"><span>Harga satuan ke Pertamina</span><input type="number" step="any" id="qPrice" value="${nz(b.unit_price)}"></label>
+          <label class="f"><span>Harga ke pelaksana</span><input type="number" step="any" id="qPalda" value="${nz(b.palda_price)}"></label>
+          <label class="f"><span>Kategori</span><select id="qCat">${["UTAMA", "PENDUKUNG", "TAMBAHAN"].map(x => `<option ${b.category === x ? "selected" : ""}>${x}</option>`).join("")}</select></label>
+        </div>
+        <label class="f"><span>Uraian <em>*</em></span><input type="text" id="qDesc" value="${esc(b.description)}"></label>
+        <label class="f"><span>Catatan</span><input type="text" id="qNote" value="${esc(b.notes || "")}"></label>
+        <div class="note mt12">Harga satuan hanya terlihat oleh peran yang berhak atas data komersial.</div>`,
+        `${id ? `<button class="btn d" id="qDel">Hapus</button>` : ""}<button class="btn p" id="qSave">Simpan</button>`);
+      $("#qSave").onclick = () => {
+        const rec = sasaranSimpan(DB.boq, "boq_id", id, b); if (!rec) return;
+        Object.assign(rec, {
+          boq_code: $("#qCode").value.trim(), description: $("#qDesc").value.trim(), unit: $("#qUnit").value.trim() || "m2",
+          contract_qty: nz($("#qQty").value), unit_price: nz($("#qPrice").value), palda_price: nz($("#qPalda").value),
+          category: $("#qCat").value, notes: $("#qNote").value
+        });
+        if (!rec.boq_code || !rec.description) return toast("Kode dan uraian wajib diisi.", "err");
+        const r = boqRollup(rec);
+        if (nz(rec.contract_qty) > 0 && r.klaim > nz(rec.contract_qty) + 0.0001)
+          return toast("Qty kontrak lebih kecil dari yang sudah diklaim (" + fmt(r.klaim, 2) + " " + rec.unit + ").", "err");
+        if (!id) DB.boq.push(rec);
+        audit(id ? "UPDATE" : "CREATE", "04_BOQ_MASTER", rec.boq_id, "", rec.boq_code);
+        save(); closeModal(); toast("Baris BOQ tersimpan.", "ok"); render();
+      };
+      if ($("#qDel")) $("#qDel").onclick = () => {
+        const r = boqRollup(b);
+        if (r.bakp > 0 || r.klaim > 0) return toast("Baris ini sudah dipakai BAKP atau tagihan, jadi tidak dapat dihapus.", "err");
+        if (!confirmBox("Hapus baris BOQ " + b.boq_code + "?")) return;
+        DB.boq = DB.boq.filter(x => x.boq_id !== b.boq_id);
+        tandaiHapus("boq", b.boq_id);
+        audit("DELETE", "04_BOQ_MASTER", b.boq_id, b.boq_code, "");
+        save(); closeModal(); toast("Baris BOQ dihapus.", "ok"); render();
+      };
+    };
+    if ($("#bqNew")) $("#bqNew").onclick = () => buka(null);
+    $$("[data-bq]").forEach(b => b.onclick = () => buka(b.dataset.bq));
+  }
+};
+
+/* ============================================================
+   V2.6 — VIEW: FINANCE (Blueprint V2.9 §10)
+   Pembayaran dicatat per transaksi, sehingga pembayaran sebagian
+   terekam apa adanya dan outstanding selalu benar.
+   ============================================================ */
+VIEWS.finance = {
+  html() {
+    const c = corongKomersial();
+    const rows = DB.billings.slice().reverse();
+    return `
+    <div class="grid g4">
+      <div class="kpi blue"><div class="eyebrow">Nilai tagihan</div><div class="v" style="font-size:17px">${rupiah(c.nilaiTagih)}</div><div class="sub">${DB.billings.length} tagihan</div></div>
+      <div class="kpi teal"><div class="eyebrow">Sudah dibayar</div><div class="v" style="font-size:17px">${rupiah(c.dibayar)}</div><div class="sub">${DB.payments.length} transaksi</div></div>
+      <div class="kpi red"><div class="eyebrow">Outstanding</div><div class="v" style="font-size:17px">${rupiah(c.outstanding)}</div>
+        <div class="sub">${DB.billings.filter(b => outstanding(b) > 0).length} tagihan belum lunas</div></div>
+      <div class="kpi olive"><div class="eyebrow">BAKP disetujui</div><div class="v">${fmt(c.bakp, 1)}</div><div class="sub">m² dasar klaim</div></div>
+    </div>
+
+    <div class="card mt16"><h3>Tagihan &amp; pembayaran</h3><div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Tagihan</th><th>Periode</th><th>SPK</th><th class="n">Nilai invoice</th><th class="n">Dibayar</th>
+        <th class="n">Outstanding</th><th>Status</th><th>Umur</th><th></th></tr></thead>
+      <tbody>${rows.length ? rows.map(b => {
+        const bayar = terbayar(b.billing_id), sisa = outstanding(b);
+        const umur = b.invoice_date ? businessDays(b.invoice_date, today()) : null;
+        return `<tr>
+        <td><b>${esc(b.billing_no || b.billing_id)}</b>${b.invoice_no ? `<div class="tiny muted">inv ${esc(b.invoice_no)}</div>` : ""}</td>
+        <td class="num tiny">${esc(monthID(b.period))}</td>
+        <td class="tiny">${esc(spkNo(b.spk_id))}</td>
+        <td class="n">${rupiah(b.invoice_value || b.billing_value)}</td>
+        <td class="n">${rupiah(bayar)}</td>
+        <td class="n"><b style="color:${sisa > 0 ? "var(--red)" : "var(--teal)"}">${rupiah(sisa)}</b></td>
+        <td><span class="b ${sisa <= 0 && bayar > 0 ? "teal" : bayar > 0 ? "amber" : "gray"}">${sisa <= 0 && bayar > 0 ? "Lunas" : bayar > 0 ? "Sebagian" : esc(b.status || "Draft")}</span></td>
+        <td class="tiny">${umur === null ? "—" : umur + " hari kerja"}</td>
+        <td class="right">${can("money") ? `<button class="btn sm" data-inv="${b.billing_id}">Invoice</button>
+          <button class="btn p sm" data-pay="${b.billing_id}" ${sisa <= 0 ? "disabled" : ""}>Catat bayar</button>` : ""}</td></tr>`;
+      }).join("") : `<tr><td colspan="9"><div class="empty"><b>Belum ada tagihan</b>Tagihan lahir dari Gerbang Layak Tagih.</div></td></tr>`}
+      </tbody></table></div></div></div>
+
+    <div class="card"><h3>Riwayat pembayaran</h3><div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Tanggal</th><th>Tagihan</th><th class="n">Jumlah</th><th>Cara</th><th>Referensi</th><th>Dicatat oleh</th></tr></thead>
+      <tbody>${DB.payments.length ? DB.payments.slice().reverse().map(p => `<tr>
+        <td class="num">${esc(dateID(p.payment_date))}</td>
+        <td class="tiny">${esc((byId(DB.billings, "billing_id", p.billing_id) || {}).billing_no || p.billing_id)}</td>
+        <td class="n">${rupiah(p.amount)}</td><td class="tiny">${esc(p.method || "—")}</td>
+        <td class="tiny">${esc(p.reference || "—")}</td><td class="tiny">${esc(p.recorded_by || "—")}</td></tr>`).join("")
+        : `<tr><td colspan="6"><div class="empty">Belum ada pembayaran tercatat.</div></td></tr>`}
+      </tbody></table></div></div></div>`;
+  },
+  bind() {
+    $$("[data-inv]").forEach(btn => btn.onclick = () => {
+      const b = byId(DB.billings, "billing_id", btn.dataset.inv);
+      openModal("Data invoice — " + (b.billing_no || b.billing_id), `
+        <div class="fg c3">
+          <label class="f"><span>Nomor invoice</span><input type="text" id="ivNo" value="${esc(b.invoice_no || "")}"></label>
+          <label class="f"><span>Tanggal invoice</span><input type="date" id="ivDate" value="${esc(b.invoice_date || "")}"></label>
+          <label class="f"><span>Nilai invoice</span><input type="number" step="any" id="ivVal" value="${nz(b.invoice_value || b.billing_value)}"></label>
+        </div>
+        <div class="note mt12">Umur tagihan dihitung dalam hari kerja sejak tanggal invoice, mengikuti Kalender Kerja.</div>`,
+        `<button class="btn p" id="ivSave">Simpan</button>`);
+      $("#ivSave").onclick = () => {
+        const nilai = nz($("#ivVal").value), bayar = terbayar(b.billing_id);
+        if (nilai < bayar) return toast("Nilai invoice lebih kecil dari yang sudah dibayar (" + rupiah(bayar) + ").", "err");
+        b.invoice_no = $("#ivNo").value.trim(); b.invoice_date = $("#ivDate").value; b.invoice_value = nilai;
+        if (b.invoice_date && b.status === "DRAFT") b.status = "INVOICED";
+        audit("UPDATE", "30_BILLING", b.billing_id, "", b.invoice_no);
+        save(); closeModal(); toast("Data invoice tersimpan.", "ok"); render();
+      };
+    });
+    $$("[data-pay]").forEach(btn => btn.onclick = () => {
+      const b = byId(DB.billings, "billing_id", btn.dataset.pay);
+      const sisa = outstanding(b);
+      openModal("Catat pembayaran — " + (b.billing_no || b.billing_id), `
+        <div class="fg c2">
+          <label class="f"><span>Tanggal bayar <em>*</em></span><input type="date" id="pyDate" value="${today()}"></label>
+          <label class="f"><span>Jumlah <em>*</em></span><input type="number" step="any" id="pyAmt" value="${sisa}"></label>
+          <label class="f"><span>Cara bayar</span><select id="pyMet">${["Transfer bank", "i-Vendor", "Lainnya"].map(x => `<option>${x}</option>`).join("")}</select></label>
+          <label class="f"><span>Referensi</span><input type="text" id="pyRef" placeholder="no. bukti transfer"></label>
+        </div>
+        <label class="f"><span>Catatan</span><input type="text" id="pyNote"></label>
+        <div class="note mt12">Outstanding saat ini <b class="num">${rupiah(sisa)}</b>. Pembayaran sebagian boleh dicatat berkali-kali;
+          setiap transaksi tersimpan sendiri sehingga riwayatnya tetap utuh.</div>`,
+        `<button class="btn p" id="pySave">Simpan pembayaran</button>`);
+      $("#pySave").onclick = () => {
+        const a = nz($("#pyAmt").value);
+        if (a <= 0) return toast("Jumlah pembayaran harus lebih dari nol.", "err");
+        if (a > sisa + 0.0001) return toast("Jumlah melebihi outstanding tagihan ini.", "err");
+        DB.payments.push({
+          payment_id: uid("PY"), billing_id: b.billing_id, payment_date: $("#pyDate").value,
+          amount: a, method: $("#pyMet").value, reference: $("#pyRef").value,
+          notes: $("#pyNote").value, recorded_by: S.user.user_name, recorded_at: new Date().toISOString()
+        });
+        if (outstanding(b) <= 0) { b.status = "PAID"; b.payment_date = $("#pyDate").value; }
+        audit("CREATE", "32_PAYMENT_TRACKING", b.billing_id, "", a);
+        save(); closeModal(); toast("Pembayaran tercatat.", "ok"); render();
+      };
+    });
+  }
+};
+
+/* ============================================================
+   V2.6 — VIEW: PUSAT PERINGATAN (Blueprint V2.9 §14)
+   Peringatan dihitung ulang dari keadaan data. Yang penyebabnya sudah
+   dibereskan hilang sendiri — tidak ada daftar peringatan basi.
+   ============================================================ */
+VIEWS.notif = {
+  html() {
+    const list = hitungNotifikasi();
+    const baca = new Set(notifTerbaca());
+    const per = { CRITICAL: [], WARNING: [], ATTENTION: [], INFO: [] };
+    list.forEach(n => per[n.sev].push(n));
+    return `
+    <div class="grid g4">
+      ${["CRITICAL", "WARNING", "ATTENTION", "INFO"].map(k => `
+      <div class="kpi ${SEVERITY[k].c === "gray" ? "" : SEVERITY[k].c}"><div class="eyebrow">${SEVERITY[k].t}</div>
+        <div class="v">${per[k].length}</div><div class="sub">${k === "CRITICAL" ? "menuntut tindakan hari ini" : k === "WARNING" ? "perlu dibereskan minggu ini" : k === "ATTENTION" ? "pantau" : "sekadar kabar"}</div></div>`).join("")}
+    </div>
+    ${list.length ? `<div class="row mt16"><span class="small muted grow">${list.filter(n => !baca.has(n.kunci)).length} baru sejak terakhir dibuka.</span>
+      <button class="btn sm" id="ntRead">Tandai sudah dibaca</button></div>` : ""}
+    <div class="card mt16"><h3>Daftar peringatan</h3><div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Tingkat</th><th>Hal</th><th>Keterangan</th><th></th></tr></thead>
+      <tbody>${list.length ? list.map(n => `<tr style="${baca.has(n.kunci) ? "" : "background:#FBFCFD"}">
+        <td><span class="b ${SEVERITY[n.sev].c}">${SEVERITY[n.sev].t}</span></td>
+        <td><b>${esc(n.judul)}</b>${baca.has(n.kunci) ? "" : ` <span class="tiny" style="color:var(--red)">baru</span>`}</td>
+        <td class="tiny">${esc(n.isi)}</td>
+        <td class="right"><button class="btn sm" data-go="${esc(n.view)}">Buka</button></td></tr>`).join("")
+        : `<tr><td colspan="4"><div class="empty"><b>Tidak ada peringatan</b>Semua yang dipantau sistem sedang dalam batas wajar.</div></td></tr>`}
+      </tbody></table></div></div></div>`;
+  },
+  bind() {
+    if ($("#ntRead")) $("#ntRead").onclick = () => {
+      tandaiNotifBaca(hitungNotifikasi().map(n => n.kunci));
+      toast("Ditandai sudah dibaca.", "ok"); render();
+    };
+    $$("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
+  }
+};
+
 /* ============================================================
    MESIN SINKRONISASI
    Aplikasi tetap bekerja penuh tanpa internet. Sinkronisasi hanya
@@ -4043,7 +5505,11 @@ async function serverCall(payload, timeoutMs) {
     const r = await fetch(s.url, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(Object.assign({ token: s.token }, payload)),
+      /* PIN pengguna ikut dikirim supaya server tahu peran perangkat ini,
+         dan dapat menyaring data komersial sebelum mengirimkannya. Peran
+         tidak dikirim mentah, karena keterangan yang dikirim aplikasi bisa
+         dikarang — server mencocokkan PIN ke lembar users miliknya sendiri. */
+      body: JSON.stringify(Object.assign({ token: s.token, pin: (S.user && S.user.pin) || "" }, payload)),
       redirect: "follow",
       signal: ctrl.signal
     });
@@ -4158,7 +5624,12 @@ async function syncNow(lapor, opsi) {
     daftar.forEach(t => {
       kirim[t] = (DB[t] || []).map(r => {
         const o = Object.assign({}, r);
-        if (t === "meetings") { o.points_json = JSON.stringify(r.points || []); delete o.points; }
+        if (t === "meetings") {
+          o.points_json = JSON.stringify(r.points || []); delete o.points;
+          /* Potret rapat ikut diserialkan — objek bersarang tidak bisa
+             ditulis apa adanya ke satu sel Spreadsheet. */
+          o.snapshot_json = JSON.stringify(r.snapshot || null); delete o.snapshot;
+        }
         if (t === "photos") delete o.file_url_data;
         return o;
       });
@@ -4192,6 +5663,8 @@ function terapkanServer(tables) {
       if (t === "meetings") {
         try { o.points = JSON.parse(o.points_json || "[]"); } catch (e) { o.points = []; }
         delete o.points_json;
+        try { o.snapshot = JSON.parse(o.snapshot_json || "null"); } catch (e) { o.snapshot = null; }
+        delete o.snapshot_json;
       }
       if (t === "users") o.active = (o.active === true || o.active === "TRUE" || o.active === "true" || o.active === 1);
       if (t === "qc") o.rework_required = (o.rework_required === true || o.rework_required === "TRUE" || o.rework_required === "true");
@@ -4825,8 +6298,9 @@ async function periksaSinkron(T) {
 VIEWS.master = {
   html() {
     const tab = S.tab || "tank";
-    const T = { area: "Area", tank: "Tanki", spk: "SPK Pertamina", bamk: "BAMK ke Pelaksana",
-      stage: "Tahapan", scope: "Scope", target: "Target Plan" };
+    const T = { area: "Area", tank: "Tanki", spk: "SPK Pertamina", job: "Job Register",
+      bamk: "BAMK ke Pelaksana", eng: "Engineering", stage: "Tahapan", scope: "Scope",
+      coating: "Sistem Cat", calendar: "Kalender Kerja", target: "Target Plan" };
     let body = "";
     if (tab === "area") body = `
       <div class="row"><span class="small muted grow">Tiga area kerja program.</span><button class="btn a sm" id="mNew">+ Area</button></div>
@@ -4946,6 +6420,91 @@ VIEWS.master = {
         <td><span class="b ${s.status === "AKTIF" ? "teal" : "gray"}">${esc(s.status)}</span></td>
         <td class="right"><button class="btn sm" data-ed="${s.scope_id}">Ubah</button></td></tr>`).join("")}</tbody></table></div>`;
 
+
+    /* ---------- JOB REGISTER (Blueprint V2.9 §3) ----------
+       Kunci permanen JOB-HBM-YYYY-NNNN. Nomor tanki bukan kunci utama:
+       satu tanki bisa punya lebih dari satu Job kalau lingkupnya diulang
+       atau dipecah, dan riwayat Job lama tetap utuh. */
+    if (tab === "job") body = `
+      <div class="row"><span class="small muted grow">${DB.jobs.length} Job terdaftar · ${jobsAktif().length} sedang berjalan.</span>
+        <button class="btn a sm" id="mNew">+ Job</button></div>
+      <div class="note mt12">Job lahir dari pasangan SPK + tanki. <b>Dasar target</b> menentukan angka mana yang dikejar
+        Active Tank Control: hasil survei engineering, volume SPK, volume BAMK, atau alokasi yang disetujui sendiri.</div>
+      <div class="tw mt12"><table><thead><tr><th>Job</th><th>Tanki</th><th>SPK</th><th>Dasar target</th>
+        <th class="n">Target</th><th class="n">Terpasang</th><th class="n">%</th><th>Status</th><th></th></tr></thead>
+      <tbody>${DB.jobs.length ? DB.jobs.map(j => {
+        const k = kendaliTanki(j);
+        const tb = (TARGET_BASIS.filter(x => x.k === j.target_basis)[0] || {}).t || j.target_basis;
+        return `<tr><td><b class="num tiny">${esc(j.job_no)}</b>${j.rescope_of ? `<div class="tiny muted">re-scope dari ${esc(j.rescope_of)}</div>` : ""}</td>
+        <td>${esc(tankNo(j.tank_id))}</td><td class="tiny">${esc(spkNo(j.spk_id))}</td>
+        <td class="tiny">${esc(tb)}</td>
+        <td class="n">${fmt(k.target, 1)}</td><td class="n">${fmt(k.earned, 1)}</td>
+        <td class="n">${fmt(k.persen, 1)}</td>
+        <td><span class="b ${j.status === "ON_PROGRESS" ? "teal" : j.status === "SELESAI" ? "blue" : "gray"}">${esc(j.status)}</span></td>
+        <td class="right"><button class="btn sm" data-ed="${j.job_id}">Ubah</button></td></tr>`;
+      }).join("") : `<tr><td colspan="9"><div class="empty"><b>Belum ada Job</b>Job terbentuk sendiri saat BAMK dibuat, atau tambahkan manual di sini.</div></td></tr>`}
+      </tbody></table></div>`;
+
+    /* ---------- ENGINEERING SURVEY (sheet 09) ---------- */
+    if (tab === "eng") body = `
+      <div class="row"><span class="small muted grow">Hasil ukur lapangan per tanki — dasar target yang paling dekat dengan kenyataan.</span>
+        <button class="btn a sm" id="mNew">+ Hasil survei</button></div>
+      <div class="note mt12">Angka di sini menggantikan hitungan rumus luas begitu Job memakai dasar target
+        <b>Engineering Survey</b>. Selama belum ada barisnya, sistem tetap memakai volume BAMK.</div>
+      <div class="tw mt12"><table><thead><tr><th>Tanggal</th><th>Tanki</th><th>Job</th><th class="n">Shell</th>
+        <th class="n">Atap</th><th class="n">Perlengkapan</th><th class="n">Jumlah</th><th>Metode</th><th>Surveyor</th><th></th></tr></thead>
+      <tbody>${DB.engineering.length ? DB.engineering.map(e => `<tr>
+        <td class="num tiny">${esc(e.survey_date)}</td><td>${esc(tankNo(e.tank_id))}</td>
+        <td class="tiny">${esc(e.job_id ? jobNo(e.job_id) : "—")}</td>
+        <td class="n">${fmt(e.shell_m2, 1)}</td><td class="n">${fmt(e.roof_m2, 1)}</td><td class="n">${fmt(e.acc_m2, 1)}</td>
+        <td class="n"><b>${fmt(nz(e.shell_m2) + nz(e.roof_m2) + nz(e.acc_m2), 1)}</b></td>
+        <td class="tiny">${esc(e.method || "—")}</td><td class="tiny">${esc(e.surveyor || "—")}</td>
+        <td class="right"><button class="btn sm" data-ed="${e.eng_id}">Ubah</button></td></tr>`).join("")
+        : `<tr><td colspan="10"><div class="empty">Belum ada hasil survei.</div></td></tr>`}
+      </tbody></table></div>`;
+
+    /* ---------- SISTEM CAT (sheet 06) ---------- */
+    if (tab === "coating") body = `
+      <div class="row"><span class="small muted grow">Lapisan cat, standar persiapan permukaan, dan rentang DFT.</span>
+        <button class="btn a sm" id="mNew">+ Lapisan</button></div>
+      <div class="note warn mt12">Nilai DFT masih nol sampai spesifikasi cat yang disetujui Pertamina dimasukkan.
+        Angka DFT dipakai sebagai dasar terima/tolak inspeksi, jadi sengaja tidak diisi tebakan.</div>
+      <div class="tw mt12"><table><thead><tr><th class="n">#</th><th>Lapisan</th><th>Produk</th><th>Standar</th>
+        <th class="n">DFT min</th><th class="n">DFT maks</th><th class="n">Overcoat (jam)</th><th>Status</th><th></th></tr></thead>
+      <tbody>${DB.coatings.slice().sort((a, b) => nz(a.layer_no) - nz(b.layer_no)).map(c => `<tr>
+        <td class="n">${nz(c.layer_no)}</td><td><b>${esc(c.layer_name)}</b></td><td>${esc(c.product || "—")}</td>
+        <td class="tiny">${esc(c.spec_std || "—")}</td>
+        <td class="n">${nz(c.dft_min) ? fmt(c.dft_min, 0) + " µm" : "—"}</td>
+        <td class="n">${nz(c.dft_max) ? fmt(c.dft_max, 0) + " µm" : "—"}</td>
+        <td class="n tiny">${nz(c.interval_min_jam) || nz(c.interval_max_jam) ? nz(c.interval_min_jam) + " – " + nz(c.interval_max_jam) : "—"}</td>
+        <td><span class="b ${c.active !== false ? "teal" : "gray"}">${c.active !== false ? "Aktif" : "Nonaktif"}</span></td>
+        <td class="right"><button class="btn sm" data-ed="${c.coating_id}">Ubah</button></td></tr>`).join("")}
+      </tbody></table></div>`;
+
+    /* ---------- KALENDER KERJA (sheet 14) ---------- */
+    if (tab === "calendar") {
+      const peta = kalenderPeta();
+      const th = String(today()).slice(0, 4);
+      const libur = DB.calendar.filter(c => c.day_type === "LIBUR").length;
+      const tambah = DB.calendar.filter(c => c.day_type === "KERJA_TAMBAHAN").length;
+      body = `
+      <div class="row"><span class="small muted grow">${libur} hari libur · ${tambah} hari kerja tambahan.</span>
+        <button class="btn a sm" id="mNew">+ Tanggal</button></div>
+      <div class="note mt12">Dari sinilah <b>sisa hari kerja efektif</b> dan <b>laju wajib per hari</b> dihitung.
+        Bawaannya: Minggu libur, Sabtu tetap hari kerja. <b>Kerja tambahan</b> dipakai untuk memasukkan kembali
+        hari yang biasanya libur, misalnya saat ada perintah kerja akhir pekan.</div>
+      <div class="row mt12"><span class="small muted">Hari kerja efektif tahun ${th}:
+        <b>${hitungHariKerja(th + "-01-01", th + "-12-31")}</b> hari.</span></div>
+      <div class="tw mt12"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th></th></tr></thead>
+      <tbody>${DB.calendar.length ? DB.calendar.slice().sort((a, b) => String(a.cal_date).localeCompare(b.cal_date)).map(c => `<tr>
+        <td class="num">${esc(dateID(c.cal_date))}</td>
+        <td><span class="b ${c.day_type === "LIBUR" ? "red" : "teal"}">${c.day_type === "LIBUR" ? "Libur" : "Kerja tambahan"}</span></td>
+        <td class="tiny">${esc(c.description || "—")}</td>
+        <td class="right"><button class="btn sm" data-ed="${c.cal_id}">Ubah</button></td></tr>`).join("")
+        : `<tr><td colspan="4"><div class="empty">Belum ada tanggal khusus.</div></td></tr>`}
+      </tbody></table></div>`;
+    }
+
     if (tab === "target") body = `
       <div class="row"><span class="small muted grow">Baseline waktu dan rencana progress per periode.</span>
         <button class="btn a sm" id="mNew">+ Target</button></div>
@@ -4993,11 +6552,15 @@ function sasaranSimpan(arr, kunci, id, cadangan) {
 const MASTER_TABEL = {
   area:   { arr: () => DB.areas,   kunci: "area_id",   tabel: "areas",   log: "02_AREA_MASTER",  nama: "area",  label: r => r.area_name },
   tank:   { arr: () => DB.tanks,   kunci: "tank_id",   tabel: "tanks",   log: "03_TANK_MASTER",  nama: "tanki", label: r => r.tank_no },
-  spk:    { arr: () => DB.spk,     kunci: "spk_id",    tabel: "spk",     log: "04A_SPK",        nama: "SPK",   label: r => r.spk_no },
+  spk:    { arr: () => DB.spk,     kunci: "spk_id",    tabel: "spk",     log: "11_SPK",         nama: "SPK",   label: r => r.spk_no },
   bamk:   { arr: () => DB.bamk,    kunci: "bamk_id",   tabel: "bamk",    log: "04B_BAMK",       nama: "BAMK",  label: r => r.bamk_no },
   stage:  { arr: () => DB.stages,  kunci: "stage_id",  tabel: "stages",  log: "04C_TAHAPAN",    nama: "tahap", label: r => r.stage_name },
   scope:  { arr: () => DB.scopes,  kunci: "scope_id",  tabel: "scopes",  log: "05_SCOPE_MASTER", nama: "scope", label: r => r.scope_code },
-  target: { arr: () => DB.targets, kunci: "target_id", tabel: "targets", log: "06_TARGET_PLAN",  nama: "target", label: r => r.period }
+  target: { arr: () => DB.targets, kunci: "target_id", tabel: "targets", log: "06_TARGET_PLAN",  nama: "target", label: r => r.period },
+  job:      { arr: () => DB.jobs,        kunci: "job_id",     tabel: "jobs",        log: "08_JOB_TANK_REGISTER",     nama: "Job",      label: r => r.job_no },
+  eng:      { arr: () => DB.engineering, kunci: "eng_id",     tabel: "engineering", log: "09_ENGINEERING_TANK",      nama: "survei",   label: r => r.survey_date },
+  coating:  { arr: () => DB.coatings,    kunci: "coating_id", tabel: "coatings",    log: "06_COATING_MASTER",        nama: "lapisan",  label: r => r.layer_name },
+  calendar: { arr: () => DB.calendar,    kunci: "cal_id",     tabel: "calendar",    log: "14_MASTER_WORK_CALENDAR",  nama: "tanggal",  label: r => r.cal_date }
 };
 
 /* Alasan sebuah baris master tidak boleh dihapus. Baris yang sudah dipakai
@@ -5019,6 +6582,7 @@ function alasanTakBolehHapus(tab, id) {
     hitung(DB.billables, "bamk_id", "baris layak tagih"); hitung(DB.billings, "bamk_id", "tagihan");
   }
   if (tab === "scope") { hitung(DB.progress, "scope_id", "baris progress"); hitung(DB.verifications, "scope_id", "verifikasi"); }
+  if (tab === "job") { hitung(DB.bamk, "job_id", "BAMK"); hitung(DB.dailies, "job_id", "laporan harian"); hitung(DB.acceptances, "job_id", "BAKP"); }
   return pakai.length ? pakai.join(", ") : "";
 }
 
@@ -5063,6 +6627,140 @@ function masterModal(tab, id) {
     };
   }
 
+
+  /* ---------- MODAL: JOB ---------- */
+  if (tab === "job") {
+    const j = id ? byId(DB.jobs, "job_id", id) : {
+      job_id: "", spk_id: DB.spk[0] ? DB.spk[0].spk_id : "", tank_id: DB.tanks[0] ? DB.tanks[0].tank_id : "",
+      job_no: "", target_basis: "BAMK_VOLUME", target_qty: 0, unit: "m2",
+      status: "ON_PROGRESS", rescope_of: "", revision: "R0", created_from: "manual", notes: ""
+    };
+    title = id ? "Ubah Job — " + j.job_no : "Job baru";
+    body = `<div class="fg c3">
+      <label class="f"><span>Tanki <em>*</em></span><select id="xTank">${opts(DB.tanks, j.tank_id, t => t.tank_id, t => t.tank_no)}</select></label>
+      <label class="f"><span>SPK induk</span><select id="xSpk"><option value="">— belum ada SPK —</option>${opts(DB.spk, j.spk_id, x => x.spk_id, x => x.spk_no)}</select></label>
+      <label class="f"><span>Status</span><select id="xSt">${["ON_PROGRESS", "SELESAI", "DITUNDA", "BATAL"].map(x => `<option ${j.status === x ? "selected" : ""}>${x}</option>`).join("")}</select></label>
+      <label class="f"><span>Dasar target</span><select id="xBasis">${TARGET_BASIS.map(x => `<option value="${x.k}" ${j.target_basis === x.k ? "selected" : ""}>${esc(x.t)}</option>`).join("")}</select></label>
+      <label class="f"><span>Alokasi disetujui (m²)</span><input type="number" step="any" id="xQty" value="${nz(j.target_qty)}"></label>
+      <label class="f"><span>Re-scope dari Job</span><input type="text" id="xRes" value="${esc(j.rescope_of || "")}" placeholder="JOB-HBM-…"></label></div>
+      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(j.notes || "")}"></label>
+      <div class="note mt12">Kolom alokasi hanya terpakai bila dasar target dipilih <b>Approved Allocation</b>.
+        Untuk dasar lain, angkanya diambil sendiri dari survei, SPK, atau BAMK.</div>`;
+    onSave = () => {
+      const rec = sasaranSimpan(DB.jobs, "job_id", id, j); if (!rec) return false;
+      Object.assign(rec, {
+        tank_id: $("#xTank").value, spk_id: $("#xSpk").value, status: $("#xSt").value,
+        target_basis: $("#xBasis").value, target_qty: nz($("#xQty").value),
+        rescope_of: $("#xRes").value.trim(), notes: $("#xNote").value
+      });
+      if (!rec.tank_id) return toast("Tanki wajib dipilih.", "err");
+      if (!id) {
+        const sp = spkOf(rec.spk_id);
+        const th = String((sp && (sp.issue_date || sp.start_date)) || today()).slice(0, 4);
+        const n = DB.jobs.filter(x => String(x.job_id).indexOf("JOB-HBM-" + th) === 0).length + 1;
+        rec.job_id = "JOB-HBM-" + th + "-" + String(n).padStart(4, "0");
+        rec.job_no = rec.job_id;
+        rec.created_at = new Date().toISOString();
+        DB.jobs.push(rec);
+      }
+      audit(id ? "UPDATE" : "CREATE", "08_JOB_TANK_REGISTER", rec.job_id, "", tankNo(rec.tank_id));
+      return true;
+    };
+  }
+
+  /* ---------- MODAL: ENGINEERING ---------- */
+  if (tab === "eng") {
+    const e = id ? byId(DB.engineering, "eng_id", id) : {
+      eng_id: uid("EN"), tank_id: DB.tanks[0] ? DB.tanks[0].tank_id : "", job_id: "",
+      survey_date: today(), shell_m2: 0, roof_m2: 0, acc_m2: 0,
+      method: "Pengukuran lapangan", surveyor: "", notes: ""
+    };
+    title = id ? "Ubah hasil survei" : "Hasil survei baru";
+    body = `<div class="fg c3">
+      <label class="f"><span>Tanggal survei</span><input type="date" id="xDate" value="${esc(e.survey_date)}"></label>
+      <label class="f"><span>Tanki <em>*</em></span><select id="xTank">${opts(DB.tanks, e.tank_id, t => t.tank_id, t => t.tank_no)}</select></label>
+      <label class="f"><span>Job</span><select id="xJob"><option value="">— tidak dikaitkan —</option>${opts(DB.jobs, e.job_id, j => j.job_id, j => j.job_no + " · " + tankNo(j.tank_id))}</select></label>
+      <label class="f"><span>Luas shell (m²)</span><input type="number" step="any" id="xShell" value="${nz(e.shell_m2)}"></label>
+      <label class="f"><span>Luas atap (m²)</span><input type="number" step="any" id="xRoof" value="${nz(e.roof_m2)}"></label>
+      <label class="f"><span>Perlengkapan (m²)</span><input type="number" step="any" id="xAcc" value="${nz(e.acc_m2)}"></label>
+      <label class="f"><span>Metode</span><input type="text" id="xMet" value="${esc(e.method || "")}"></label>
+      <label class="f"><span>Surveyor</span><input type="text" id="xSur" value="${esc(e.surveyor || "")}"></label></div>
+      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(e.notes || "")}"></label>`;
+    onSave = () => {
+      const rec = sasaranSimpan(DB.engineering, "eng_id", id, e); if (!rec) return false;
+      Object.assign(rec, {
+        survey_date: $("#xDate").value, tank_id: $("#xTank").value, job_id: $("#xJob").value,
+        shell_m2: nz($("#xShell").value), roof_m2: nz($("#xRoof").value), acc_m2: nz($("#xAcc").value),
+        method: $("#xMet").value, surveyor: $("#xSur").value, notes: $("#xNote").value
+      });
+      if (!id) DB.engineering.push(rec);
+      audit(id ? "UPDATE" : "CREATE", "09_ENGINEERING_TANK", rec.eng_id, "", tankNo(rec.tank_id));
+      return true;
+    };
+  }
+
+  /* ---------- MODAL: SISTEM CAT ---------- */
+  if (tab === "coating") {
+    const c = id ? byId(DB.coatings, "coating_id", id) : {
+      coating_id: uid("CT"), layer_no: DB.coatings.length + 1, layer_name: "", product: "", spec_std: "",
+      dft_min: 0, dft_max: 0, interval_min_jam: 0, interval_max_jam: 0, active: true, notes: ""
+    };
+    title = id ? "Ubah lapisan" : "Lapisan baru";
+    body = `<div class="fg c3">
+      <label class="f"><span>Urutan</span><input type="number" id="xNo" value="${nz(c.layer_no)}"></label>
+      <label class="f"><span>Nama lapisan <em>*</em></span><input type="text" id="xName" value="${esc(c.layer_name)}"></label>
+      <label class="f"><span>Produk cat</span><input type="text" id="xProd" value="${esc(c.product || "")}"></label>
+      <label class="f"><span>Standar permukaan</span><input type="text" id="xStd" value="${esc(c.spec_std || "")}" placeholder="SSPC-SP10 / ISO Sa 2½"></label>
+      <label class="f"><span>DFT minimum (µm)</span><input type="number" step="any" id="xMin" value="${nz(c.dft_min)}"></label>
+      <label class="f"><span>DFT maksimum (µm)</span><input type="number" step="any" id="xMax" value="${nz(c.dft_max)}"></label>
+      <label class="f"><span>Overcoat minimum (jam)</span><input type="number" step="any" id="xIvMin" value="${nz(c.interval_min_jam)}"></label>
+      <label class="f"><span>Overcoat maksimum (jam)</span><input type="number" step="any" id="xIvMax" value="${nz(c.interval_max_jam)}"></label>
+      <label class="f"><span>Status</span><select id="xAct"><option value="1" ${c.active !== false ? "selected" : ""}>Aktif</option><option value="0" ${c.active === false ? "selected" : ""}>Nonaktif</option></select></label></div>
+      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(c.notes || "")}"></label>`;
+    onSave = () => {
+      const rec = sasaranSimpan(DB.coatings, "coating_id", id, c); if (!rec) return false;
+      Object.assign(rec, {
+        layer_no: nz($("#xNo").value), layer_name: $("#xName").value, product: $("#xProd").value,
+        spec_std: $("#xStd").value, dft_min: nz($("#xMin").value), dft_max: nz($("#xMax").value),
+        interval_min_jam: nz($("#xIvMin").value), interval_max_jam: nz($("#xIvMax").value),
+        active: $("#xAct").value === "1", notes: $("#xNote").value
+      });
+      if (!rec.layer_name) return toast("Nama lapisan wajib diisi.", "err");
+      if (nz(rec.dft_max) > 0 && nz(rec.dft_min) > nz(rec.dft_max)) return toast("DFT minimum melebihi maksimum.", "err");
+      if (!id) DB.coatings.push(rec);
+      audit(id ? "UPDATE" : "CREATE", "06_COATING_MASTER", rec.coating_id, "", rec.layer_name);
+      return true;
+    };
+  }
+
+  /* ---------- MODAL: KALENDER ---------- */
+  if (tab === "calendar") {
+    const c = id ? byId(DB.calendar, "cal_id", id) : { cal_id: uid("CAL"), cal_date: today(), day_type: "LIBUR", description: "" };
+    title = id ? "Ubah tanggal" : "Tanggal khusus baru";
+    body = `<div class="fg c2">
+      <label class="f"><span>Tanggal <em>*</em></span><input type="date" id="xDate" value="${esc(c.cal_date)}"></label>
+      <label class="f"><span>Jenis</span><select id="xType">
+        <option value="LIBUR" ${c.day_type === "LIBUR" ? "selected" : ""}>Libur — tidak dihitung sebagai hari kerja</option>
+        <option value="KERJA_TAMBAHAN" ${c.day_type === "KERJA_TAMBAHAN" ? "selected" : ""}>Kerja tambahan — dihitung walau jatuh di hari libur</option>
+      </select></label></div>
+      <label class="f"><span>Keterangan</span><input type="text" id="xDesc" value="${esc(c.description || "")}" placeholder="Idul Fitri, cuti bersama, perintah kerja akhir pekan…"></label>`;
+    onSave = () => {
+      const rec = sasaranSimpan(DB.calendar, "cal_id", id, c); if (!rec) return false;
+      const tgl = $("#xDate").value;
+      if (!tgl) return toast("Tanggal wajib diisi.", "err");
+      if (DB.calendar.some(x => x.cal_date === tgl && x.cal_id !== rec.cal_id))
+        return toast("Tanggal itu sudah terdaftar di kalender.", "err");
+      Object.assign(rec, { cal_date: tgl, day_type: $("#xType").value, description: $("#xDesc").value });
+      if (!id) DB.calendar.push(rec);
+      /* Daftar libur lama di Pengaturan ikut diselaraskan supaya tidak ada
+         dua sumber kebenaran untuk hari yang sama. */
+      const C = DB.config; C.holidays = (C.holidays || []).filter(d => d !== tgl);
+      if (rec.day_type === "LIBUR") C.holidays.push(tgl);
+      audit(id ? "UPDATE" : "CREATE", "14_MASTER_WORK_CALENDAR", rec.cal_id, "", rec.cal_date + " " + rec.day_type);
+      return true;
+    };
+  }
+
   if (tab === "tank") {
     const t = id ? byId(DB.tanks, "tank_id", id) : {
       tank_id: uid("TK"), tank_no: "", area_id: DB.areas[0] ? DB.areas[0].area_id : "", tank_type: "CRT",
@@ -5102,6 +6800,7 @@ function masterModal(tab, id) {
     const x = id ? byId(DB.spk, "spk_id", id) : {
       spk_id: uid("SPK"), spk_no: "", contract_no: DB.config.contract_no || "",
       issue_date: today(), start_date: today(), finish_date: "", duration_days: 30,
+      duration_type: "KALENDER",
       work_hours: "07.00 - 18.00 WITA", method: "Rope access",
       supervisor_pertamina: DB.config.pertamina_supervisor || "", signed_by: "", signed_title: "",
       status: "DRAFT", scan_url: "", notes: ""
@@ -5115,7 +6814,10 @@ function masterModal(tab, id) {
       <label class="f"><span>Tanggal surat</span><input type="date" id="xDt" value="${esc(x.issue_date)}"></label>
       <label class="f"><span>Mulai (tmt) <em>*</em></span><input type="date" id="xSd" value="${esc(x.start_date)}"></label>
       <label class="f"><span>Sampai dengan <em>*</em></span><input type="date" id="xFd" value="${esc(x.finish_date)}"></label>
-      <label class="f"><span>Durasi (hari kalender)</span><input type="number" id="xDur" value="${nz(x.duration_days)}" readonly></label>
+      <label class="f"><span>Durasi</span><input type="number" id="xDur" value="${nz(x.duration_days)}" readonly></label>
+      <label class="f"><span>Dasar durasi</span><select id="xDurT">
+        <option value="KALENDER" ${x.duration_type !== "KERJA" ? "selected" : ""}>Hari kalender</option>
+        <option value="KERJA" ${x.duration_type === "KERJA" ? "selected" : ""}>Hari kerja</option></select></label>
       <label class="f"><span>Jam kerja</span><input type="text" id="xJam" value="${esc(x.work_hours)}"></label>
       <label class="f"><span>Metode pelaksanaan</span><input type="text" id="xMet" value="${esc(x.method)}" placeholder="rope access / scaffolding"></label>
       <label class="f"><span>Status</span><select id="xSt">${opts(STATUS_SPK.map(v => ({ v })), x.status, o => o.v, o => o.v)}</select></label>
@@ -5144,6 +6846,7 @@ function masterModal(tab, id) {
         start_date: sd, finish_date: fd,
         duration_days: (sd && fd) ? Math.round((new Date(fd + "T00:00:00") - new Date(sd + "T00:00:00")) / 86400000) + 1 : 0,
         work_hours: $("#xJam").value, method: $("#xMet").value, status: $("#xSt").value,
+        duration_type: $("#xDurT").value,
         supervisor_pertamina: $("#xPw").value, signed_by: $("#xTtd").value, signed_title: $("#xJab").value,
         scan_url: $("#xScan").value, notes: $("#xNote").value
       });
@@ -5799,8 +7502,9 @@ VIEWS.settings = {
       });
       $("#wipeTx").onclick = () => {
         if (!confirmBox("Hapus seluruh laporan, verifikasi, penerimaan, volume layak tagih dan tagihan? Master data dan pengguna tetap.")) return;
-        ["dailies", "progress", "manpower", "materials", "photos", "qc", "hsse", "issues",
-          "verifications", "acceptances", "billables", "billings", "documents", "meetings", "actions"].forEach(k => DB[k] = []);
+        ["dailies", "progress", "manpower", "materials", "equipment", "photos", "qc", "hsse", "issues",
+          "verifications", "acceptances", "bakp_item", "billables", "billings", "billing_item",
+          "payments", "documents", "meetings", "actions"].forEach(k => DB[k] = []);
         audit("DELETE", "ALL_TRANSACTION", "-", "", "wipe");
         save(); toast("Data transaksi dibersihkan.", "ok"); render();
       };
@@ -5955,7 +7659,10 @@ const GUARD = {
   billing: ["billing", "billing_view"], documents: ["documents"],
   issues: ["issues", "issues_view"], meeting: ["meeting"], reports: ["reports"],
   master: ["master"], settings: ["settings"], audit: ["audit"], sync: ["sync_panel"],
-  pesan: ["pesan"]
+  pesan: ["pesan"],
+  /* V2.6 — penegakan hak akses layar baru, sama kerasnya dengan yang lama */
+  kendali: ["kendali"], scurve: ["scurve"], boq: ["boq", "boq_view"],
+  finance: ["finance", "finance_view"], notif: ["notif"]
 };
 Object.keys(GUARD).forEach(k => {
   const v = VIEWS[k]; if (!v) return;
