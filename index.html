@@ -383,7 +383,7 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
 const APP_VERSI = "2.6";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
-const CODEGS_VERSI = "2.2";
+const CODEGS_VERSI = "2.3";
 try {
   if (document.getElementById("appVer")) document.getElementById("appVer").textContent = "v" + APP_VERSI;
   if (document.getElementById("lgVer")) document.getElementById("lgVer").textContent = "v" + APP_VERSI;
@@ -806,6 +806,7 @@ function migrate() {
   DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
   bersihkanSuperAdmin();
   DB.dailies.forEach(d => {
+    d.scan_url = d.scan_url || "";
     d.revision_no = d.revision_no || 0;
     d.supervisor_side = d.supervisor_side || ""; d.supervisor_name = d.supervisor_name || "";
   });
@@ -2701,7 +2702,7 @@ function newDraft() {
   const w = bamkAktif()[0];
   return {
     daily_id: null, report_date: today(), bamk_id: w ? w.bamk_id : "", weather: "Cerah", shift: "Harian",
-    general_notes: "", status: "DRAFT", revision_no: 0,
+    general_notes: "", status: "DRAFT", revision_no: 0, scan_url: "",
     supervisor_side: PENGAWAS[0], supervisor_name: "",
     progress: [], manpower: [], materials: [], equipment: [], photos: [],
     qc: { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "", ma4_known: false, ma4_date: "" },
@@ -2716,6 +2717,7 @@ function loadDraft(id) {
   S.draft = {
     daily_id: d.daily_id, report_date: d.report_date, bamk_id: d.bamk_id, weather: d.weather,
     shift: d.shift, general_notes: d.general_notes, status: d.status, revision_no: d.revision_no || 0,
+    scan_url: d.scan_url || "",
     supervisor_side: d.supervisor_side || PENGAWAS[0], supervisor_name: d.supervisor_name || "",
     progress: DB.progress.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
     manpower: DB.manpower.filter(p => p.daily_id === id).map(p => Object.assign({}, p)),
@@ -2826,6 +2828,14 @@ VIEWS["daily-new"] = {
       <div class="photos mt12" id="phList"></div>
       <div class="tiny muted mt8">Setiap foto punya tombol unduh, dan seluruh foto satu laporan dapat diunduh sekaligus
         dari layar detail laporan untuk lampiran tagihan.</div>
+    </div></div>
+
+    <div class="card"><h3>5b · Laporan hard copy
+      <span class="tiny muted">lembar Daily Activity yang sudah ditandatangani</span></h3><div class="body">
+      ${kotakPindaian("dScan", d.scan_url, "Pindaian laporan harian bertanda tangan")}
+      <div class="tiny muted mt8">Yang diunggah di sini adalah lembar tulis tangan yang sudah ditandatangani
+        Pertamina. Begitu tersimpan, siapa pun yang membuka laporan ini — termasuk pimpinan —
+        cukup menekan tautan <b>hard copy</b> untuk membacanya, tanpa perlu minta akses.</div>
     </div></div>
 
     <div class="grid g2">
@@ -3104,6 +3114,17 @@ VIEWS["daily-new"] = {
         || `<div class="empty" style="grid-column:1/-1">Belum ada foto. Minimal satu foto diperlukan untuk mengajukan laporan.</div>`;
       $$("#phList [data-dph]").forEach(b => b.onclick = () => { d.photos.splice(+b.dataset.dph, 1); drawPh(); });
     };
+    pasangPindaian("dScan");
+    const kotakScan = $("#dScan");
+    if (kotakScan) {
+      const serap = () => { d.scan_url = kotakScan.value.trim(); };
+      kotakScan.oninput = serap;
+      const berkasScan = $("#dScanFile");
+      if (berkasScan) {
+        const bawaan = berkasScan.onchange;
+        berkasScan.onchange = e => { bawaan(e); const t = setInterval(serap, 400); setTimeout(() => clearInterval(t), 20000); };
+      }
+    }
     $("#phFile").onchange = e => {
       const files = Array.from(e.target.files || []);
       files.forEach(f => shrink(f, url => {
@@ -3280,6 +3301,7 @@ function commitDaily(status) {
     daily_id: id, report_date: d.report_date, bamk_id: d.bamk_id, tank_id: w.tank_id, area_id: w.area_id,
     admin_user_id: prev ? prev.admin_user_id : S.user.user_id,
     weather: d.weather, shift: d.shift, general_notes: d.general_notes,
+    scan_url: d.scan_url || "",
     supervisor_side: d.supervisor_side, supervisor_name: d.supervisor_name,
     status, revision_no: rev, submitted_at: new Date().toISOString(), review_note: ""
   };
@@ -3369,7 +3391,7 @@ VIEWS["daily-list"] = {
       </div>
       <div class="tw"><table>
         <thead><tr><th>Tanggal</th><th>BAMK / Tanki</th><th class="n">Target</th><th class="n">Realisasi</th>
-        <th class="n">Foto</th><th>Status</th><th></th></tr></thead>
+        <th class="n">Foto</th><th>Hard copy</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows.length ? rows.map(d => {
       const pr = DB.progress.filter(p => p.daily_id === d.daily_id);
       const tg = pr.reduce((a, p) => a + nz(p.target_qty), 0), ac = pr.reduce((a, p) => a + nz(p.actual_qty), 0);
@@ -3385,13 +3407,14 @@ VIEWS["daily-list"] = {
             <td><b>${esc(bamkNo(d.bamk_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))} · ${esc(areaName(d.area_id))}</div></td>
             <td class="n">${fmt(tg, 1)}</td><td class="n">${fmt(ac, 1)}</td>
             <td class="n">${ph}</td>
+            <td>${d.scan_url ? `<a class="btn sm" href="${esc(d.scan_url)}" target="_blank" rel="noopener">Hard copy</a>` : `<span class="tiny muted">—</span>`}</td>
             <td>${statusBadge(d.status, d.revision_no)}
               ${d.status === "REJECTED" && d.return_code
       ? `<div class="tiny mono" style="color:var(--red);font-weight:700;margin-top:3px">${esc(d.return_code)}</div>` : ""}</td>
             <td class="right"><button class="btn sm" data-open="${d.daily_id}">Lihat</button>
               ${editable ? `<button class="btn ${d.status === "REJECTED" ? "a" : ""} sm" data-edit="${d.daily_id}">${d.status === "REJECTED" ? "Perbaiki" : "Ubah"}</button>` : ""}
               ${can("master") ? `<button class="btn d sm" data-del="${d.daily_id}">Hapus</button>` : ""}</td></tr>`;
-    }).join("") : `<tr><td colspan="8"><div class="empty"><b>Belum ada laporan</b>Laporan yang dibuat akan muncul di sini.</div></td></tr>`}
+    }).join("") : `<tr><td colspan="9"><div class="empty"><b>Belum ada laporan</b>Laporan yang dibuat akan muncul di sini.</div></td></tr>`}
         </tbody></table></div>
     </div></div>`;
   },
@@ -3452,6 +3475,9 @@ function showDaily(id) {
       <div><div class="eyebrow">Cuaca</div>${esc(d.weather)}</div>
       <div><div class="eyebrow">Penginput</div>${esc(userName(d.admin_user_id))}</div>
       <div><div class="eyebrow">Status</div>${statusBadge(d.status, d.revision_no)}</div>
+      <div><div class="eyebrow">Laporan hard copy</div>${d.scan_url
+        ? `<a href="${esc(d.scan_url)}" target="_blank" rel="noopener"><b>Buka lembar bertanda tangan &rsaquo;</b></a>`
+        : `<span class="muted">belum diunggah</span>`}</div>
     </div>
     <h4 class="mt16">Progress</h4>
     <div class="tw"><table><thead><tr><th>Bagian</th><th>Tahap</th><th>Aktivitas</th>
@@ -3593,7 +3619,7 @@ VIEWS.review = {
     <div class="note">Realisasi lapangan tidak otomatis menjadi volume terverifikasi. Periksa kuantitas dan bukti sebelum menyetujui.
       Laporan yang dikembalikan dapat diperbaiki Admin Site lalu diajukan ulang, dan seluruh catatan bolak-balik tersimpan.</div>
     <div class="card mt16"><h3>Antrian review <span class="b amber">${q.length}</span></h3><div class="body flush"><div class="tw"><table>
-      <thead><tr><th>Tanggal</th><th>BAMK / Tanki</th><th>Penginput</th><th class="n">Realisasi diajukan</th><th class="n">Foto</th><th>QC</th><th></th></tr></thead>
+      <thead><tr><th>Tanggal</th><th>BAMK / Tanki</th><th>Penginput</th><th class="n">Realisasi diajukan</th><th class="n">Foto</th><th>Hard copy</th><th>QC</th><th></th></tr></thead>
       <tbody>${q.length ? q.map(d => {
       const pr = DB.progress.filter(p => p.daily_id === d.daily_id);
       const ac = pr.reduce((a, p) => a + nz(p.actual_qty), 0);
@@ -3602,10 +3628,12 @@ VIEWS.review = {
           <td><b>${esc(bamkNo(d.bamk_id))}</b><div class="tiny muted">${esc(tankNo(d.tank_id))}</div></td>
           <td class="tiny">${esc(userName(d.admin_user_id))}</td>
           <td class="n">${fmt(ac, 1)}</td><td class="n">${DB.photos.filter(p => p.daily_id === d.daily_id).length}</td>
+          <td>${d.scan_url ? `<a class="btn sm" href="${esc(d.scan_url)}" target="_blank" rel="noopener">Buka</a>`
+            : `<span class="tiny muted">belum ada</span>`}</td>
           <td class="tiny">${qc ? esc(qc.result || "—") : "—"}</td>
           <td class="right"><button class="btn sm" data-v2="${d.daily_id}">Lihat</button>
           <button class="btn p sm" data-rev="${d.daily_id}">Review</button></td></tr>`;
-    }).join("") : `<tr><td colspan="7"><div class="empty"><b>Antrian kosong</b>Tidak ada laporan yang menunggu review.</div></td></tr>`}
+    }).join("") : `<tr><td colspan="8"><div class="empty"><b>Antrian kosong</b>Tidak ada laporan yang menunggu review.</div></td></tr>`}
       </tbody></table></div></div></div>
 
     <div class="card"><h3>Verifikasi terakhir</h3><div class="body flush"><div class="tw"><table>
