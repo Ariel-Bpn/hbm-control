@@ -390,9 +390,39 @@ try {
 } catch (e) { /* tampilan versi tidak wajib */ }
 
 const SYNC_BAWAAN = {
-  url: "https://script.google.com/macros/s/AKfycbwXC8UJznyLLAd6JjAHLWD2PW4ZDJpr7v6vQ18zz-ePyvwurmoRWCmb_pK9zXEoq2Ux8A/exec",
+  url: "https://script.google.com/macros/s/AKfycbyPmRc2-J5taLps6_q3xi2E_dEMkBrlqLY0Jux2kzj3eWA20zPBWU0vs1T9QP45W7ca/exec",
   token: ""
 };
+
+/* ---------- PINDAH SERVER (18 Sep 2026) ----------
+   Server lama diganti proyek Apps Script baru. Perangkat yang sudah
+   menyimpan alamat lama tidak akan berpindah sendiri, karena pengaturan
+   yang sudah terisi memang tidak pernah ditimpa — dan kalau dibiarkan,
+   HP lapangan akan terus mengirim ke server yang tidak lagi dibaca
+   siapa pun. Jadi perpindahan dilakukan SEKALI, ditandai, lalu tidak
+   pernah diulang: sesudah ini Anda tetap bebas mengganti alamatnya
+   sendiri di layar Sinkronisasi tanpa dikembalikan paksa. */
+const SYNC_PINDAH = {
+  ke: "https://script.google.com/macros/s/AKfycbyPmRc2-J5taLps6_q3xi2E_dEMkBrlqLY0Jux2kzj3eWA20zPBWU0vs1T9QP45W7ca/exec",
+  tanda: "server-baru-2026-09-18"
+};
+function pindahkanServerSekali() {
+  const s = DB.config.sync = DB.config.sync || { url: "", token: "", auto: false, last: "" };
+  if (!SYNC_PINDAH.ke || s.pindah === SYNC_PINDAH.tanda) return false;
+  const lama = s.url || "";
+  s.url = SYNC_PINDAH.ke;
+  s.pindah = SYNC_PINDAH.tanda;
+  /* Penanda waktu kiriman terakhir dikosongkan supaya perangkat ini
+     mengirim ulang seluruh isinya ke server baru, bukan hanya yang
+     berubah sejak terakhir kali. */
+  s.kirim_ts = 0;
+  s.last = "";
+  try {
+    audit("UPDATE", "40_SYSTEM_SETTING", "sync.url", lama, SYNC_PINDAH.ke,
+      "Pindah ke server baru V2.6");
+  } catch (e) { /* log audit belum siap saat pemuatan paling awal */ }
+  return true;
+}
 
 /* ---------- LOGO ---------- */
 const LOGO_SVG = `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo HBM">
@@ -751,6 +781,8 @@ function bangunBawaan() {
 
 let DB = load() || seed();
 migrate();
+if (tautkanJobBilaHilang()) save();
+if (pindahkanServerSekali()) save();
 pasangSyncBawaan();
 
 /* Alamat Web App yang sudah ditanam di berkas dipasangkan ke perangkat yang
@@ -1094,6 +1126,75 @@ function migrasiV26() {
 
   /* --- Peralatan harian: submodul baru, tidak ada data lama untuk dipindah. --- */
   DB.progress.forEach(p => { if (p.job_id == null) p.job_id = ""; });
+}
+
+
+/* ---------- PENAUTAN JOB YANG MENYEMBUHKAN DIRI ----------
+   Kolom job_id bisa hilang dari baris lama tanpa disengaja: server yang
+   Code.gs-nya belum diperbarui hanya menulis kolom yang dikenalnya, lalu
+   mengirimkan baris itu kembali tanpa job_id. Migrasi tidak akan
+   mengulanginya sendiri, karena migrasi hanya berjalan sekali saat naik
+   versi. Karena itu penautan diperiksa ulang setiap kali aplikasi dibuka —
+   hanya mengisi yang kosong, tidak pernah menimpa yang sudah ada. */
+function tautkanJobBilaHilang() {
+  if (!Array.isArray(DB.jobs)) DB.jobs = [];
+  let berubah = false;
+
+  /* Peta pasangan SPK + tanki ke Job yang sudah ada. */
+  const peta = {};
+  DB.jobs.forEach(j => { peta[(j.spk_id || "") + "|" + j.tank_id] = j.job_id; });
+
+  const cariAtauBuat = (spk_id, tank_id, sumber) => {
+    if (!tank_id) return "";
+    const k = (spk_id || "") + "|" + tank_id;
+    if (peta[k]) return peta[k];
+    /* Kunci deterministik — sama di setiap perangkat, sehingga tidak
+       melahirkan Job kembar saat disinkronkan. */
+    const id = "JOB-" + (spk_id || "NOSPK") + "-" + tank_id;
+    if (!DB.jobs.some(j => j.job_id === id)) {
+      const sp = (DB.spk || []).filter(x => x.spk_id === spk_id)[0];
+      const th = String((sp && (sp.issue_date || sp.start_date)) || today()).slice(0, 4);
+      const n = DB.jobs.filter(x => String(x.job_id).indexOf("JOB-") === 0).length + 1;
+      DB.jobs.push({
+        job_id: id, job_no: "JOB-HBM-" + th + "-" + String(n).padStart(4, "0"),
+        spk_id: spk_id || "", tank_id: tank_id, target_basis: "BAMK_VOLUME",
+        target_qty: 0, unit: "m2", status: "ON_PROGRESS", rescope_of: "", revision: "R0",
+        created_from: sumber, created_at: new Date().toISOString(), notes: ""
+      });
+      berubah = true;
+    }
+    peta[k] = id;
+    return id;
+  };
+
+  (DB.bamk || []).forEach(b => {
+    if (!b.job_id) { b.job_id = cariAtauBuat(b.spk_id, b.tank_id, "BAMK " + (b.bamk_no || "")); berubah = true; }
+  });
+  const jobDariBamk = {};
+  (DB.bamk || []).forEach(b => { jobDariBamk[b.bamk_id] = b.job_id || ""; });
+  (DB.dailies || []).forEach(d => {
+    if (!d.job_id && jobDariBamk[d.bamk_id]) { d.job_id = jobDariBamk[d.bamk_id]; berubah = true; }
+  });
+  (DB.progress || []).forEach(p => {
+    if (!p.job_id && jobDariBamk[p.bamk_id]) { p.job_id = jobDariBamk[p.bamk_id]; berubah = true; }
+  });
+  (DB.equipment || []).forEach(e => {
+    if (!e.job_id && jobDariBamk[e.bamk_id]) { e.job_id = jobDariBamk[e.bamk_id]; berubah = true; }
+  });
+  (DB.acceptances || []).forEach(a => {
+    if (!a.job_id && jobDariBamk[a.bamk_id]) { a.job_id = jobDariBamk[a.bamk_id]; berubah = true; }
+  });
+  /* Target Job diisi dari volume BAMK-nya bila masih nol, supaya Active Tank
+     Control punya angka pembanding. */
+  (DB.jobs || []).forEach(j => {
+    if (nz(j.target_qty) > 0) return;
+    const b = (DB.bamk || []).filter(x => x.job_id === j.job_id)[0];
+    if (b) {
+      const v = nz(b.vol_shell) + nz(b.vol_acc) + nz(b.vol_roof);
+      if (v > 0) { j.target_qty = v; berubah = true; }
+    }
+  });
+  return berubah;
 }
 
 /* Peran Super Admin sudah dihapus dari sistem. Akun lama yang tersisa dari versi
@@ -5641,6 +5742,10 @@ async function syncNow(lapor, opsi) {
     terapkanServer(r.tables);
     bangunSidik();
     DB.deleted = [];
+    /* Server yang Code.gs-nya lebih lama bisa mengembalikan baris tanpa
+       job_id. Ditautkan ulang di sini, supaya Active Tank Control tidak
+       mendadak kosong sesudah sinkronisasi. */
+    tautkanJobBilaHilang();
     DB.config.sync.last = new Date().toISOString();
     DB.config.sync.kirim_ts = capKirim;
     save();
