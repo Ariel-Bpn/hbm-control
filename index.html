@@ -3179,7 +3179,7 @@ VIEWS["daily-new"] = {
     const drawMp = () => {
       const total = d.manpower.reduce((a, m) => a + nz(m.worker_count), 0);
       $("#mpList").innerHTML = d.manpower.length ? d.manpower.map((m, i) => `
-        <div class="entry"><div class="eh"><b>${i + 1}. ${esc(m.notes || "Tenaga")}</b><button class="btn d sm" data-dm="${i}">Hapus</button></div>
+        <div class="entry"><div class="eh"><b>Orang ke-${i + 1}</b><button class="btn d sm" data-dm="${i}">Hapus</button></div>
           <div class="fg c2">
             <label class="f"><span>Name</span><input type="text" data-m="notes" data-i="${i}" value="${esc(m.notes || "")}"
               placeholder="nama pekerja" autocomplete="off"></label>
@@ -3664,8 +3664,8 @@ function showDaily(id) {
         ? `<a href="${esc(d.scan_url)}" target="_blank" rel="noopener"><b>Buka lembar bertanda tangan &rsaquo;</b></a>`
         : `<span class="muted">belum diunggah</span>`}</div>
     </div>
-    <h4 class="mt16">Progress</h4>
-    <div class="tw"><table><thead><tr><th>Bagian</th><th>Tahap</th><th>Aktivitas</th>
+    ${pr.length ? `<h4 class="mt16">Progress</h4>` : `<div class="note mt16">Tidak ada pekerjaan coating pada hari ini.</div>`}
+    <div class="tw" ${pr.length ? "" : `style="display:none"`}><table><thead><tr><th>Bagian</th><th>Tahap</th><th>Aktivitas</th>
       <th class="n">Luas (m²)</th><th class="n">Bobot</th><th class="n">Setara selesai</th></tr></thead>
     <tbody>${pr.map(p => { const t = tahapOf(p.stage_id), bt = bobotTahap(p.stage_id);
       return `<tr><td>${esc(bagianLabel(p.part))}</td><td>${esc(t ? t.stage_name : "—")}</td>
