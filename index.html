@@ -2836,7 +2836,11 @@ VIEWS["daily-new"] = {
     const sc = w ? scopesOfBamk(w.bamk_id) : [];
     const thread = d.daily_id ? reviewsOf(d.daily_id) : [];
     return spanduk + `
-    <div class="note">Urutan isian mengikuti lembar <b>Daily Activity</b> yang dipakai di lapangan: Permit &amp; tanki,
+    ${isPC() ? `<div class="note" style="border-left-color:var(--green,#2E7D32)"><b>Input langsung dari lembar Daily Activity bertanda tangan.</b>
+      Ketik apa yang tertulis di lembar saja. Yang tidak ada di lembar boleh dikosongkan.
+      Tekan <b>Simpan final</b>: laporan langsung tersimpan sebagai <b>Disetujui</b> dan luasnya langsung
+      <b>terverifikasi</b>, tanpa diajukan dan tanpa review. Unggah foto lembar bertanda tangan di bagian 5b sebagai bukti.</div>` : ""}
+    <div class="note ${isPC() ? "mt12" : ""}">Urutan isian mengikuti lembar <b>Daily Activity</b> yang dipakai di lapangan: Permit &amp; tanki,
       uraian kegiatan dengan Target % / Actual %, material, manpower, lalu tanda tangan. Lembarnya bisa dicetak kembali
       dari laporan ini (tombol <b>Cetak Daily Activity</b> di layar detail), jadi tidak perlu menulis dua kali.
       Satu laporan harian ini menjadi sumber rekap mingguan dan bulanan. Tidak ada input ulang.
@@ -2981,7 +2985,8 @@ VIEWS["daily-new"] = {
       <label class="f"><span>Catatan pengawas</span><textarea id="dNotes" placeholder="Ringkasan kegiatan, koordinasi, rencana besok">${esc(d.general_notes)}</textarea></label>
       <div class="row mt12">
         <button class="btn" id="btnDraft">Simpan draft</button>
-        <button class="btn p" id="btnSubmit">${d.status === "REJECTED" ? "Ajukan ulang" : "Ajukan laporan"}</button>
+        ${isPC() ? `<button class="btn p" id="btnFinal">Simpan final</button>`
+          : `<button class="btn p" id="btnSubmit">${d.status === "REJECTED" ? "Ajukan ulang" : "Ajukan laporan"}</button>`}
         <button class="btn" id="btnReset">Kosongkan</button>
       </div>
     </div></div>`;
@@ -3289,7 +3294,8 @@ VIEWS["daily-new"] = {
 
     $("#btnReset").onclick = () => { if (confirmBox("Kosongkan formulir ini?")) { S.draft = newDraft(); render(); } };
     $("#btnDraft").onclick = () => { pull(); commitDaily("DRAFT"); };
-    $("#btnSubmit").onclick = () => { pull(); commitDaily("SUBMITTED"); };
+    if ($("#btnSubmit")) $("#btnSubmit").onclick = () => { pull(); commitDaily("SUBMITTED"); };
+    if ($("#btnFinal")) $("#btnFinal").onclick = () => { pull(); commitDaily("FINAL"); };
   }
 };
 function photoName(d, p, i) {
@@ -3414,6 +3420,14 @@ function bedaLaporan(a, b) {
 
 function commitDaily(status) {
   const d = S.draft;
+  /* V2.7 — Project Control mengetik langsung dari lembar Daily Activity yang
+     sudah ditandatangani semua pihak di lapangan. Lembar itu sendiri adalah
+     persetujuannya, jadi laporan langsung final: tanpa diajukan, tanpa
+     review, dan luasnya langsung terverifikasi. Yang diwajibkan hanya yang
+     memang ada di lembar. */
+  const FINAL = status === "FINAL";
+  if (FINAL && !isPC()) return toast("Simpan final hanya untuk Project Control.", "err");
+  if (FINAL) status = "APPROVED";
   if (!d.report_date) return toast("Isi tanggal laporan.", "err");
   if (!d.bamk_id) return toast("Pilih tanki. Tanpa BAMK yang sah laporan tidak dapat diproses.", "err");
   /* Gerbang dua lapis: SPK Pertamina harus terbit dan BAMK harus aktif. */
@@ -3429,6 +3443,17 @@ function commitDaily(status) {
   if (d.kegiatan.some(k => nz(k.target_pct) < 0 || nz(k.target_pct) > 100 || nz(k.actual_pct) < 0 || nz(k.actual_pct) > 100))
     return toast("Target % dan Actual % kegiatan harus di antara 0 dan 100.", "err");
   if (d.permit_no && !d.hsse.permit_status) d.hsse.permit_status = "AKTIF";
+  if (FINAL) {
+    if (!d.progress.length && !d.kegiatan.length)
+      return toast("Isi minimal satu baris: pekerjaan coating (2a) atau kegiatan pendukung (2b).", "err");
+    if (d.progress.some(p => !p.part || !p.stage_id)) return toast("Setiap baris pekerjaan coating harus punya bagian dan tahap.", "err");
+    if (d.progress.some(p => nz(p.actual_qty) <= 0))
+      return toast("Ada baris pekerjaan coating (2a) tanpa luas. Isi luasnya, atau hapus barisnya.", "err");
+    const pelanggaranF = periksaBatasProgress(d);
+    if (pelanggaranF) return toast(pelanggaranF, "err");
+    /* Aktivitas tidak tertulis terpisah di lembar — diisi dari tahapnya. */
+    d.progress.forEach(p => { if (!p.activity) { const t = tahapOf(p.stage_id); p.activity = t ? t.stage_name : "Pekerjaan coating"; } });
+  }
   if (status === "SUBMITTED") {
     if (!d.progress.length && !d.kegiatan.length)
       return toast("Isi minimal satu baris: pekerjaan coating (2a) atau kegiatan pendukung (2b).", "err");
@@ -3521,12 +3546,38 @@ function commitDaily(status) {
   if (beda.length)
     logReview(id, "UBAH", "Isi laporan diubah:\n· " + beda.join("\n· "));
 
+  /* Laporan yang disimpan ulang mendapat progress_id baru, sehingga verifikasi
+     lamanya tidak lagi menunjuk baris mana pun. Bila tidak disimpan final,
+     verifikasi itu dibuang supaya luasnya tidak terhitung dobel/basi. */
+  if (!FINAL && status !== "APPROVED") {
+    for (let i = DB.verifications.length - 1; i >= 0; i--) if (DB.verifications[i].daily_id === id) {
+      tandaiHapus("verifications", DB.verifications[i].verification_id); DB.verifications.splice(i, 1);
+    }
+  }
+  if (FINAL) {
+    /* Verifikasi lama milik laporan ini dibuang dulu (progress_id-nya sudah
+       berganti), lalu dibuat ulang sama dengan luas di lembar. */
+    for (let i = DB.verifications.length - 1; i >= 0; i--) if (DB.verifications[i].daily_id === id) {
+      tandaiHapus("verifications", DB.verifications[i].verification_id); DB.verifications.splice(i, 1);
+    }
+    DB.progress.filter(p => p.daily_id === id && !isKeg(p)).forEach(p => DB.verifications.push({
+      verification_id: uid("VF"), progress_id: p.progress_id, daily_id: id, bamk_id: d.bamk_id,
+      scope_id: p.scope_id || "", submitted_qty: nz(p.actual_qty), verified_qty: nz(p.actual_qty),
+      verified_by: S.user.user_id, verified_date: d.report_date || today(), status: "VERIFIED",
+      remarks: "Dari lembar Daily Activity bertanda tangan"
+    }));
+    const hd = byId(DB.dailies, "daily_id", id);
+    if (hd) hd.review_note = "Input langsung dari lembar Daily Activity bertanda tangan";
+    logReview(id, "SETUJU", (sebelum ? "Diperbarui" : "Diinput") + " langsung oleh Project Control dari lembar Daily Activity bertanda tangan" +
+      " — luas terverifikasi " + fmt(d.progress.reduce((a, p) => a + nz(p.actual_qty), 0), 2) + " m².");
+  }
   if (status === "SUBMITTED") logReview(id, wasRejected ? "REVISI" : "SUBMIT",
     wasRejected ? ("Laporan diperbaiki dan diajukan kembali (revisi ke-" + rev + ").") : "Laporan diajukan ke Project Control.");
   audit(d.daily_id ? "UPDATE" : "CREATE", "07_DAILY_REPORT", id, "",
     status + (beda.length ? " · " + beda.length + " perubahan" : ""));
   save();
-  toast(status === "DRAFT" ? "Draft tersimpan." : (wasRejected ? "Laporan diajukan ulang." : "Laporan diajukan ke Project Control."), "ok");
+  toast(status === "DRAFT" ? "Draft tersimpan." : FINAL ? "Laporan tersimpan final dan terverifikasi." :
+    (wasRejected ? "Laporan diajukan ulang." : "Laporan diajukan ke Project Control."), "ok");
   S.draft = null;
   go("daily-list");
 }
