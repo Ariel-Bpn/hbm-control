@@ -302,6 +302,59 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
 .btn.danger:hover{background:var(--red);color:#fff}
 .mfoot .btn.danger{margin-right:auto}
 
+/* ---------- V2.9 WAJAH ADMIN ---------- */
+.lk-on [data-lk]:not(.lk-aktif){display:none !important}
+.lksteps{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
+.lkstep{flex:1 0 auto;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:999px;
+  padding:5px 10px 5px 5px;cursor:pointer;font-size:12px;color:var(--ink-2);white-space:nowrap}
+.lkstep.on{border-color:var(--rail);background:var(--olive-soft);color:var(--ink);font-weight:700}
+.lkstep.lewat{color:var(--ink)}
+.lkno{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--steel);font-weight:700;font-size:12px;flex:0 0 auto}
+.lkstep.on .lkno{background:var(--rail);color:#fff}
+.lkstep.lewat .lkno{background:var(--teal);color:#fff}
+.lkno.besar{width:34px;height:34px;font-size:16px;background:var(--rail);color:#fff;margin-right:10px}
+.lknav{position:sticky;bottom:0;z-index:5;box-shadow:0 -4px 14px rgba(19,36,51,.10)}
+@media (max-width:700px){ .lkstep .lkt{display:none} .lkstep.on .lkt{display:inline} }
+.card.adm .eyebrow{margin-bottom:2px}
+
+/* ---------- V2.9 PETA PANEL ---------- */
+.ppchips{display:flex;gap:6px;flex-wrap:wrap}
+.ppchip{border:1.5px solid var(--c);background:#fff;color:var(--ink);border-radius:999px;padding:6px 11px;cursor:pointer;font-size:12.5px}
+.ppchip b{display:inline-block;min-width:16px;text-align:center;border-radius:3px;background:var(--c);color:#fff;margin-right:2px}
+.ppchip.on{background:var(--c);color:#fff;font-weight:700}
+.ppchip.on b{background:#fff;color:var(--c)}
+.ppn{display:inline-block;background:var(--ink);color:#fff;border-radius:9px;padding:0 6px;font-size:11px}
+.pptabs{border-radius:var(--r-s);padding:0 6px}
+.ppw{overflow-x:auto;padding-bottom:4px}
+.ppr{display:flex;align-items:stretch;gap:4px;margin-bottom:4px;width:max-content}
+.ppr .ppc{position:sticky;left:0;z-index:2;flex:0 0 70px;background:var(--paper);text-align:center;font-weight:700;font-size:12px;
+  padding-top:10px;box-shadow:3px 0 4px -2px rgba(19,36,51,.15)}
+.pptr{position:relative;height:82px;flex:0 0 auto;background:#F4F6F8;border-radius:4px}
+.pptr .pp{position:absolute;top:0;bottom:0;min-width:0;overflow:hidden;padding:4px 2px}
+.ppruler{position:relative;height:18px;flex:0 0 auto;border-top:1.5px solid var(--ink-3)}
+.ppruler span{position:absolute;top:2px;font-size:10px;color:var(--ink-2);white-space:nowrap;border-left:1px solid var(--ink-3);padding-left:3px}
+.pp{border:1.5px solid var(--line);border-radius:6px;padding:5px 4px;text-align:center;font-size:11px;vertical-align:top;
+  background:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;min-width:66px}
+.pp b{display:block;font-size:11.5px}
+.pp .tiny{display:block;color:var(--ink-2)}
+.pp em{display:block;font-style:normal;font-weight:700;font-size:10px}
+.pp.buka:hover{border-color:var(--c)}
+.pp.hari{background:var(--c);border-color:var(--c);color:#fff}
+.pp.hari .tiny{color:#fff}
+.pp.selesai{background:var(--steel);cursor:default}
+.pp.separuh{border-style:dashed;border-color:var(--c)}
+.pp.kunci{background:repeating-linear-gradient(45deg,#F4F6F8,#F4F6F8 4px,#E6EBEF 4px,#E6EBEF 8px);color:var(--ink-3);cursor:not-allowed}
+.ppd{display:inline-flex;gap:2px;margin-top:3px;vertical-align:middle}
+.ppd i{font-style:normal;display:inline-block;width:15px;height:13px;border:1.4px solid;border-radius:2px;font-size:8.5px;
+  line-height:10px;font-weight:700;color:#132433;text-align:center}
+.ppacc{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px}
+.ppacc .pp{text-align:left;min-width:0}
+.ppacc .pp span{display:block}
+.pplg span{white-space:nowrap}
+.pplg .lg{display:inline-block;width:13px;height:11px;border:1.4px solid var(--line);border-radius:2px;vertical-align:middle;margin-right:3px;background:#fff}
+.pplg .lg.hari{background:var(--c);border-color:var(--c)}
+.pplg .lg.selesai{background:var(--steel);border-color:var(--ink-3)}
+.pplg .lg.kunci{background:#E6EBEF}
 </style>
 </head>
 <body>
@@ -387,7 +440,7 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "2.8";
+const APP_VERSI = "2.9";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
 const CODEGS_VERSI = "2.3";
@@ -1255,12 +1308,13 @@ const ROLE_LABEL = {
   MANAGEMENT: "Management HBM", FINANCE: "Finance HBM"
 };
 const PERM = {
-  ADMIN_SITE: ["daily_input", "daily_own",
-    /* hanya melihat — tidak pernah mengubah */ "dash_view", "scurve_view"],
+  /* V2.9 — wajah Admin dibatasi pada menu input lapangan saja. */
+  ADMIN_SITE: ["admin_home", "daily_input", "daily_own", "admin_peta", "admin_ukur", "admin_panduan"],
   PROJECT_CONTROL: ["dash", "daily_input", "daily_all", "daily_edit_all", "review", "verify", "accept",
     "billable", "billing", "documents", "issues", "reports", "master", "money", "audit",
     "settings", "users", "meeting", "pesan",
-    /* V2.6 */ "kendali", "scurve", "boq", "finance", "notif"],
+    /* V2.6 */ "kendali", "scurve", "boq", "finance", "notif",
+    /* V2.9 */ "admin_peta", "admin_panduan"],
   MANAGEMENT: ["dash", "reports", "money", "billing_view", "issues_view", "meeting", "sync_panel", "pesan",
     /* V2.6 */ "kendali", "scurve", "boq_view", "finance_view", "notif"],
   FINANCE: ["dash", "billable", "billing", "reports", "money", "documents", "audit", "sync_panel", "pesan",
@@ -1639,6 +1693,883 @@ function earnedBamk(bamk_id) {
 function persenBamk(bamk_id) {
   const b = bamkOf(bamk_id), v = volBamk(b);
   return v > 0 ? Math.min(100, earnedBamk(bamk_id) / v * 100) : 0;
+}
+
+/* ============================================================
+   V2.9 — PETA PANEL PROGRES
+   ------------------------------------------------------------
+   Masalahnya: luas harian yang diketik bebas (m²) membuat tiap orang
+   bisa menaksir progress dengan caranya sendiri. Lembar gambar lama
+   juga membagi dinding secara teoretis (3 course × 8 segmen), padahal
+   tanki aslinya berbeda.
+
+   Penyelesaiannya: tiap tanki punya PETA PANEL dari hasil ukur lapangan
+     · Bentangan dinding luar : per course — tinggi, jumlah plat, dan geser
+       (jarak titik 0 ke sambungan tegak pertama). Titik 0 = tangga, nomor
+       plat naik searah jarum jam dilihat dari atas. Sambungan yang
+       berselang-seling antar course tergambar apa adanya.
+     · Tampak atas           : cincin dari tepi ke tengah, tiap cincin
+       dengan jumlah plat atap sendiri
+     Gambar bentangan dan tampak atas terbentuk sendiri dari angka itu.
+     · Perlengkapan          : daftar item dengan porsi (%)
+   Peta dikunci oleh Project Control. Sesudah itu laporan harian tidak
+   lagi mengetik m², melainkan mencentang panel yang selesai; luasnya
+   dihitung sistem dari volume BAMK.
+
+   Tidak ada kolom baru di server (Code.gs tetap). Penyimpanan:
+     · peta  → kolom catatan tanki:  [PETA#sidik]{json}[/PETA] catatan
+               Sidik ditaruh paling depan supaya setiap perubahan peta
+               terbaca sebagai perubahan baris dan ikut tersinkron.
+     · panel → kolom work_package baris progress:
+               "Persiapan permukaan — Shell (dinding) · Panel: C2-S3, C2-S4 (½)"
+               Tetap terbaca manusia di Spreadsheet, dan dibaca ulang aplikasi.
+   ============================================================ */
+const PETA_BUKA = "[PETA#", PETA_TUTUP = "[/PETA]";
+const ACC_BAWAAN = [
+  { k: "ACC-1", n: "Tangga & handrail", w: 35 },
+  { k: "ACC-2", n: "Pipa foam / water drencher", w: 30 },
+  { k: "ACC-3", n: "Foam chamber, vent & nozzle", w: 20 },
+  { k: "ACC-4", n: "Lettering & lain-lain", w: 15 }
+];
+function sidik8(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+function bacaPeta(notes) {
+  const s = String(notes == null ? "" : notes);
+  const i = s.indexOf(PETA_BUKA);
+  if (i < 0) return { peta: null, sisa: s };
+  const j = s.indexOf(PETA_TUTUP, i), k = s.indexOf("]", i);
+  if (j < 0 || k < 0 || k > j) return { peta: null, sisa: s };
+  let peta = null;
+  try { peta = JSON.parse(s.slice(k + 1, j)); } catch (e) { peta = null; }
+  return { peta: peta ? normalPeta(peta) : null, sisa: (s.slice(0, i) + s.slice(j + PETA_TUTUP.length)).trim() };
+}
+function tulisPeta(peta, sisa) {
+  sisa = String(sisa || "").trim();
+  if (!peta) return sisa;
+  const json = JSON.stringify(peta);
+  return PETA_BUKA + sidik8(json) + "]" + json + PETA_TUTUP + (sisa ? " " + sisa : "");
+}
+function normalPeta(p) {
+  const o = Object.assign({
+    v: 2, ref: "Tangga", plat: 4, course: [], atap: [], acc: ACC_BAWAAN.map(a => Object.assign({}, a)),
+    half: true, note: "", survei: { tgl: "", oleh: "" }, kunci: null, awal: {}
+  }, p || {});
+  /* Peta versi pertama (segmen sama untuk semua course, atap satu angka)
+     diubah ke bentuk per course & per cincin tanpa mengubah kode panelnya. */
+  const segLama = Math.max(1, Math.round(nz(o.seg) || 8));
+  o.course = (Array.isArray(o.course) ? o.course : []).map(c => (c && typeof c === "object")
+    ? { h: nz(c.h), n: Math.max(1, Math.round(nz(c.n) || 1)), geser: Math.max(0, nz(c.geser)) }
+    : { h: nz(c), n: segLama, geser: 0 });
+  if (!Array.isArray(o.atap) || !o.atap.length) o.atap = [{ n: Math.max(1, Math.round(nz(o.roof) || 8)), lebar: 0 }];
+  o.atap = o.atap.map(r => ({ n: Math.max(1, Math.round(nz(r && r.n) || 1)), lebar: Math.max(0, nz(r && r.lebar)) }));
+  delete o.seg; delete o.roof; o.v = 2;
+  o.plat = nz(o.plat) > 0 ? nz(o.plat) : 4;
+  o.acc = (Array.isArray(o.acc) ? o.acc : []).filter(a => a && a.k);
+  o.awal = o.awal && typeof o.awal === "object" ? o.awal : {};
+  o.survei = o.survei || { tgl: "", oleh: "" };
+  return o;
+}
+const catatanTanki = t => bacaPeta(t ? t.notes : "").sisa;
+function petaTanki(tank_id) { const t = tankOf(tank_id); return t ? bacaPeta(t.notes).peta : null; }
+function petaTerkunci(tank_id) { const p = petaTanki(tank_id); return p && p.kunci ? p : null; }
+function simpanPetaTanki(tank_id, peta) {
+  const t = tankOf(tank_id); if (!t) return false;
+  t.notes = tulisPeta(peta, bacaPeta(t.notes).sisa);
+  return true;
+}
+const tinggiPeta = p => (p.course || []).reduce((a, c) => a + nz(c && typeof c === "object" ? c.h : c), 0);
+
+/* Singkatan & warna tahap — B / P / F seperti legenda lembar gambar. */
+const WARNA_TAHAP = ["#E0A526", "#C65A3A", "#3E8E5A", "#4C6FB0", "#7A5BA8"];
+function singkatTahap(t, i) {
+  const n = String(t && t.stage_name || "").toLowerCase();
+  if (/blast|persiapan|surface/.test(n)) return "B";
+  if (/primer/.test(n)) return "P";
+  if (/inter|antara|mid/.test(n)) return "I";
+  if (/finish|top|akhir/.test(n)) return "F";
+  return String(i + 1);
+}
+
+/* Daftar panel satu tanki. Luas tiap panel adalah porsi dari volume BAMK
+   bagian itu, sehingga jumlah semua panel selalu sama persis dengan BAMK.
+   Tanpa BAMK, dipakai hitungan luas eksterior tanki. */
+function daftarPanel(peta, W, tank_id) {
+  const tid = W ? W.tank_id : tank_id, t = tankOf(tid);
+  const vol = W ? { SHELL: volBagian(W, "SHELL"), ROOF: volBagian(W, "ROOF"), ACC: volBagian(W, "ACC") }
+    : (() => { const v = volDariTanki(tid); return { SHELL: v.shell, ROOF: v.roof, ACC: v.acc }; })();
+  const D = nz(t ? t.shell_diameter_m : 0), C = Math.PI * D, H = tinggiPeta(peta), out = [];
+  /* Dinding: tiap course punya jumlah plat dan letak sambungan sendiri.
+     Plat ke-1 dimulai di sambungan tegak pertama sesudah titik 0 (searah
+     jarum jam dilihat dari atas); plat terakhir melewati titik 0. */
+  peta.course.forEach((c, ci) => {
+    const L = C > 0 ? C / c.n : 0;
+    for (let k = 1; k <= c.n; k++) out.push({
+      kode: "C" + (ci + 1) + "-S" + k, part: "SHELL", c: ci + 1, s: k, tinggi: c.h, n: c.n, panjang: L,
+      mulai: C > 0 ? (nz(c.geser) + (k - 1) * L) % C : 0,
+      luas: H > 0 ? vol.SHELL * c.h / H / c.n : 0
+    });
+  });
+  /* Atap: cincin dari tepi (R1) ke tengah; tiap cincin punya jumlah plat sendiri. */
+  cincinAtap(peta, D).forEach((r, i) => {
+    for (let k = 1; k <= r.n; k++) out.push({
+      kode: kodeAtap(peta, i, k), part: "ROOF", ring: i + 1, s: k, n: r.n, rIn: r.rIn, rOut: r.rOut, rMax: r.rMax,
+      luas: vol.ROOF * r.porsi / r.n
+    });
+  });
+  const wTot = peta.acc.reduce((a, x) => a + nz(x.w), 0);
+  peta.acc.forEach((a, i) => out.push({ kode: a.k, part: "ACC", s: i + 1, nama: a.n, luas: wTot > 0 ? vol.ACC * nz(a.w) / wTot : 0 }));
+  return out;
+}
+const kodeAtap = (peta, i, k) => peta.atap.length > 1 ? "R" + (i + 1) + "-S" + k : "R-S" + k;
+/* Jari-jari tiap cincin atap. Lebar diisi dari ukur lapangan; bila kosong
+   semuanya, cincin dibagi rata. Porsi luas cincin = selisih kuadrat jari-jari. */
+function cincinAtap(peta, D) {
+  const R = D > 0 ? D / 2 : 1, n = peta.atap.length;
+  const pakaiLebar = n > 1 && peta.atap.every(r => nz(r.lebar) > 0);
+  const lebar = peta.atap.map(r => pakaiLebar ? nz(r.lebar) : R / n);
+  const jumlah = lebar.reduce((a, x) => a + x, 0) || 1;
+  let luar = R;
+  return peta.atap.map((r, i) => {
+    const w = lebar[i] * R / jumlah, dalam = Math.max(0, luar - w);
+    const o = { n: r.n, rOut: luar, rIn: i === n - 1 ? 0 : dalam, rMax: R, porsi: (luar * luar - (i === n - 1 ? 0 : dalam * dalam)) / (R * R) };
+    luar = dalam; return o;
+  });
+}
+function ringkasPeta(p) {
+  const plat = p.course.reduce((a, c) => a + c.n, 0), atap = p.atap.reduce((a, r) => a + r.n, 0);
+  return p.course.length + " course · " + plat + " plat dinding · atap " +
+    (p.atap.length > 1 ? p.atap.length + " cincin / " : "") + atap + " plat · " + p.acc.length + " item perlengkapan";
+}
+/* Potongan gambar satu plat pada bentangan: plat yang melewati titik 0
+   digambar dua potong (ujung kanan dan awal kiri), tetap satu kode. */
+function potongPlat(x, C) {
+  const akhir = x.mulai + x.panjang;
+  if (akhir <= C + 1e-6) return [{ a: x.mulai, l: x.panjang, lanjut: false }];
+  return [{ a: x.mulai, l: C - x.mulai, lanjut: false }, { a: 0, l: akhir - C, lanjut: true }];
+}
+function jalurSektor(cx, cy, r0, r1, a0, a1) {
+  const besar = (a1 - a0) > Math.PI ? 1 : 0, P = (r, a) => (cx + r * Math.cos(a)).toFixed(1) + "," + (cy + r * Math.sin(a)).toFixed(1);
+  return "M" + P(r1, a0) + " A" + r1.toFixed(1) + "," + r1.toFixed(1) + " 0 " + besar + " 1 " + P(r1, a1) +
+    " L" + P(r0, a1) + " A" + r0.toFixed(1) + "," + r0.toFixed(1) + " 0 " + besar + " 0 " + P(r0, a0) + " Z";
+}
+
+/* Membaca dan menulis daftar panel di kolom work_package. */
+function bacaPanel(wp) {
+  const m = String(wp || "").match(/Panel:\s*(.+)$/);
+  if (!m) return [];
+  return m[1].split(",").map(x => x.trim()).filter(Boolean).map(x => {
+    const half = /\(½\)|\(1\/2\)/.test(x);
+    return { kode: x.replace(/\(.*?\)/g, "").trim(), f: half ? 0.5 : 1 };
+  }).filter(x => x.kode);
+}
+function labelPanel(stage_id, part, list) {
+  const t = tahapOf(stage_id);
+  return (t ? t.stage_name : "") + " — " + bagianLabel(part) +
+    (list.length ? " · Panel: " + list.map(x => x.kode + (x.f < 1 ? " (½)" : "")).join(", ") : "");
+}
+/* Ringkasan pendek untuk lembar cetak: "C2: S3–S5, S7 · R: S1 (½)". */
+function ringkasKode(list) {
+  if (!list || !list.length) return "";
+  const grup = {}, urut = [];
+  list.forEach(x => {
+    const m = x.kode.match(/^(C\d+|R\d*)-S(\d+)$/);
+    const g = m ? m[1] : "ACC", n = m ? +m[2] : x.kode;
+    if (!grup[g]) { grup[g] = []; urut.push(g); }
+    grup[g].push({ n: n, f: x.f });
+  });
+  return urut.map(g => {
+    const a = grup[g];
+    if (g === "ACC") return a.map(x => x.n + (x.f < 1 ? " (½)" : "")).join(", ");
+    a.sort((p, q) => p.n - q.n);
+    const bag = [];
+    let i = 0;
+    while (i < a.length) {
+      if (a[i].f < 1) { bag.push("S" + a[i].n + " (½)"); i++; continue; }
+      let j = i;
+      while (j + 1 < a.length && a[j + 1].f >= 1 && a[j + 1].n === a[j].n + 1) j++;
+      bag.push(j > i + 1 ? "S" + a[i].n + "–S" + a[j].n : j === i + 1 ? "S" + a[i].n + ", S" + a[j].n : "S" + a[i].n);
+      i = j + 1;
+    }
+    return g + ": " + bag.join(", ");
+  }).join(" · ");
+}
+
+/* Keadaan panel satu BAMK: { stage_id: { kode: bagian selesai 0..1 } }.
+   Sumbernya laporan harian yang tidak dikembalikan, ditambah saldo awal. */
+function keadaanPanel(bamk_id, kecuali, tanpaAwal) {
+  const W = bamkOf(bamk_id), hasil = {}, tgl = {};
+  if (!W) return { f: hasil, tgl: tgl };
+  const tambah = (st, kode, f, t) => {
+    hasil[st] = hasil[st] || {}; hasil[st][kode] = Math.min(1, (hasil[st][kode] || 0) + f);
+    if (t) { tgl[st] = tgl[st] || {}; if (!tgl[st][kode] || tgl[st][kode] < t) tgl[st][kode] = t; }
+  };
+  const ok = dailyIdsOfBamk(bamk_id, kecuali);
+  const tglLap = {};
+  DB.dailies.forEach(d => { tglLap[d.daily_id] = d.report_date; });
+  DB.progress.forEach(p => {
+    if (!ok.has(p.daily_id) || isKeg(p)) return;
+    bacaPanel(p.work_package).forEach(x => tambah(p.stage_id, x.kode, x.f, tglLap[p.daily_id]));
+  });
+  if (!tanpaAwal) {
+    const pt = petaTanki(W.tank_id), aw = pt && pt.awal ? (pt.awal[bamk_id] || {}) : {};
+    Object.keys(aw).forEach(st => Object.keys(aw[st] || {}).forEach(k => tambah(st, k, nz(aw[st][k]), "saldo awal")));
+  }
+  return { f: hasil, tgl: tgl };
+}
+/* Luas yang tercatat TANPA kode panel (sebelum peta dikunci), per bagian|tahap. */
+function luasTanpaPanel(bamk_id) {
+  const ok = dailyIdsOfBamk(bamk_id, null), out = {};
+  DB.progress.forEach(p => {
+    if (!ok.has(p.daily_id) || isKeg(p) || bacaPanel(p.work_package).length) return;
+    const k = p.part + "|" + p.stage_id; out[k] = (out[k] || 0) + nz(p.actual_qty);
+  });
+  return out;
+}
+
+/* Batas yang masih boleh dicentang pada satu panel untuk satu tahap:
+   tidak lebih dari 1 panel penuh, dan tidak melampaui tahap sebelumnya. */
+function sisaPanel(done, sel, stage_id, kode) {
+  const TH = tahapAktif(), i = TH.findIndex(t => t.stage_id === stage_id);
+  const g = (o, st) => ((o[st] || {})[kode] || 0);
+  const atas = i <= 0 ? 1 : Math.min(1, g(done, TH[i - 1].stage_id) + g(sel, TH[i - 1].stage_id));
+  return Math.max(0, atas - g(done, stage_id));
+}
+/* Sesudah sebuah tahap dikurangi, tahap sesudahnya dipangkas supaya
+   urutan tetap sah. Mengembalikan jumlah panel yang terpangkas. */
+function rapikanPilihan(done, sel) {
+  const TH = tahapAktif(); let n = 0;
+  for (let i = 1; i < TH.length; i++) {
+    const st = TH[i].stage_id, s = sel[st]; if (!s) continue;
+    Object.keys(s).forEach(k => {
+      const maks = sisaPanel(done, sel, st, k);
+      if (s[k] > maks + 1e-9) { n++; const v = maks >= 1 ? 1 : maks >= 0.5 ? 0.5 : 0; if (v > 0) s[k] = v; else delete s[k]; }
+    });
+  }
+  return n;
+}
+function nilaiBerikut(sekarang, sisa, half) {
+  const penuh = sisa >= 1 - 1e-9 ? 1 : sisa >= 0.5 - 1e-9 ? 0.5 : 0;
+  if (penuh <= 0) return 0;
+  const urut = [0, penuh]; if (half && penuh > 0.5) urut.push(0.5);
+  const i = urut.findIndex(v => Math.abs(v - sekarang) < 1e-9);
+  return urut[(i + 1) % urut.length];
+}
+
+/* Pilihan panel → baris progress (satu baris per tahap per bagian). */
+function pilihanKeProgress(sel, peta, W) {
+  const P = {}; daftarPanel(peta, W, W ? W.tank_id : "").forEach(x => { P[x.kode] = x; });
+  const rows = [];
+  tahapAktif().forEach(t => {
+    const s = sel[t.stage_id] || {};
+    BAGIAN.forEach(b => {
+      const list = Object.keys(s).filter(k => P[k] && P[k].part === b[0] && s[k] > 0)
+        .map(k => ({ kode: k, f: s[k] }))
+        .sort((x, y) => urutKode(x.kode) - urutKode(y.kode));
+      if (!list.length) return;
+      const luas = list.reduce((a, x) => a + P[x.kode].luas * x.f, 0);
+      rows.push({
+        part: b[0], stage_id: t.stage_id, scope_id: "", activity: t.stage_name, activity_other: "",
+        work_package: labelPanel(t.stage_id, b[0], list),
+        target_qty: 0, actual_qty: Math.round(luas * 1e6) / 1e6, unit: "m2", pct_complete: 0
+      });
+    });
+  });
+  return rows;
+}
+function urutKode(k) {
+  const m = String(k).match(/^C(\d+)-S(\d+)$/); if (m) return +m[1] * 1000 + +m[2];
+  const r = String(k).match(/^R(\d*)-S(\d+)$/); if (r) return 100000 + (+r[1] || 1) * 1000 + +r[2];
+  const a = String(k).match(/(\d+)$/); return 900000 + (a ? +a[1] : 0);
+}
+function progressKePilihan(rows) {
+  const sel = {};
+  (rows || []).forEach(p => bacaPanel(p.work_package).forEach(x => {
+    sel[p.stage_id] = sel[p.stage_id] || {};
+    sel[p.stage_id][x.kode] = Math.min(1, (sel[p.stage_id][x.kode] || 0) + x.f);
+  }));
+  return sel;
+}
+/* Pemeriksaan akhir sebelum laporan disimpan. */
+function periksaPanel(d) {
+  const W = bamkOf(d.bamk_id); if (!W) return "";
+  const peta = petaTerkunci(W.tank_id); if (!peta || d.modeManual) return "";
+  if (prVol(d.progress).some(p => !bacaPanel(p.work_package).length))
+    return "Tanki " + tankNo(W.tank_id) + " memakai peta panel. Pekerjaan coating diisi dengan mencentang panel, bukan mengetik luas.";
+  const done = keadaanPanel(d.bamk_id, d.daily_id).f, sel = progressKePilihan(d.progress);
+  const kodeSah = new Set(daftarPanel(peta, W).map(x => x.kode));
+  for (const t of tahapAktif()) {
+    const s = sel[t.stage_id] || {};
+    for (const k of Object.keys(s)) {
+      if (!kodeSah.has(k)) return "Panel " + k + " tidak ada di peta tanki ini.";
+      if (s[k] > sisaPanel(done, sel, t.stage_id, k) + 1e-9)
+        return "Panel " + k + " — " + t.stage_name + ": melebihi yang masih boleh (sudah tercatat di laporan lain, atau tahap sebelumnya belum selesai).";
+    }
+  }
+  return "";
+}
+
+/* ---------- KOMPONEN PEMILIH PANEL ----------
+   ctx = { peta, W, done:{st:{kode:f}}, sel:{st:{kode:f}}, stage, bagian,
+           baca (true = hanya lihat), onUbah() } */
+function htmlPemilih(ctx) {
+  const tid = ctx.W ? ctx.W.tank_id : ctx.tank_id, tk = tankOf(tid);
+  const TH = tahapAktif(), P = daftarPanel(ctx.peta, ctx.W, tid);
+  const st = ctx.stage || (TH[0] || {}).stage_id, bag = ctx.bagian || "SHELL";
+  const iSt = TH.findIndex(t => t.stage_id === st);
+  const g = (o, s, k) => ((o[s] || {})[k] || 0);
+  const kotakTahap = (k) => `<span class="ppd">${TH.map((t, i) => {
+    const a = g(ctx.done, t.stage_id, k), b = g(ctx.sel, t.stage_id, k);
+    const fill = Math.min(1, a + b), col = WARNA_TAHAP[i % WARNA_TAHAP.length];
+    const bg = fill <= 0 ? "#fff" : fill >= 1 ? col : `linear-gradient(90deg,${col} 50%,#fff 50%)`;
+    return `<i title="${esc(t.stage_name)}" style="background:${bg};border-color:${col};${b > 0 ? "outline:2px solid var(--ink);outline-offset:0" : ""}">${singkatTahap(t, i)}</i>`;
+  }).join("")}</span>`;
+  const keadaan = (k) => {
+    const a = g(ctx.done, st, k), b = g(ctx.sel, st, k), sisa = sisaPanel(ctx.done, ctx.sel, st, k);
+    if (b > 0) return "hari";
+    if (a >= 1 - 1e-9) return "selesai";
+    if (sisa <= 1e-9) return "kunci";
+    return a > 0 ? "separuh" : "buka";
+  };
+  const bolehKetuk = k => !ctx.baca && k !== "kunci" && k !== "selesai";
+  const warnaSt = WARNA_TAHAP[Math.max(0, iSt) % WARNA_TAHAP.length];
+
+  const chip = ctx.pratinjau ? "" : TH.map((t, i) => {
+    const s = ctx.sel[t.stage_id] || {}, n = Object.keys(s).length;
+    return `<button class="ppchip ${t.stage_id === st ? "on" : ""}" data-pst="${t.stage_id}" style="--c:${WARNA_TAHAP[i % WARNA_TAHAP.length]}">
+      <b>${singkatTahap(t, i)}</b> ${esc(t.stage_name)} <span class="tiny">${fmt(t.weight_pct, 0)}%</span>${n ? ` <span class="ppn">${n}</span>` : ""}</button>`;
+  }).join("");
+  const tab = [["SHELL", "Bentangan dinding"], ["ROOF", "Tampak atas (atap)"], ["ACC", "Perlengkapan"]]
+    .map(b => `<button data-pbg="${b[0]}" class="${bag === b[0] ? "on" : ""}">${b[1]}</button>`).join("");
+
+  let isi = "";
+  if (bag === "SHELL") {
+    const C = Math.PI * nz(tk ? tk.shell_diameter_m : 0), nC = ctx.peta.course.length;
+    const sh = P.filter(x => x.part === "SHELL");
+    if (!nC || C <= 0) isi = `<div class="empty">${C <= 0 ? "Diameter tanki belum diisi di Master Data › Tanki." : "Peta belum punya course."}</div>`;
+    else {
+      const layar = (document.documentElement && document.documentElement.clientWidth) || 1000;
+      const ruang = ctx.lebar || Math.max(260, Math.min(980, layar - (layar < 900 ? 120 : 430)));
+      const Lmin = Math.min.apply(null, sh.map(x => x.panjang).filter(v => v > 0).concat([C]));
+      /* Skala: muat selebar layar, tetapi plat terkecil minimal 70 px supaya mudah diketuk. */
+      const skala = Math.max(ruang / C, 70 / Lmin), lebar = Math.round(C * skala);
+      let baris = "";
+      for (let c = nC; c >= 1; c--) {
+        const kc = ctx.peta.course[c - 1];
+        baris += `<div class="ppr"><div class="ppc">C${c}<div class="tiny muted">${fmt(kc.h, 2)} m</div><div class="tiny muted">${kc.n} plat</div></div>
+          <div class="pptr" style="width:${lebar}px">${sh.filter(x => x.c === c).map(x => {
+          const k = keadaan(x.kode), b = g(ctx.sel, st, x.kode);
+          return potongPlat(x, C).map(q => {
+            const w = q.l * skala - 3;
+            return `<div class="pp ${k}" ${bolehKetuk(k) ? `data-pk="${x.kode}"` : ""} title="${x.kode} · ${fmt(x.panjang, 2)} × ${fmt(x.tinggi, 2)} m = ${fmt(x.luas, 2)} m²"
+              style="left:${(q.a * skala + 1.5).toFixed(1)}px;width:${Math.max(4, w).toFixed(1)}px;--c:${warnaSt}">
+              ${w >= 30 ? `<b>${q.lanjut ? "↩" : ""}${w >= 54 ? x.kode : "S" + x.s}</b>` : ""}
+              ${!q.lanjut && w >= 56 ? `<span class="tiny">${fmt(x.luas, 2)} m²</span>${kotakTahap(x.kode)}` : ""}
+              ${b > 0 && w >= 40 && !q.lanjut ? `<em>${b < 1 ? "½ hari ini" : "hari ini"}</em>` : ""}</div>`;
+          }).join("");
+        }).join("")}</div></div>`;
+      }
+      const langkah = C <= 30 ? 2 : C <= 80 ? 5 : C <= 200 ? 10 : 20;
+      let tanda = "";
+      for (let m = 0; m < C - langkah * 0.75; m += langkah)
+        tanda += `<span style="left:${(m * skala).toFixed(1)}px">${m === 0 ? (langkah * skala >= 80 ? "0 · " + esc(ctx.peta.ref || "titik 0") : "0") : m + " m"}</span>`;
+      tanda += `<span style="left:${(C * skala - 1).toFixed(1)}px;transform:translateX(-100%);border-left:none;border-right:1px solid var(--ink-3);padding:0 2px 0 0">${fmt(C, 2)} m</span>`;
+      isi = `<div class="ppw">${baris}<div class="ppr"><div class="ppc"></div><div class="ppruler" style="width:${lebar}px">${tanda}</div></div></div>
+        <div class="tiny muted mt8">Bentangan dinding luar seperti dilihat dari luar tanki, digelar mulai ${esc(ctx.peta.ref || "titik 0")} (0 m)
+          searah jarum jam bila dilihat dari atas. C1 paling bawah. Tiap kotak = satu plat; panjang plat = keliling ÷ jumlah plat course itu,
+          dan letak sambungannya mengikuti geser yang diukur, jadi susunan berselang-seling antar course tergambar apa adanya.
+          Plat bertanda ↩ adalah potongan plat terakhir yang melewati titik 0.</div>`;
+    }
+  }
+  if (bag === "ROOF") {
+    const RR = 130, cx = 150, cy = 150, rv = 16;
+    const roofs = P.filter(x => x.part === "ROOF");
+    const skalaR = r => rv + (RR - rv) * (roofs[0] ? r / roofs[0].rMax : 0);
+    let path = "";
+    roofs.forEach(x => {
+      const a0 = -Math.PI / 2 + (x.s - 1) * 2 * Math.PI / x.n, a1 = a0 + 2 * Math.PI / x.n;
+      const r0 = skalaR(x.rIn), r1 = skalaR(x.rOut);
+      const k = keadaan(x.kode), b = g(ctx.sel, st, x.kode), a = g(ctx.done, st, x.kode);
+      const fill = k === "hari" ? warnaSt : k === "selesai" ? warnaSt + "55" : k === "separuh" ? warnaSt + "2a" : k === "kunci" ? "#E4E9EE" : "#FFFFFF";
+      const am = (a0 + a1) / 2, rm = (r0 + r1) / 2, tx = cx + rm * Math.cos(am), ty = cy + rm * Math.sin(am);
+      const busur = rm * (a1 - a0), fs = Math.max(5.5, Math.min(10, busur / 2.6, (r1 - r0) / 1.6));
+      path += `<path ${bolehKetuk(k) ? `data-pk="${x.kode}" style="cursor:pointer"` : ""} d="${jalurSektor(cx, cy, r0, r1, a0, a1)}"
+        fill="${fill}" stroke="#41505C" stroke-width="1"><title>${x.kode} · ${fmt(x.luas, 2)} m²</title></path>
+        <text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="${fs.toFixed(1)}"
+          font-weight="700" fill="${k === "hari" ? "#fff" : "#132433"}" pointer-events="none">${x.s}${b > 0 && b < 1 ? "½" : ""}${k === "selesai" ? "✓" : a > 0 && a < 1 && !b ? "½" : ""}</text>`;
+    });
+    const cin = ctx.peta.atap.map((r, i) => {
+      const x = roofs.find(q => q.ring === i + 1);
+      return `<div><b>${ctx.peta.atap.length > 1 ? "R" + (i + 1) : "R"}</b>${ctx.peta.atap.length > 1 ? (i === 0 ? " (tepi)" : i === ctx.peta.atap.length - 1 ? " (tengah)" : "") : ""}:
+        ${r.n} plat @ ${fmt(x ? x.luas : 0, 2)} m²</div>`;
+    }).join("");
+    isi = `<div class="row" style="align-items:flex-start">
+      <svg viewBox="0 0 300 312" style="width:min(100%,360px);flex:0 0 auto">
+        ${path}
+        <circle cx="150" cy="150" r="${rv}" fill="#fff" stroke="#41505C"/><text x="150" y="153" text-anchor="middle" font-size="7">vent</text>
+        <circle cx="150" cy="${150 - RR}" r="5" fill="var(--blue)"/><text x="150" y="${150 - RR - 9}" text-anchor="middle" font-size="9" fill="var(--blue)">${esc(ctx.peta.ref || "titik 0")}</text>
+        <text x="150" y="306" text-anchor="middle" font-size="9" fill="#4A5D6E">nomor plat naik searah jarum jam dilihat dari atas</text>
+      </svg>
+      <div class="small" style="flex:1 1 240px;min-width:0">
+        ${cin}
+        <div class="tiny muted mt8">${ctx.baca ? "" : "Ketuk plat pada gambar. "}Angka pada gambar = nomor plat (S).
+          ${ctx.peta.atap.length > 1 ? "Kode ditulis R1-S3 = cincin 1 (tepi), plat ke-3." : "Kode ditulis R-S3 = plat atap ke-3."}
+          Berwarna penuh = dicentang hari ini; pudar = sudah selesai; abu-abu = tahap sebelumnya belum selesai.</div>
+      </div></div>`;
+  }
+  if (bag === "ACC") {
+    isi = `<div class="ppacc">${P.filter(x => x.part === "ACC").map(x => {
+      const k = keadaan(x.kode), b = g(ctx.sel, st, x.kode);
+      return `<div class="pp ${k}" ${bolehKetuk(k) ? `data-pk="${x.kode}"` : ""} style="--c:${warnaSt}">
+        <b>${esc(x.kode)}</b> <span>${esc(x.nama)}</span><span class="tiny">${fmt(x.luas, 2)} m²</span>${kotakTahap(x.kode)}
+        ${b > 0 ? `<em>${b < 1 ? "½ hari ini" : "hari ini"}</em>` : ""}</div>`;
+    }).join("")}</div>`;
+  }
+
+  /* Ringkasan hari ini */
+  const rows = ctx.pratinjau ? [] : pilihanKeProgress(ctx.sel, ctx.peta, ctx.W);
+  const ring = rows.length ? `<div class="tw mt12"><table><thead><tr><th>Tahap</th><th>Bagian</th><th>Kode panel</th><th class="n">Luas (m²)</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td class="tiny">${esc((tahapOf(r.stage_id) || {}).stage_name || "")}</td><td class="tiny">${esc(bagianLabel(r.part))}</td>
+      <td class="tiny num">${esc(ringkasKode(bacaPanel(r.work_package)))}</td><td class="n">${fmt(r.actual_qty, 2)}</td></tr>`).join("")}</tbody>
+    <tfoot><tr><th colspan="3" class="right">${ctx.judulJumlah || "Jumlah hari ini"}</th><th class="n">${fmt(rows.reduce((a, r) => a + r.actual_qty, 0), 2)}</th></tr></tfoot></table></div>`
+    : `<div class="tiny muted mt12">${ctx.baca ? "" : "Belum ada panel yang dicentang."}</div>`;
+
+  return `${chip ? `<div class="ppchips">${chip}</div>` : ""}
+    <div class="tabs mt8 pptabs">${tab}</div>
+    <div class="mt8">${isi}</div>
+    ${ctx.pratinjau ? "" : `<div class="row tiny muted mt8 pplg">
+      <span><i class="lg buka"></i> boleh dicentang</span><span><i class="lg hari" style="--c:${warnaSt}"></i> dicentang hari ini</span>
+      <span><i class="lg selesai" style="--c:${warnaSt}"></i> sudah selesai</span><span><i class="lg kunci"></i> tahap sebelumnya belum</span>
+      ${ctx.baca ? "" : `<span>Ketuk lagi untuk ${ctx.peta.half ? "½ panel, lalu batal" : "membatalkan"}.</span>`}</div>`}
+    ${ring}`;
+}
+function pasangPemilih(kotak, ctx) {
+  const gambar = () => { kotak.innerHTML = htmlPemilih(ctx); };
+  kotak.onclick = e => {
+    const st = e.target.closest("[data-pst]"), bg = e.target.closest("[data-pbg]"), pk = e.target.closest("[data-pk]");
+    if (st) { ctx.stage = st.dataset.pst; gambar(); return; }
+    if (bg) { ctx.bagian = bg.dataset.pbg; gambar(); return; }
+    if (pk && !ctx.baca) {
+      const k = pk.dataset.pk, s = ctx.stage || (tahapAktif()[0] || {}).stage_id;
+      ctx.sel[s] = ctx.sel[s] || {};
+      const v = nilaiBerikut(ctx.sel[s][k] || 0, sisaPanel(ctx.done, ctx.sel, s, k), ctx.peta.half);
+      if (v > 0) ctx.sel[s][k] = v; else delete ctx.sel[s][k];
+      const n = rapikanPilihan(ctx.done, ctx.sel);
+      if (n) toast(n + " panel pada tahap berikutnya ikut dibatalkan, karena tahap sebelumnya dikurangi.", "err");
+      gambar();
+      if (ctx.onUbah) ctx.onUbah();
+    }
+  };
+  gambar();
+}
+
+/* ---------- MASTER DATA › PETA PANEL ---------- */
+function bamkTanki(tank_id) {
+  const L = DB.bamk.filter(b => b.tank_id === tank_id && b.status !== "BATAL");
+  return L.filter(b => b.status === "AKTIF")[0] || L[0] || null;
+}
+function statusPetaHtml(t) {
+  const p = bacaPeta(t.notes).peta;
+  if (!p) return `<span class="b gray">Belum ada</span>`;
+  if (p.kunci) return `<span class="b teal">Terkunci</span><div class="tiny muted">${esc(dateID(p.kunci.tgl))} · ${esc(p.kunci.oleh || "")}</div>`;
+  return `<span class="b amber">Draft</span>`;
+}
+function htmlTabPeta() {
+  return `<div class="row"><span class="small muted grow">Peta panel tiap tanki dari hasil ukur lapangan — dasar penentuan progress harian.</span></div>
+    <div class="note mt12"><b>Alur:</b> (1) ukur di lapangan: tiap course — tinggi, jumlah plat, dan jarak sambungan tegak pertama dari tangga;
+      atap — jumlah cincin dan jumlah plat tiap cincin; (2) isi di <b>Atur peta</b> — gambar bentangan dan tampak atas terbentuk sendiri
+      dari angka itu; (3) <b>Kunci</b> — sesudah dikunci, laporan harian tanki itu diisi dengan mencentang plat, luasnya dihitung sistem dari
+      volume BAMK; (4) cetak peta sebagai lampiran lembar gambar dan pegangan lapangan.
+      Tanki yang sudah berjalan sebelum peta dikunci: petakan <b>saldo awal</b> di layar Lihat progres.</div>
+    <div class="tw mt12"><table><thead><tr><th>Tanki</th><th class="n">Ø / Tinggi</th><th>Peta</th><th>Susunan</th>
+      <th>BAMK</th><th class="n">Progress</th><th></th></tr></thead>
+    <tbody>${DB.tanks.map(t => {
+    const p = bacaPeta(t.notes).peta, W = bamkTanki(t.tank_id);
+    return `<tr><td><b>${esc(t.tank_no)}</b><div class="tiny muted">${esc(areaName(t.area_id))}</div></td>
+      <td class="n tiny">${fmt(t.shell_diameter_m, 2)} / ${fmt(t.tank_height_m, 2)}</td>
+      <td>${statusPetaHtml(t)}</td>
+      <td class="tiny">${p ? esc(ringkasPeta(p)) : "—"}</td>
+      <td class="tiny">${W ? esc(W.bamk_no) + ` <span class="muted">(${esc(W.status)})</span>` : "—"}</td>
+      <td class="n">${W ? fmt(persenBamk(W.bamk_id), 1) + "%" : "—"}</td>
+      <td class="right" style="white-space:nowrap">
+        <button class="btn sm" data-patur="${t.tank_id}">${p ? (p.kunci ? "Lihat susunan" : "Atur peta") : "Buat peta"}</button>
+        ${p && p.kunci && W ? `<button class="btn sm" data-plihat="${t.tank_id}">Lihat progres</button>` : ""}
+        ${p ? `<button class="btn sm" data-pcetak="${t.tank_id}">Cetak</button>` : ""}</td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+function pasangTabPeta() {
+  $$("[data-patur]").forEach(b => b.onclick = () => petaModal(b.dataset.patur));
+  $$("[data-plihat]").forEach(b => b.onclick = () => petaLihatModal(b.dataset.plihat));
+  $$("[data-pcetak]").forEach(b => b.onclick = () => cetakPetaPanel(b.dataset.pcetak));
+}
+
+/* Apakah sudah ada laporan yang memakai kode panel tanki ini. */
+function petaSudahDipakai(tank_id) {
+  const bam = new Set(DB.bamk.filter(b => b.tank_id === tank_id).map(b => b.bamk_id));
+  return DB.progress.some(p => bam.has(p.bamk_id) && bacaPanel(p.work_package).length);
+}
+
+function petaModal(tank_id) {
+  const t = tankOf(tank_id); if (!t) return;
+  const lama = bacaPeta(t.notes).peta;
+  const H = nz(t.tank_height_m), D = nz(t.shell_diameter_m), C = Math.PI * D;
+  const p = normalPeta(lama ? JSON.parse(JSON.stringify(lama)) : {
+    course: H > 0 ? [{ h: H, n: C > 0 ? Math.max(1, Math.round(C / 4)) : 8, geser: 0 }] : [],
+    atap: [{ n: 8, lebar: 0 }], survei: { tgl: today(), oleh: "" }
+  });
+  const kunci = !!p.kunci, W = bamkTanki(tank_id);
+  const dis = kunci ? "disabled" : "";
+  const angka = v => nz(String(v == null ? "" : v).replace(",", "."));
+  const koma = v => String(v).replace(".", ",");
+  const ctxPrev = { peta: p, W: W, tank_id: tank_id, done: {}, sel: {}, bagian: "SHELL", baca: true, pratinjau: true };
+
+  /* Tabel isian hanya digambar ulang bila baris bertambah/berkurang, supaya
+     kursor tidak hilang saat mengetik. Angka turunan dan gambar pratinjau
+     diperbarui setiap kali angka diketik. */
+  const tabelCourse = () => {
+    $("#pmCourse").innerHTML = p.course.map((c, i) => `<tr>
+      <td><b>C${i + 1}</b>${i === 0 ? ` <span class="tiny muted">(bawah)</span>` : i === p.course.length - 1 ? ` <span class="tiny muted">(atas)</span>` : ""}</td>
+      <td><input type="text" inputmode="decimal" data-ch="${i}" value="${koma(c.h)}" ${dis} style="width:72px"></td>
+      <td><input type="number" min="1" max="200" data-cn="${i}" value="${c.n}" ${dis} style="width:64px"></td>
+      <td class="n tiny" id="pmL${i}"></td>
+      <td><input type="text" inputmode="decimal" data-cg="${i}" value="${koma(c.geser)}" ${dis} style="width:64px"></td>
+      <td class="n tiny" id="pmA${i}"></td></tr>`).join("") || `<tr><td colspan="6" class="tiny muted">Belum ada course.</td></tr>`;
+    $$("#pmCourse [data-ch]").forEach(el => el.oninput = () => { p.course[+el.dataset.ch].h = angka(el.value); segarkan(); });
+    $$("#pmCourse [data-cn]").forEach(el => el.oninput = () => { p.course[+el.dataset.cn].n = Math.max(1, Math.round(angka(el.value)) || 1); segarkan(); });
+    $$("#pmCourse [data-cg]").forEach(el => el.oninput = () => { p.course[+el.dataset.cg].geser = Math.max(0, angka(el.value)); segarkan(); });
+  };
+  const tabelAtap = () => {
+    $("#pmAtap").innerHTML = p.atap.map((r, i) => `<tr>
+      <td><b>${p.atap.length > 1 ? "R" + (i + 1) : "R"}</b>${p.atap.length > 1 ? (i === 0 ? ` <span class="tiny muted">(tepi)</span>` : i === p.atap.length - 1 ? ` <span class="tiny muted">(tengah)</span>` : "") : ""}</td>
+      <td><input type="number" min="1" max="200" data-rn="${i}" value="${r.n}" ${dis} style="width:64px"></td>
+      <td>${p.atap.length > 1 ? `<input type="text" inputmode="decimal" data-rl="${i}" value="${r.lebar ? koma(r.lebar) : ""}" ${dis} style="width:64px" placeholder="rata">` : `<span class="tiny muted">—</span>`}</td>
+      <td class="n tiny" id="pmR${i}"></td></tr>`).join("");
+    $$("#pmAtap [data-rn]").forEach(el => el.oninput = () => { p.atap[+el.dataset.rn].n = Math.max(1, Math.round(angka(el.value)) || 1); segarkan(); });
+    $$("#pmAtap [data-rl]").forEach(el => el.oninput = () => { p.atap[+el.dataset.rl].lebar = Math.max(0, angka(el.value)); segarkan(); });
+  };
+  const tabelAcc = () => {
+    $("#pmAcc").innerHTML = p.acc.map((a, i) => `<tr><td class="tiny num">${esc(a.k)}</td>
+      <td><input type="text" data-pan="${i}" value="${esc(a.n)}" ${dis}></td>
+      <td><input type="text" inputmode="decimal" data-paw="${i}" value="${koma(a.w)}" ${dis} style="width:64px"></td>
+      <td class="n tiny" id="pmX${i}"></td></tr>`).join("") +
+      `<tr><th colspan="2" class="right">Jumlah porsi</th><th id="pmXW"></th><th></th></tr>`;
+    $$("#pmAcc [data-pan]").forEach(el => el.oninput = () => { p.acc[+el.dataset.pan].n = el.value; });
+    $$("#pmAcc [data-paw]").forEach(el => el.oninput = () => { p.acc[+el.dataset.paw].w = angka(el.value); segarkan(); });
+  };
+  const segarkan = () => {
+    const P = daftarPanel(p, W, tank_id), ΣH = tinggiPeta(p), beda = ΣH - H;
+    p.course.forEach((c, i) => {
+      const L = C > 0 ? C / c.n : 0, x = P.find(q => q.c === i + 1);
+      const el = $("#pmL" + i); if (el) el.innerHTML = `${fmt(L, 2)} m` + (c.geser >= L - 1e-9 && L > 0 ? `<div style="color:var(--red)">geser ≥ panjang plat</div>` : "");
+      const ea = $("#pmA" + i); if (ea) ea.textContent = fmt(x ? x.luas : 0, 2) + " m²";
+    });
+    p.atap.forEach((r, i) => { const x = P.find(q => q.part === "ROOF" && q.ring === i + 1), e = $("#pmR" + i); if (e) e.textContent = fmt(x ? x.luas : 0, 2) + " m²"; });
+    p.acc.forEach((a, i) => { const x = P.find(q => q.kode === a.k), e = $("#pmX" + i); if (e) e.textContent = fmt(x ? x.luas : 0, 2) + " m²"; });
+    const accW = p.acc.reduce((a, x) => a + nz(x.w), 0), ew = $("#pmXW");
+    if (ew) { ew.textContent = fmt(accW, 1) + "%"; ew.style.color = Math.abs(accW - 100) > 0.01 ? "var(--red)" : ""; }
+    $("#pmCek").innerHTML = (H > 0
+      ? `Jumlah tinggi course <b>${fmt(ΣH, 2)} m</b> · tinggi tanki <b>${fmt(H, 2)} m</b> · selisih
+        <b style="color:${Math.abs(beda) > 0.05 ? "var(--red)" : "var(--teal)"}">${beda >= 0 ? "+" : ""}${fmt(beda, 2)} m</b>
+        ${Math.abs(beda) > 0.05 ? " — tuliskan penjelasan selisih sebelum mengunci." : " — sesuai."}`
+      : `<span style="color:var(--red)">Tinggi tanki di Master Data masih kosong.</span>`) +
+      `<div>Keliling π × ${fmt(D, 2)} = <b>${fmt(C, 2)} m</b>.</div>`;
+    const lb = p.atap.map(r => nz(r.lebar)), adaLb = p.atap.length > 1 && lb.some(v => v > 0);
+    $("#pmCekAtap").innerHTML = p.atap.length < 2 ? `Satu cincin: plat atap dibagi dari tepi sampai vent.`
+      : !adaLb ? `Lebar cincin kosong — dibagi rata dari tepi ke tengah.`
+        : lb.some(v => v <= 0) ? `<span style="color:var(--red)">Isi lebar semua cincin, atau kosongkan semuanya.</span>`
+          : `Jumlah lebar ${fmt(lb.reduce((a, v) => a + v, 0), 2)} m · jari-jari ${fmt(D / 2, 2)} m` +
+          (Math.abs(lb.reduce((a, v) => a + v, 0) - D / 2) > 0.05 ? ` — <span style="color:var(--amber)">berbeda; porsi luas tetap dihitung menurut perbandingan lebar.</span>` : ` — sesuai.`);
+    const vs = P.filter(x => x.part === "SHELL").reduce((a, x) => a + x.luas, 0),
+      vr = P.filter(x => x.part === "ROOF").reduce((a, x) => a + x.luas, 0),
+      va = P.filter(x => x.part === "ACC").reduce((a, x) => a + x.luas, 0);
+    $("#pmRing").innerHTML = `${esc(ringkasPeta(p))}.<br>Jumlah luas: dinding ${fmt(vs, 2)} + atap ${fmt(vr, 2)} + perlengkapan ${fmt(va, 2)} =
+      <b>${fmt(vs + vr + va, 2)} m²</b> ${W ? `— sama dengan volume BAMK ${esc(W.bamk_no)} (${fmt(volBamk(W), 2)} m²)` : "— dari hitungan luas eksterior (belum ada BAMK)"}.`;
+    $("#pmPrev").innerHTML = htmlPemilih(ctxPrev);
+  };
+  const body = `
+    ${kunci ? `<div class="note" style="border-left-color:var(--teal)"><b>Peta terkunci</b> sejak ${esc(dateID(p.kunci.tgl))} oleh ${esc(p.kunci.oleh || "-")}.
+      Susunan tidak bisa diubah. ${petaSudahDipakai(tank_id) ? "Laporan harian sudah memakai kode panel peta ini, jadi kuncinya juga tidak bisa dibuka." : "Buka kunci hanya bila hasil ukur memang salah — tercatat di Log Audit."}</div>` :
+      `<div class="note">Isi dari hasil ukur lapangan; gambar di bawah terbentuk sendiri dari angka yang diisi.
+      <b>Tiap course</b>: tinggi (dari sambungan mendatar), jumlah plat keliling, dan <b>geser</b> = jarak dari titik 0 ke sambungan tegak pertama
+      searah jarum jam (dilihat dari atas). Karena sambungan plat biasanya berselang-seling, geser tiap course bisa berbeda.
+      <b>Atap</b>: cincin dihitung dari tepi ke tengah, tiap cincin dengan jumlah platnya sendiri.
+      ${isPC() ? "" : "<br><b>Sesudah disimpan, Project Control memeriksa lalu mengunci peta ini.</b>"}</div>`}
+    <div class="fg c4 mt12">
+      <label class="f"><span>Tanggal ukur</span><input type="date" id="pmTgl" value="${esc(p.survei.tgl || "")}" ${dis}></label>
+      <label class="f"><span>Diukur oleh</span><input type="text" id="pmOleh" value="${esc(p.survei.oleh || "")}" ${dis} placeholder="nama QC / pengawas"></label>
+      <label class="f"><span>Titik 0 (referensi)</span><input type="text" id="pmRef" value="${esc(p.ref || "")}" ${dis}></label>
+      <label class="f"><span>Panjang plat standar (m)</span><input type="text" inputmode="decimal" id="pmPlat" value="${koma(p.plat)}" ${dis}></label>
+    </div>
+    <h4>Susunan shell course <span class="tiny muted">dari bawah</span></h4>
+    <div class="tw mt8"><table><thead><tr><th>Course</th><th>Tinggi (m)</th><th>Jumlah plat</th><th class="n">Panjang/plat</th>
+      <th>Geser sambungan pertama (m)</th><th class="n">Luas/plat</th></tr></thead><tbody id="pmCourse"></tbody></table></div>
+    ${kunci ? "" : `<div class="row mt8"><button class="btn sm" id="pmCAdd">+ Course</button><button class="btn sm" id="pmCDel">− Course teratas</button>
+      <button class="btn sm" id="pmCRata">Bagi rata tinggi tanki</button><button class="btn sm" id="pmCPlat">Hitung jumlah plat dari panjang standar</button></div>`}
+    <div class="small mt8" id="pmCek"></div>
+    <div class="grid g2 mt12">
+      <div><h4>Tampak atas <span class="tiny muted">cincin dari tepi</span></h4>
+        <div class="tw mt8"><table><thead><tr><th>Cincin</th><th>Jumlah plat</th><th>Lebar (m)</th><th class="n">Luas/plat</th></tr></thead><tbody id="pmAtap"></tbody></table></div>
+        ${kunci ? "" : `<div class="row mt8"><button class="btn sm" id="pmRAdd">+ Cincin</button><button class="btn sm" id="pmRDel">− Cincin tengah</button></div>`}
+        <div class="small mt8" id="pmCekAtap"></div>
+      </div>
+      <div><h4>Perlengkapan</h4>
+        <div class="tw mt8"><table><thead><tr><th>Kode</th><th>Item</th><th>Porsi %</th><th class="n">Luas</th></tr></thead><tbody id="pmAcc"></tbody></table></div>
+        ${kunci ? "" : `<div class="row mt8"><button class="btn sm" id="pmAAdd">+ Item</button><button class="btn sm" id="pmADel">− Item terakhir</button></div>`}
+        <div class="chk mt8"><input type="checkbox" id="pmHalf" ${p.half ? "checked" : ""} ${dis}><label for="pmHalf">Izinkan ½ panel (pilihan hanya 0, ½, atau 1)</label></div>
+      </div>
+    </div>
+    <label class="f mt12"><span>Penjelasan selisih / catatan ukur</span><input type="text" id="pmNote" value="${esc(p.note || "")}" ${dis}
+      placeholder="mis. tinggi course diukur dari plat dasar; selisih karena angle curb"></label>
+    <div class="note mt12" id="pmRing"></div>
+    <h4 class="mt16">Pratinjau peta <span class="tiny muted">terbentuk otomatis</span></h4>
+    <div id="pmPrev" class="mt8"></div>`;
+  /* Admin Site boleh mengisi hasil ukur; mengunci, membuka kunci, dan
+     menghapus peta hanya Project Control. */
+  const foot = kunci
+    ? (petaSudahDipakai(tank_id) || !isPC() ? "" : `<button class="btn danger" id="pmBuka">Buka kunci</button>`) + `<button class="btn" id="pmCetak">Cetak peta</button>`
+    : (lama && isPC() ? `<button class="btn danger" id="pmHapus">Hapus peta</button>` : "") +
+      (isPC() ? `<button class="btn" id="pmDraft">Simpan draft</button><button class="btn p" id="pmKunci">Simpan &amp; kunci</button>`
+        : `<button class="btn p" id="pmDraft">Simpan hasil ukur</button>`);
+  openModal("Peta panel — Tanki " + t.tank_no, body, foot, true);
+  $("#pmPrev").onclick = e => { const b = e.target.closest("[data-pbg]"); if (b) { ctxPrev.bagian = b.dataset.pbg; segarkan(); } };
+  const tarik = () => {
+    if (kunci) return;
+    p.survei = { tgl: $("#pmTgl").value, oleh: $("#pmOleh").value.trim() };
+    p.ref = $("#pmRef").value.trim() || "Tangga";
+    p.plat = angka($("#pmPlat").value) || 4;
+    p.half = $("#pmHalf").checked;
+    p.note = $("#pmNote").value.trim();
+    /* Geser lebih dari satu plat sama artinya dengan menomori ulang plat — dikembalikan ke rentang 0..panjang plat. */
+    p.course.forEach(c => { const L = C > 0 ? C / c.n : 0; if (L > 0 && c.geser >= L) c.geser = Math.round((c.geser % L) * 1000) / 1000; });
+  };
+  if (!kunci) {
+    $("#pmRef").oninput = () => { p.ref = $("#pmRef").value.trim() || "Tangga"; segarkan(); };
+    $("#pmCAdd").onclick = () => {
+      const atas = p.course[p.course.length - 1];
+      p.course.push(atas ? { h: atas.h, n: atas.n, geser: 0 } : { h: 0, n: C > 0 ? Math.max(1, Math.round(C / (angka($("#pmPlat").value) || 4))) : 8, geser: 0 });
+      tabelCourse(); segarkan();
+    };
+    $("#pmCDel").onclick = () => { p.course.pop(); tabelCourse(); segarkan(); };
+    $("#pmCRata").onclick = () => {
+      const n = p.course.length || 1; if (H <= 0) return toast("Tinggi tanki di Master Data masih kosong.", "err");
+      if (!p.course.length) p.course.push({ h: 0, n: 8, geser: 0 });
+      p.course.forEach(c => { c.h = Math.round(H / n * 1000) / 1000; }); tabelCourse(); segarkan();
+      toast("Dibagi rata sebagai titik awal saja — ganti dengan hasil ukur tiap course.", "ok");
+    };
+    $("#pmCPlat").onclick = () => {
+      const L = angka($("#pmPlat").value); if (L <= 0 || C <= 0) return toast("Isi panjang plat standar dan diameter tanki dulu.", "err");
+      const n = Math.max(1, Math.round(C / L));
+      p.course.forEach(c => { c.n = n; }); tabelCourse(); segarkan();
+      toast("Keliling " + fmt(C, 2) + " m ÷ " + fmt(L, 2) + " m ≈ " + n + " plat per course (@ " + fmt(C / n, 2) + " m). Sesuaikan course yang berbeda.", "ok");
+    };
+    $("#pmRAdd").onclick = () => { const r = p.atap[p.atap.length - 1]; p.atap.push({ n: r ? Math.max(1, Math.round(r.n / 2)) : 8, lebar: 0 }); tabelAtap(); segarkan(); };
+    $("#pmRDel").onclick = () => { if (p.atap.length > 1) { p.atap.pop(); tabelAtap(); segarkan(); } };
+    $("#pmAAdd").onclick = () => {
+      let n = p.acc.length + 1; while (p.acc.some(a => a.k === "ACC-" + n)) n++;
+      p.acc.push({ k: "ACC-" + n, n: "", w: 0 }); tabelAcc(); segarkan();
+    };
+    $("#pmADel").onclick = () => { p.acc.pop(); tabelAcc(); segarkan(); };
+  }
+  tabelCourse(); tabelAtap(); tabelAcc(); segarkan();
+  const simpan = (dikunci) => {
+    tarik();
+    if (dikunci) {
+      if (H <= 0 || D <= 0) return toast("Isi diameter dan tinggi tanki di Master Data › Tanki dulu.", "err");
+      if (!p.course.length || p.course.some(c => nz(c.h) <= 0 || c.n < 1)) return toast("Setiap course harus punya tinggi dan jumlah plat.", "err");
+      if (!p.survei.tgl || !p.survei.oleh) return toast("Isi tanggal ukur dan nama yang mengukur — peta terkunci harus bisa ditelusuri.", "err");
+      if (Math.abs(tinggiPeta(p) - H) > 0.05 && !p.note)
+        return toast("Jumlah tinggi course berbeda " + fmt(tinggiPeta(p) - H, 2) + " m dari tinggi tanki. Tuliskan penjelasannya dulu.", "err");
+      if (p.atap.length > 1 && p.atap.some(r => nz(r.lebar) > 0) && p.atap.some(r => nz(r.lebar) <= 0))
+        return toast("Lebar cincin atap: isi semuanya, atau kosongkan semuanya.", "err");
+      if (p.acc.some(a => !String(a.n || "").trim())) return toast("Setiap item perlengkapan harus punya nama.", "err");
+      if (Math.abs(p.acc.reduce((a, x) => a + nz(x.w), 0) - 100) > 0.01) return toast("Jumlah porsi perlengkapan harus 100%.", "err");
+      if (!confirmBox("Kunci peta panel tanki " + t.tank_no + "?\n\n" + ringkasPeta(p) +
+        ".\nSesudah dikunci, laporan harian tanki ini diisi dengan mencentang plat dan susunannya tidak bisa diubah.")) return;
+      p.kunci = { tgl: today(), oleh: S.user ? S.user.user_name : "" };
+    }
+    simpanPetaTanki(tank_id, p);
+    audit(lama ? "UPDATE" : "CREATE", "03_TANK_MASTER", tank_id, lama ? "peta panel" : "",
+      (dikunci ? "KUNCI peta panel: " : "draft peta panel: ") + ringkasPeta(p));
+    save(); closeModal(); render();
+    toast(dikunci ? "Peta panel " + t.tank_no + " dikunci." : isPC() ? "Draft peta tersimpan." : "Hasil ukur tersimpan. Project Control akan memeriksa dan mengunci.", "ok");
+  };
+  if ($("#pmDraft")) $("#pmDraft").onclick = () => simpan(false);
+  if ($("#pmKunci")) $("#pmKunci").onclick = () => simpan(true);
+  if ($("#pmCetak")) $("#pmCetak").onclick = () => cetakPetaPanel(tank_id);
+  if ($("#pmHapus")) $("#pmHapus").onclick = () => {
+    if (!confirmBox("Hapus draft peta panel tanki " + t.tank_no + "?")) return;
+    simpanPetaTanki(tank_id, null);
+    audit("DELETE", "03_TANK_MASTER", tank_id, "draft peta panel", ""); save(); closeModal(); render();
+  };
+  if ($("#pmBuka")) $("#pmBuka").onclick = () => {
+    const alasan = window.prompt("Alasan membuka kunci peta panel " + t.tank_no + " (wajib, tercatat di Log Audit):", "");
+    if (!alasan || !alasan.trim()) return;
+    const q = JSON.parse(JSON.stringify(lama)); q.kunci = null;
+    simpanPetaTanki(tank_id, q);
+    audit("UPDATE", "03_TANK_MASTER", tank_id, "peta panel terkunci", "kunci dibuka", alasan.trim());
+    save(); closeModal(); petaModal(tank_id); toast("Kunci dibuka. Perbaiki lalu kunci lagi.", "ok");
+  };
+}
+
+/* Lihat progres per panel + pemetaan saldo awal. */
+function petaLihatModal(tank_id, mode) {
+  const t = tankOf(tank_id), peta = petaTerkunci(tank_id), W = bamkTanki(tank_id);
+  if (!t || !peta || !W) return;
+  const TH = tahapAktif();
+  const tanpa = luasTanpaPanel(W.bamk_id);
+  const adaTanpa = Object.keys(tanpa).some(k => tanpa[k] > 0.005);
+  if (mode === "awal") {
+    const done = keadaanPanel(W.bamk_id, null, true).f;
+    const sel = JSON.parse(JSON.stringify((peta.awal || {})[W.bamk_id] || {}));
+    const ctx = { peta, W, done, sel, stage: (TH[0] || {}).stage_id, bagian: "SHELL", judulJumlah: "Luas saldo awal" };
+    const banding = () => {
+      const rows = pilihanKeProgress(sel, peta, W), pet = {};
+      rows.forEach(r => { pet[r.part + "|" + r.stage_id] = r.actual_qty; });
+      $("#paBanding").innerHTML = `<table><thead><tr><th>Bagian</th>${TH.map(x => `<th class="n">${esc(x.stage_name)}</th>`).join("")}</tr></thead>
+        <tbody>${BAGIAN.map(b => `<tr><td>${esc(b[1])}</td>${TH.map(x => {
+          const a = tanpa[b[0] + "|" + x.stage_id] || 0, c = pet[b[0] + "|" + x.stage_id] || 0, beda = c - a;
+          return `<td class="n tiny">${fmt(a, 2)} → ${fmt(c, 2)}<div style="color:${Math.abs(beda) > 0.5 ? "var(--red)" : "var(--teal)"}">${beda >= 0 ? "+" : ""}${fmt(beda, 2)}</div></td>`;
+        }).join("")}</tr>`).join("")}</tbody></table>`;
+    };
+    ctx.onUbah = banding;
+    openModal("Saldo awal panel — " + t.tank_no + " · BAMK " + W.bamk_no, `
+      <div class="note">Luas yang sudah diketik sebelum peta dikunci belum punya kode panel. Centang panel yang
+        <b>memang sudah selesai</b> di lapangan sampai hari ini, per tahap. Tabel di bawah membandingkan luas tanpa kode
+        (kiri) dengan luas panel yang dicentang (kanan) — usahakan selisihnya sekecil mungkin. Saldo awal tidak menambah luas
+        progress; ia hanya menandai panel mana yang sudah selesai, supaya tidak dicentang dua kali.</div>
+      <div class="tw mt12" id="paBanding"></div>
+      <div id="paBox" class="mt12"></div>`,
+      `<button class="btn" id="paBatal">Batal</button><button class="btn p" id="paSimpan">Simpan saldo awal</button>`, true);
+    pasangPemilih($("#paBox"), ctx); banding();
+    $("#paBatal").onclick = () => { closeModal(); petaLihatModal(tank_id); };
+    $("#paSimpan").onclick = () => {
+      const q = petaTanki(tank_id); q.awal = q.awal || {}; q.awal[W.bamk_id] = sel;
+      simpanPetaTanki(tank_id, q);
+      const n = Object.keys(sel).reduce((a, s) => a + Object.keys(sel[s]).length, 0);
+      audit("UPDATE", "03_TANK_MASTER", tank_id, "saldo awal panel", n + " panel · BAMK " + W.bamk_no);
+      save(); closeModal(); petaLihatModal(tank_id); toast("Saldo awal tersimpan.", "ok");
+    };
+    return;
+  }
+  const kp = keadaanPanel(W.bamk_id, null);
+  const ctx = { peta, W, done: kp.f, sel: {}, stage: (TH[0] || {}).stage_id, bagian: "SHELL", baca: true };
+  const P = daftarPanel(peta, W);
+  const ring = TH.map((x, i) => {
+    const f = kp.f[x.stage_id] || {};
+    const luas = P.reduce((a, q) => a + q.luas * (f[q.kode] || 0), 0), m2 = BAGIAN.reduce((a, b) => a + kumulatif(W.bamk_id, b[0], x.stage_id, null), 0);
+    return `<tr><td><b style="color:${WARNA_TAHAP[i % WARNA_TAHAP.length]}">${singkatTahap(x, i)}</b> ${esc(x.stage_name)}</td>
+      <td class="n">${fmt(P.reduce((a, q) => a + (f[q.kode] || 0), 0), 1)} / ${P.length}</td><td class="n">${fmt(luas, 2)}</td><td class="n">${fmt(m2, 2)}</td></tr>`;
+  }).join("");
+  openModal("Progres per panel — " + t.tank_no + " · BAMK " + W.bamk_no, `
+    ${adaTanpa ? `<div class="note warn">Ada luas yang diketik sebelum peta dikunci (tanpa kode panel).
+      ${Object.keys(peta.awal || {}).length && peta.awal[W.bamk_id] ? "Saldo awal sudah dipetakan — periksa kembali bila perlu." : "<b>Saldo awal belum dipetakan</b>: panel yang sudah selesai belum terlihat di peta dan bisa tercentang dua kali."}
+      ${isPC() ? `<div class="mt8"><button class="btn a sm" id="plAwal">Petakan saldo awal</button></div>` : ""}</div>` : ""}
+    <div class="tw mt12"><table><thead><tr><th>Tahap</th><th class="n">Panel selesai</th><th class="n">Luas panel (m²)</th><th class="n">Luas tercatat (m²)</th></tr></thead>
+      <tbody>${ring}</tbody></table></div>
+    <div class="tiny muted mt8">Luas panel = panel yang tercentang (termasuk saldo awal). Luas tercatat = jumlah m² di laporan harian (dasar tagihan).</div>
+    <div id="plBox" class="mt12"></div>`,
+    `<button class="btn" id="plCetak">Cetak peta</button>`, true);
+  pasangPemilih($("#plBox"), ctx);
+  $("#plCetak").onclick = () => cetakPetaPanel(tank_id);
+  if ($("#plAwal")) $("#plAwal").onclick = () => { closeModal(); petaLihatModal(tank_id, "awal"); };
+}
+
+/* Cetak peta panel: bentangan dinding, tampak atas, perlengkapan,
+   dengan kotak B/P/F terisi sesuai progres — pengganti bagian F lembar gambar. */
+function cetakPetaPanel(tank_id) {
+  const t = tankOf(tank_id), peta = petaTanki(tank_id); if (!t || !peta) return;
+  const W = bamkTanki(tank_id), TH = tahapAktif();
+  const kp = W && peta.kunci ? keadaanPanel(W.bamk_id, null).f : {};
+  const P = daftarPanel(peta, W, tank_id);
+  const D = nz(t.shell_diameter_m), C = Math.PI * D;
+  const cetakWarna = "-webkit-print-color-adjust:exact;print-color-adjust:exact";
+  const kotak = k => TH.map((x, i) => {
+    const f = (kp[x.stage_id] || {})[k] || 0, col = WARNA_TAHAP[i % WARNA_TAHAP.length];
+    const bg = f <= 0 ? "#fff" : f >= 1 ? col : `linear-gradient(90deg,${col} 50%,#fff 50%)`;
+    return `<span style="display:inline-block;width:13px;height:12px;border:1.3px solid ${col};border-radius:2px;margin:0 1px;font-size:7.5px;line-height:10px;text-align:center;font-weight:700;color:${f >= 1 ? "#fff" : col};background:${bg};${cetakWarna}">${singkatTahap(x, i)}</span>`;
+  }).join("");
+  /* Tahap terakhir yang sudah penuh/separuh — untuk warna dasar plat. */
+  const tahapAkhir = k => { let a = -1, f = 0; TH.forEach((x, i) => { const v = (kp[x.stage_id] || {})[k] || 0; if (v > 0) { a = i; f = v; } }); return { i: a, f: f }; };
+  const LEBAR = 960, skala = C > 0 ? LEBAR / C : 0;
+  let grid = "";
+  for (let c = peta.course.length; c >= 1; c--) {
+    const kc = peta.course[c - 1];
+    grid += `<div style="display:flex;gap:4px;margin-bottom:3px;page-break-inside:avoid">
+      <div style="flex:0 0 52px;text-align:center;font-weight:700;font-size:10px;padding-top:6px">C${c}<div class="mut">${fmt(kc.h, 2)} m</div><div class="mut">${kc.n} plat</div></div>
+      <div style="position:relative;width:${LEBAR}px;height:58px">${P.filter(x => x.c === c).map(x => potongPlat(x, C).map(q => {
+      const w = q.l * skala - 2, ta = tahapAkhir(x.kode);
+      const dasar = ta.i >= 0 ? WARNA_TAHAP[ta.i % WARNA_TAHAP.length] + (ta.f >= 1 ? "33" : "14") : "#fff";
+      return `<div style="position:absolute;left:${(q.a * skala + 1).toFixed(1)}px;width:${Math.max(3, w).toFixed(1)}px;top:0;bottom:0;border:1px solid #444;
+        background:${dasar};${cetakWarna};text-align:center;overflow:hidden;font-size:8.5px;line-height:1.25;padding-top:2px">
+        ${w >= 26 ? `<b>${q.lanjut ? "↩" : ""}${w >= 46 ? x.kode : "S" + x.s}</b>` : ""}
+        ${!q.lanjut && w >= 50 ? `<div class="mut" style="font-size:7.5px">${fmt(x.luas, 2)} m²</div>` : ""}
+        ${!q.lanjut && w >= 48 ? `<div>${kotak(x.kode)}</div>` : ""}</div>`;
+    }).join("")).join("")}</div></div>`;
+  }
+  const langkah = C <= 30 ? 2 : C <= 80 ? 5 : C <= 200 ? 10 : 20;
+  let tanda = "";
+  for (let m = 0; m < C - langkah * 0.75; m += langkah)
+    tanda += `<span style="position:absolute;left:${(m * skala).toFixed(1)}px;border-left:1px solid #555;padding-left:2px;font-size:8px;white-space:nowrap">${m === 0 ? "0 · " + esc(peta.ref) : m + " m"}</span>`;
+  tanda += `<span style="position:absolute;right:0;border-right:1px solid #555;padding-right:2px;font-size:8px">${fmt(C, 2)} m</span>`;
+  grid += `<div style="display:flex;gap:4px"><div style="flex:0 0 52px"></div><div style="position:relative;width:${LEBAR}px;height:14px;border-top:1.2px solid #555">${tanda}</div></div>`;
+
+  const RR = 120, cx = 140, cy = 138, rv = 14, roofs = P.filter(x => x.part === "ROOF");
+  const skR = r => rv + (RR - rv) * (roofs[0] ? r / roofs[0].rMax : 0);
+  let sv = "";
+  roofs.forEach(x => {
+    const a0 = -Math.PI / 2 + (x.s - 1) * 2 * Math.PI / x.n, a1 = a0 + 2 * Math.PI / x.n, am = (a0 + a1) / 2;
+    const r0 = skR(x.rIn), r1 = skR(x.rOut), rm = (r0 + r1) / 2, ta = tahapAkhir(x.kode);
+    const fs = Math.max(5, Math.min(9, rm * (a1 - a0) / 2.6, (r1 - r0) / 1.6));
+    sv += `<path d="${jalurSektor(cx, cy, r0, r1, a0, a1)}" fill="${ta.i >= 0 ? WARNA_TAHAP[ta.i % WARNA_TAHAP.length] : "#fff"}"
+      fill-opacity="${ta.i >= 0 ? (ta.f >= 1 ? 0.45 : 0.18) : 1}" stroke="#444" stroke-width="0.9" style="${cetakWarna}"/>
+      <text x="${(cx + rm * Math.cos(am)).toFixed(1)}" y="${(cy + rm * Math.sin(am) + 2).toFixed(1)}" text-anchor="middle" font-size="${fs.toFixed(1)}" font-weight="700">${x.s}</text>`;
+  });
+  const atap = `<svg viewBox="0 0 280 296" width="280" height="296">${sv}
+    <circle cx="${cx}" cy="${cy}" r="${rv}" fill="#fff" stroke="#222"/><text x="${cx}" y="${cy + 3}" text-anchor="middle" font-size="7">vent</text>
+    <circle cx="${cx}" cy="${cy - RR}" r="4.5" fill="#1F5C99"/><text x="${cx + 8}" y="${cy - RR - 5}" font-size="8" fill="#1F5C99">${esc(peta.ref || "titik 0")} (titik 0)</text>
+    <text x="${cx}" y="290" text-anchor="middle" font-size="8" fill="#555">Ø ${fmt(D, 2)} m · nomor plat naik searah jarum jam dari atas</text></svg>`;
+  const cin = peta.atap.map((r, i) => {
+    const x = roofs.find(q => q.ring === i + 1);
+    return `<tr><td>${peta.atap.length > 1 ? "R" + (i + 1) + (i === 0 ? " (tepi)" : i === peta.atap.length - 1 ? " (tengah)" : "") : "R"}</td>
+      <td class="num">${r.n}</td><td class="num">${fmt(x ? x.luas : 0, 2)}</td>
+      <td style="font-size:9px">${roofs.filter(q => q.ring === i + 1).map(q => {
+        const ta = tahapAkhir(q.kode);
+        return ta.i >= 0 ? q.s + ":" + TH.map((s, j) => { const v = (kp[s.stage_id] || {})[q.kode] || 0; return v >= 1 ? singkatTahap(s, j) : v > 0 ? singkatTahap(s, j).toLowerCase() : ""; }).join("") : "";
+      }).filter(Boolean).join(" · ") || "—"}</td></tr>`;
+  }).join("");
+  const acc = `<table><thead><tr><th>Kode</th><th>Perlengkapan</th><th class="num">Luas (m²)</th><th>Tahap</th></tr></thead><tbody>${P.filter(x => x.part === "ACC").map(x =>
+    `<tr><td>${esc(x.kode)}</td><td>${esc(x.nama)}</td><td class="num">${fmt(x.luas, 2)}</td><td>${kotak(x.kode)}</td></tr>`).join("")}</tbody></table>`;
+  const leg = TH.map((x, i) => `<span style="margin-right:14px;white-space:nowrap"><span style="display:inline-block;width:14px;height:12px;border:1.3px solid ${WARNA_TAHAP[i % WARNA_TAHAP.length]};background:${WARNA_TAHAP[i % WARNA_TAHAP.length]};${cetakWarna};vertical-align:middle"></span>
+    <b>${singkatTahap(x, i)}</b> ${esc(x.stage_name)} — bobot ${fmt(x.weight_pct, 0)}%</span>`).join("");
+  const ringkas = W && peta.kunci ? `<table style="width:auto"><thead><tr><th>Tahap</th>${BAGIAN.map(b => `<th class="num">${esc(b[1])}</th>`).join("")}</tr></thead><tbody>${TH.map(x =>
+    `<tr><td>${esc(x.stage_name)}</td>${BAGIAN.map(b => {
+      const kap = volBagian(W, b[0]), k = kumulatif(W.bamk_id, b[0], x.stage_id, null);
+      return `<td class="num">${fmt(k, 2)} / ${fmt(kap, 2)} (${fmt(kap ? k / kap * 100 : 0, 0)}%)</td>`;
+    }).join("")}</tr>`).join("")}</tbody></table><div class="mut">Progress tanki terbobot <b>${fmt(persenBamk(W.bamk_id), 1)}%</b> per ${esc(dateID(today()))}.</div>` : "";
+  const isi = `
+    <table style="width:auto"><tr><th>Tanki</th><td><b>${esc(t.tank_no)}</b> — ${esc(areaName(t.area_id))} · tipe ${esc(t.tank_type)} · Ø ${fmt(D, 2)} m × T ${fmt(t.tank_height_m, 2)} m · keliling ${fmt(C, 2)} m</td></tr>
+      <tr><th>BAMK</th><td>${W ? esc(W.bamk_no) + " · Shell " + fmt(volBagian(W, "SHELL"), 2) + " · Perlengkapan " + fmt(volBagian(W, "ACC"), 2) + " · Atap " + fmt(volBagian(W, "ROOF"), 2) + " = " + fmt(volBamk(W), 2) + " m²" : "belum ada"}</td></tr>
+      <tr><th>Hasil ukur</th><td>${esc(dateID(peta.survei.tgl))} oleh ${esc(peta.survei.oleh || "-")} · ${esc(ringkasPeta(peta))} · jumlah tinggi course ${fmt(tinggiPeta(peta), 2)} m · titik 0: ${esc(peta.ref)}
+        ${peta.note ? "<br>" + esc(peta.note) : ""}</td></tr>
+      <tr><th>Status peta</th><td>${peta.kunci ? "Terkunci " + esc(dateID(peta.kunci.tgl)) + " oleh " + esc(peta.kunci.oleh || "-") : "<b>DRAFT — belum dikunci</b>"}</td></tr></table>
+    <h2>Bentangan dinding luar (shell development) — C1 paling bawah, digelar dari titik 0 searah jarum jam</h2>
+    ${grid}
+    <div class="mut">Tiap kotak = satu plat; letak sambungan tegak mengikuti hasil ukur (geser) tiap course. ↩ = potongan plat terakhir yang melewati titik 0.
+      Warna dasar plat = tahap terakhir yang dikerjakan (pekat = penuh, pudar = ½).</div>
+    <div style="display:flex;gap:18px;align-items:flex-start;margin-top:10px;page-break-inside:avoid">
+      <div><h2 style="margin-top:0">Tampak atas (atap)</h2>${atap}
+        <table style="width:280px"><thead><tr><th>Cincin</th><th class="num">Plat</th><th class="num">m²/plat</th><th>Progres (plat:tahap)</th></tr></thead><tbody>${cin}</tbody></table></div>
+      <div style="flex:1"><h2 style="margin-top:0">Perlengkapan</h2>${acc}
+        <h2>Legenda tahap</h2><div>${leg}</div>
+        ${ringkas ? `<h2>Ringkasan progress (m² tercatat)</h2>${ringkas}` : ""}
+        <div class="mut" style="margin-top:8px">Kode plat ditulis/dicat di tanki sesuai peta ini dan dipakai pada kolom Kode Panel lembar Daily Activity
+          (contoh: <b>C2: S3–S5</b> · atap <b>${peta.atap.length > 1 ? "R1: S1–S4" : "R: S1–S4"}</b>). Luas plat adalah porsi dari volume BAMK,
+          sehingga jumlah semua plat sama dengan BAMK.</div>
+      </div></div>`;
+  cetakDokumen("Peta Panel Progres Pengecatan — Tangki " + t.tank_no,
+    "Bentangan dinding luar · susunan shell course & plat · tampak atas · perlengkapan", isi, { lanskap: true });
 }
 
 /* ---------- TARGET HARIAN DARI SPK ---------- */
@@ -2233,7 +3164,7 @@ function doLogin() {
   S.user = u; audit("LOGIN", "23_USER_MASTER", u.user_id, "", u.user_name); save();
   $("#login").style.display = "none";
   $("#shell").classList.add("on");
-  S.view = can("dash") ? "dashboard" : "daily-new";
+  S.view = can("dash") ? "dashboard" : can("admin_home") ? "admin-home" : "daily-new";
   boot();
 }
 function logout() {
@@ -2254,9 +3185,13 @@ const NAV = [
   { v: "scurve", t: "Kurva S & Baseline", i: "∿", p: "scurve" },
   { v: "scurve", t: "Kurva S & Baseline", i: "∿", p: "scurve_view", hideIf: "scurve" },
   { g: "Lapangan" },
+  { v: "admin-home", t: "Beranda", i: "⌂", p: "admin_home" },
   { v: "daily-new", t: "Buat Laporan Harian", i: "✎", p: "daily_input" },
   { v: "daily-list", t: "Daftar Laporan", i: "☰", p: "daily_input", badge: "dikembalikan" },
   { v: "daily-list", t: "Laporan Harian", i: "☰", p: "daily_all", hideIf: "daily_input" },
+  { v: "admin-peta", t: "Progress Tanki", i: "▦", p: "admin_peta" },
+  { v: "admin-ukur", t: "Ukur Tanki (Peta)", i: "⊡", p: "admin_ukur" },
+  { v: "admin-panduan", t: "Cara Input", i: "?", p: "admin_panduan" },
   { g: "Verifikasi" },
   { v: "review", t: "Review & Verifikasi", i: "✓", p: "review", badge: "review" },
   { v: "acceptance", t: "BAKP", i: "⊕", p: "accept" },
@@ -2340,6 +3275,10 @@ const TITLES = {
   finance: ["Invoice & Pembayaran", "Nilai tagihan, pembayaran sebagian, dan outstanding"],
   notif: ["Pusat Peringatan", "Dihitung ulang dari keadaan data, bukan daftar lama"],
   "daily-new": ["Buat Laporan Harian", "Satu input untuk rekap harian, mingguan, bulanan"],
+  "admin-home": ["Beranda", "Tanki yang dikerjakan dan laporan hari ini"],
+  "admin-peta": ["Progress Tanki", "Plat yang sudah selesai per tahap"],
+  "admin-ukur": ["Ukur Tanki", "Hasil ukur lapangan untuk peta panel"],
+  "admin-panduan": ["Cara Input", "Mengetik lembar Daily Activity ke aplikasi"],
   "daily-list": ["Laporan Harian", "Riwayat dan status laporan"],
   review: ["Review & Verifikasi", "Gerbang: realisasi menjadi terverifikasi"],
   acceptance: ["BAKP — Penerimaan Volume", "Gerbang: terverifikasi menjadi disetujui lewat dokumen BAKP"],
@@ -2843,6 +3782,7 @@ function newDraft() {
     general_notes: "", status: "DRAFT", revision_no: 0, scan_url: "",
     supervisor_side: PENGAWAS[0], supervisor_name: "",
     progress: [], kegiatan: [], manpower: [], materials: [], equipment: [], photos: [],
+    panel: {}, modeManual: false,
     permit_no: "", work_hours: "",
     qc: { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "", ma4_known: false, ma4_date: "" },
     hsse: { permit_status: "", toolbox_status: "", fit_to_work: "", critical_finding: "", remarks: "" },
@@ -2871,6 +3811,11 @@ function loadDraft(id) {
     hsse: h ? Object.assign({}, h, { remarks: bacaCatatanHsse(h.remarks).sisa }) : { permit_status: "", toolbox_status: "", fit_to_work: "", critical_finding: "", remarks: "" },
     issue: is ? Object.assign({}, is) : { category: "", description: "", impact: "", action: "", owner_side: "", owner: "" }
   };
+  /* V2.9 — laporan yang dibuat dengan peta panel dibuka kembali sebagai
+     pilihan panel. Laporan lama (sebelum peta dikunci) tetap diketik luasnya. */
+  const wPeta = bamkOf(d.bamk_id), ptPeta = wPeta ? petaTerkunci(wPeta.tank_id) : null;
+  S.draft.panel = progressKePilihan(S.draft.progress);
+  S.draft.modeManual = !!(ptPeta && S.draft.progress.length && S.draft.progress.some(p => !bacaPanel(p.work_package).length));
   go("daily-new");
 }
 const PHOTO_TYPES = [["BEFORE", "Before"], ["KEGIATAN", "Kegiatan Harian"], ["AFTER", "After"], ["QC", "QC"], ["HSSE", "HSSE"]];
@@ -2883,6 +3828,7 @@ VIEWS["daily-new"] = {
     if (!S.draft) S.draft = newDraft();
     const d = S.draft, w = bamkOf(d.bamk_id), t = w ? tankOf(w.tank_id) : null;
     const wos = bamkAktif();
+    const lkOn = pakaiLangkah(), lkN = Math.min(6, Math.max(1, S.f.lk || 1));
     /* Laporan yang dikembalikan mudah terlewat kalau Admin Site langsung
        membuat laporan baru. Ditampilkan di layar ini juga. */
     const balik = DB.dailies.filter(x => x.status === "REJECTED");
@@ -2904,12 +3850,17 @@ VIEWS["daily-new"] = {
     }
     const sc = w ? scopesOfBamk(w.bamk_id) : [];
     const thread = d.daily_id ? reviewsOf(d.daily_id) : [];
-    return spanduk + `
-    ${isPC() ? `<div class="note" style="border-left-color:var(--green,#2E7D32)"><b>Input langsung dari lembar Daily Activity bertanda tangan.</b>
+    /* V2.9 — tanki dengan peta panel terkunci: luas tidak diketik, panel dicentang. */
+    const petaW = w ? petaTerkunci(w.tank_id) : null;
+    const modePanel = !!(petaW && !d.modeManual);
+    return spanduk + `<div id="lkWrap">${lkOn ? stepperHtml(lkN) : `<div class="row noprint" style="justify-content:flex-end;margin-bottom:8px">
+      <button class="btn sm" id="lkMode">Tampilkan langkah demi langkah</button></div>`}</div>
+    <div id="dForm" class="${lkOn ? "lk-on" : ""}">
+    ${isPC() ? `<div class="note" data-lk="1" style="border-left-color:var(--green,#2E7D32)"><b>Input langsung dari lembar Daily Activity bertanda tangan.</b>
       Ketik apa yang tertulis di lembar saja. Yang tidak ada di lembar boleh dikosongkan.
       Tekan <b>Simpan final</b>: laporan langsung tersimpan sebagai <b>Disetujui</b> dan luasnya langsung
       <b>terverifikasi</b>, tanpa diajukan dan tanpa review. Unggah foto lembar bertanda tangan di bagian 5b sebagai bukti.</div>` : ""}
-    <div class="note ${isPC() ? "mt12" : ""}">Urutan isian mengikuti lembar <b>Daily Activity</b> yang dipakai di lapangan: Permit &amp; tanki,
+    <div class="note ${isPC() ? "mt12" : ""}" data-lk="1">Urutan isian mengikuti lembar <b>Daily Activity</b> yang dipakai di lapangan: Permit &amp; tanki,
       uraian kegiatan dengan Target % / Actual %, material, manpower, lalu tanda tangan. Lembarnya bisa dicetak kembali
       dari laporan ini (tombol <b>Cetak Daily Activity</b> di layar detail), jadi tidak perlu menulis dua kali.
       Satu laporan harian ini menjadi sumber rekap mingguan dan bulanan. Tidak ada input ulang.
@@ -2920,7 +3871,7 @@ VIEWS["daily-new"] = {
       <div class="note warn mt12">Perbaiki bagian yang dicatat lalu tekan <b>Ajukan ulang</b>. Riwayat koordinasi tetap tersimpan.</div>
     </div></div>` : ""}
 
-    <div class="card mt16"><h3>1 · Identitas laporan</h3><div class="body">
+    <div class="card mt16" data-lk="1"><h3>1 · Identitas laporan</h3><div class="body">
       <div class="fg c4">
         <label class="f"><span>Tanggal <em>*</em></span><input type="date" id="dDate" value="${esc(d.report_date)}"></label>
         <label class="f"><span>Tanki yang dikerjakan <em>*</em></span><select id="dWo">${opts(wos, d.bamk_id, x => x.bamk_id, x => tankNo(x.tank_id) + " — BAMK " + x.bamk_no)}</select></label>
@@ -2951,18 +3902,30 @@ VIEWS["daily-new"] = {
       })() : ""}
     </div></div>
 
-    <div class="card"><h3>2a · Pekerjaan coating <span class="tiny muted">yang menambah luas (m²)</span>
+    ${modePanel ? `<div class="card" data-lk="2"><h3>2a · Pekerjaan coating <span class="tiny muted">centang panel yang selesai hari ini</span></h3><div class="body">
+      ${tahapAktif().length ? "" : `<div class="note warn">Tahapan pengecatan belum diatur. Minta Project Control mengisi Master Data › Tahapan.</div>`}
+      <div class="note">Tanki <b>${esc(tankNo(w.tank_id))}</b> memakai <b>peta panel terkunci</b>
+        (${esc(ringkasPeta(petaW))}). Pilih tahap, lalu ketuk plat sesuai
+        <b>Kode Panel</b> yang tertulis di lembar Daily Activity. Luasnya dihitung sendiri dari volume BAMK — tidak ada angka yang diketik.
+        Satu panel dihitung bila selesai penuh${petaW.half ? " (atau ½ bila disepakati)" : ""}; urutan tahap dijaga sistem.</div>
+      <div id="ppBox" class="mt12"></div>
+      <div id="sisaBox" class="mt12"></div>
+      <div class="tiny muted mt8">Hari tanpa pekerjaan coating? Biarkan kosong dan isi bagian 2b saja.</div>
+    </div></div>` : `<div class="card" data-lk="2"><h3>2a · Pekerjaan coating <span class="tiny muted">yang menambah luas (m²)</span>
       <button class="btn sm" id="copyKemarin">Salin dari kemarin</button>
       <button class="btn a sm" id="addProg">+ Tambah baris</button></h3><div class="body">
       ${tahapAktif().length ? "" : `<div class="note warn">Tahapan pengecatan belum diatur. Minta Project Control mengisi Master Data › Tahapan.</div>`}
+      ${petaW && d.modeManual ? `<div class="note warn">Laporan ini dibuat sebelum peta panel tanki ini dikunci, jadi luasnya tetap diketik.</div>`
+        : w && isPC() ? `<div class="note">Tanki ini belum punya peta panel terkunci, jadi luas masih diketik. Supaya progress tidak ditaksir,
+          buat petanya di <b>Master Data › Peta Panel</b>.</div>` : ""}
       <div id="sisaBox"></div>
       <div id="progList" class="mt12"></div>
       <div class="tiny muted mt8">Isi <b>luas yang dikerjakan hari ini saja</b> dalam m&sup2; — bukan angka kumulatif, bukan persen.
         Sisa tiap bagian dan tiap tahap dihitung sendiri oleh sistem. Persen pada lembar Daily Activity juga dihitung sendiri dari angka ini.
         Hari tanpa pekerjaan coating? Kosongkan bagian ini dan isi bagian 2b saja.</div>
-    </div></div>
+    </div></div>`}
 
-    <div class="card"><h3>2b · Kegiatan pendukung <span class="tiny muted">tidak menambah luas</span>
+    <div class="card" data-lk="2"><h3>2b · Kegiatan pendukung <span class="tiny muted">tidak menambah luas</span>
       <button class="btn a sm" id="addKeg">+ Tambah kegiatan</button></h3><div class="body">
       <datalist id="kegOpts">${KEGIATAN_PENDUKUNG.map(x => `<option value="${esc(x)}">`).join("")}</datalist>
       <div id="kegList"></div>
@@ -2971,7 +3934,7 @@ VIEWS["daily-new"] = {
         tetapi <b>tidak</b> dihitung sebagai progress pengecatan maupun dasar tagihan.</div>
     </div></div>
 
-    <div class="grid g2">
+    <div class="grid g2" data-lk="3">
       <div class="card"><h3>3 · Manpower <button class="btn sm" id="copyMp">Salin dari kemarin</button>
         <button class="btn a sm" id="addMp">+ Tambah orang</button></h3>
         <div class="body"><div id="mpList"></div>
@@ -2981,12 +3944,12 @@ VIEWS["daily-new"] = {
         <div class="body"><div id="mtList"></div></div></div>
     </div>
 
-    <div class="card"><h3>4b · Peralatan <button class="btn a sm" id="addEq">+ Tambah</button></h3>
+    <div class="card" data-lk="3"><h3>4b · Peralatan <button class="btn a sm" id="addEq">+ Tambah</button></h3>
       <div class="body"><div id="eqList"></div>
         <div class="tiny muted mt8">Alat berstatus <b>Standby</b> atau <b>Rusak</b> adalah bukti tertulis saat
           keterlambatan dipersoalkan, dan dasar bila ada klaim waktu tunggu.</div></div></div>
 
-    <div class="card"><h3>5 · Foto bukti <span class="tiny muted">Before · Kegiatan · After · QC/HSSE</span></h3><div class="body">
+    <div class="card" data-lk="4"><h3>5 · Foto bukti <span class="tiny muted">Before · Kegiatan · After · QC/HSSE</span></h3><div class="body">
       <div class="row">
         <label class="f" style="min-width:170px;margin-bottom:0"><span>Jenis foto</span>
           <select id="phType">${PHOTO_TYPES.map(p => `<option value="${p[0]}">${p[1]}</option>`).join("")}</select></label>
@@ -2999,7 +3962,7 @@ VIEWS["daily-new"] = {
         dari layar detail laporan untuk lampiran tagihan.</div>
     </div></div>
 
-    <div class="card"><h3>5b · Laporan hard copy
+    <div class="card" data-lk="4"><h3>5b · Laporan hard copy
       <span class="tiny muted">lembar Daily Activity yang sudah ditandatangani</span></h3><div class="body">
       ${kotakPindaian("dScan", d.scan_url, "Pindaian laporan harian bertanda tangan")}
       <div class="tiny muted mt8">Yang diunggah di sini adalah lembar tulis tangan yang sudah ditandatangani
@@ -3007,7 +3970,7 @@ VIEWS["daily-new"] = {
         cukup menekan tautan <b>hard copy</b> untuk membacanya, tanpa perlu minta akses.</div>
     </div></div>
 
-    <div class="grid g2">
+    <div class="grid g2" data-lk="5">
       <div class="card"><h3>6 · QC / Inspeksi</h3><div class="body">
         <div class="fg c2">
           <label class="f"><span>Jenis inspeksi</span><select id="qType">${listOpts(QC_TYPES, d.qc.inspection_type, "— tidak ada inspeksi —")}</select></label>
@@ -3033,7 +3996,7 @@ VIEWS["daily-new"] = {
       </div></div>
     </div>
 
-    <div class="card"><h3>8 · Kendala hari ini</h3><div class="body">
+    <div class="card" data-lk="5"><h3>8 · Kendala hari ini</h3><div class="body">
       <div class="fg c4">
         <label class="f"><span>Kategori</span><select id="iCat">${listOpts(["TEKNIS", "IZIN", "MATERIAL", "CUACA", "TENAGA KERJA", "PERALATAN", "LAINNYA"], d.issue.category, "Tidak ada kendala")}</select></label>
         <label class="f"><span>Dampak</span><input type="text" id="iImp" value="${esc(d.issue.impact)}" placeholder="mis. berhenti 3 jam"></label>
@@ -3046,7 +4009,8 @@ VIEWS["daily-new"] = {
       </div>
     </div></div>
 
-    <div class="card"><h3>9 · Catatan umum</h3><div class="body">
+    <div id="lkRingkas" data-lk="6"></div>
+    <div class="card" data-lk="6"><h3>9 · Catatan umum &amp; kirim</h3><div class="body">
       <div class="fg c2">
         <label class="f"><span>Catatan dibuat oleh</span><select id="dSupSide">${listOpts(PENGAWAS, d.supervisor_side)}</select></label>
         <label class="f"><span>Nama pengawas</span><input type="text" id="dSupName" value="${esc(d.supervisor_name)}" placeholder="nama pengawas yang bertanggung jawab"></label>
@@ -3055,10 +4019,15 @@ VIEWS["daily-new"] = {
       <div class="row mt12">
         <button class="btn" id="btnDraft">Simpan draft</button>
         ${isPC() ? `<button class="btn p" id="btnFinal">Simpan final</button>`
-          : `<button class="btn p" id="btnSubmit">${d.status === "REJECTED" ? "Ajukan ulang" : "Ajukan laporan"}</button>`}
+          : `<button class="btn p" id="btnSubmit">${d.status === "REJECTED" ? "Kirim ulang" : "Kirim laporan"}</button>`}
         <button class="btn" id="btnReset">Kosongkan</button>
       </div>
-    </div></div>`;
+      <div class="tiny muted mt8">Nama pengawas = yang tertulis di <b>Prepared By</b> lembar Daily Activity.</div>
+    </div></div>
+    ${lkOn ? `<div class="card lknav noprint"><div class="body row">
+      <button class="btn" id="lkPrev">‹ Kembali</button><span class="grow"></span>
+      <button class="btn" id="lkDraft">Simpan draft</button><button class="btn p" id="lkNext">Lanjut ›</button></div></div>` : ""}
+    </div>`;
   },
   bind() {
     $$("[data-fix]").forEach(b => b.onclick = () => loadDraft(b.dataset.fix));
@@ -3077,7 +4046,7 @@ VIEWS["daily-new"] = {
        seluruh pengait di bawah tidak punya sasaran. Sebelumnya hal itu
        membuat layar Buat Laporan Harian gagal terbuka sama sekali. */
     if (!$("#dWo")) return;
-    $("#dWo").onchange = () => { pull(); d.progress = []; render(); };
+    $("#dWo").onchange = () => { pull(); d.progress = []; d.panel = {}; d.modeManual = false; render(); };
 
     /* --- progress: bagian + tahap, isi luas hari ini saja --- */
     const W = bamkOf(d.bamk_id);
@@ -3192,6 +4161,21 @@ VIEWS["daily-new"] = {
       drawSisa();
     };
 
+    /* V2.9 — mode peta panel: pilihan panel menjadi baris progress. */
+    const PW = W ? petaTerkunci(W.tank_id) : null;
+    if (PW && !d.modeManual && $("#ppBox")) {
+      d.panel = d.panel || {};
+      const ctx = {
+        peta: PW, W: W, done: keadaanPanel(d.bamk_id, d.daily_id).f, sel: d.panel,
+        stage: S.f.ppStage || (TH[0] || {}).stage_id, bagian: S.f.ppBagian || "SHELL",
+        onUbah: () => { d.progress = pilihanKeProgress(d.panel, PW, W); drawSisa(); }
+      };
+      pasangPemilih($("#ppBox"), ctx);
+      /* Ingat tahap & bagian terakhir supaya tidak kembali ke awal saat layar digambar ulang. */
+      $("#ppBox").addEventListener("click", () => { S.f.ppStage = ctx.stage; S.f.ppBagian = ctx.bagian; });
+      d.progress = pilihanKeProgress(d.panel, PW, W);
+      drawSisa();
+    }
     const barisBaru = (part, stage_id) => {
       const t = tahapOf(stage_id);
       return {
@@ -3200,13 +4184,13 @@ VIEWS["daily-new"] = {
         target_qty: 0, actual_qty: 0, unit: "m2", pct_complete: 0
       };
     };
-    $("#addProg").onclick = () => {
+    if ($("#addProg")) $("#addProg").onclick = () => {
       d.progress.push(barisBaru("SHELL", (TH[0] || {}).stage_id || ""));
       drawProg();
     };
     /* Salin susunan baris laporan terakhir tanki ini — angkanya dikosongkan,
        supaya yang diketik ulang hanya luasannya. */
-    $("#copyKemarin").onclick = () => {
+    if ($("#copyKemarin")) $("#copyKemarin").onclick = () => {
       const lalu = DB.dailies.filter(x => x.bamk_id === d.bamk_id && x.daily_id !== d.daily_id)
         .slice().sort((a, b) => (b.report_date || "").localeCompare(a.report_date || ""))[0];
       if (!lalu) return toast("Belum ada laporan sebelumnya untuk tanki ini.", "err");
@@ -3216,7 +4200,7 @@ VIEWS["daily-new"] = {
       drawProg();
       toast("Disalin dari laporan " + dateID(lalu.report_date) + ". Isi luasannya.", "ok");
     };
-    drawProg();
+    if ($("#progList")) drawProg();
 
     /* --- V2.7: kegiatan pendukung (Description / Target % / Actual % / Remarks) --- */
     d.kegiatan = d.kegiatan || [];
@@ -3365,6 +4349,28 @@ VIEWS["daily-new"] = {
     $("#btnDraft").onclick = () => { pull(); commitDaily("DRAFT"); };
     if ($("#btnSubmit")) $("#btnSubmit").onclick = () => { pull(); commitDaily("SUBMITTED"); };
     if ($("#btnFinal")) $("#btnFinal").onclick = () => { pull(); commitDaily("FINAL"); };
+
+    /* --- V2.9: tampilan langkah demi langkah --- */
+    const pasangLompat = akar => (akar || document).querySelectorAll("[data-lkgo]").forEach(b => b.onclick = () => tampil(+b.dataset.lkgo, true));
+    const pasangMode = () => { const m = $("#lkMode"); if (m) m.onclick = () => { pull(); aturLangkah(!pakaiLangkah()); render(); }; };
+    const tampil = (n, gulir) => {
+      const form = $("#dForm"); if (!form || !form.classList.contains("lk-on")) return;
+      n = Math.min(LANGKAH.length, Math.max(1, n)); S.f.lk = n;
+      pull();
+      if (n === LANGKAH.length) { $("#lkRingkas").innerHTML = ringkasDraftHtml(d); pasangLompat($("#lkRingkas")); }
+      $$("#dForm [data-lk]").forEach(el => el.classList.toggle("lk-aktif", +el.dataset.lk === n));
+      $("#lkWrap").innerHTML = stepperHtml(n); pasangLompat($("#lkWrap")); pasangMode();
+      $("#lkPrev").style.visibility = n > 1 ? "visible" : "hidden";
+      $("#lkNext").style.display = n < LANGKAH.length ? "" : "none";
+      if (gulir) window.scrollTo(0, 0);
+    };
+    pasangMode();
+    if ($("#lkNext")) {
+      $("#lkNext").onclick = () => tampil((S.f.lk || 1) + 1, true);
+      $("#lkPrev").onclick = () => tampil((S.f.lk || 1) - 1, true);
+      $("#lkDraft").onclick = () => { pull(); commitDaily("DRAFT"); };
+      tampil(S.f.lk || 1, false);
+    }
   }
 };
 function photoName(d, p, i) {
@@ -3504,6 +4510,12 @@ function commitDaily(status) {
   if (!wCek) return toast("BAMK tidak ditemukan. Muat ulang halaman.", "err");
   if (wCek.status !== "AKTIF") return toast("BAMK tanki ini belum berstatus AKTIF.", "err");
   if (!spkTerbit(wCek.spk_id)) return toast("SPK dari Pertamina untuk tanki ini belum berstatus TERBIT.", "err");
+  /* V2.9 — tanki berpeta panel: baris progress selalu disusun ulang dari panel
+     yang dicentang, lalu diperiksa supaya tidak ada panel tercatat dua kali. */
+  const ptCek = petaTerkunci(wCek.tank_id);
+  if (ptCek && !d.modeManual) d.progress = pilihanKeProgress(d.panel || {}, ptCek, wCek);
+  const salahPanel = periksaPanel(d);
+  if (salahPanel) return toast(salahPanel, "err");
   /* Baris kegiatan yang benar-benar kosong dibuang diam-diam. */
   d.kegiatan = (d.kegiatan || []).filter(k => String(k.activity || "").trim() || String(k.remarks || "").trim() ||
     (k.actual_pct !== "" && k.actual_pct != null));
@@ -3538,7 +4550,7 @@ function commitDaily(status) {
     const pelanggaran = periksaBatasProgress(d);
     if (pelanggaran) return toast(pelanggaran, "err");
     if (!d.hsse.permit_status) return toast("Status PTW/izin wajib diisi sebelum mengajukan.", "err");
-    if (!d.photos.length) return toast("Lampirkan minimal satu foto bukti.", "err");
+    if (!d.photos.length && !d.scan_url) return toast("Lampirkan minimal satu foto bukti atau pindaian lembar bertanda tangan.", "err");
     if (!d.supervisor_name) return toast("Isi nama pengawas pada bagian 9.", "err");
   }
   const w = bamkOf(d.bamk_id);
@@ -3647,13 +4659,229 @@ function commitDaily(status) {
   save();
   toast(status === "DRAFT" ? "Draft tersimpan." : FINAL ? "Laporan tersimpan final dan terverifikasi." :
     (wasRejected ? "Laporan diajukan ulang." : "Laporan diajukan ke Project Control."), "ok");
-  S.draft = null;
-  go("daily-list");
+  S.draft = null; S.f.lk = 1;
+  go(can("admin_home") ? "admin-home" : "daily-list");
 }
 
 /* ============================================================
    VIEW: DAFTAR LAPORAN HARIAN
    ============================================================ */
+
+/* ============================================================
+   V2.9 — WAJAH ADMIN (input lapangan yang ringkas)
+   ------------------------------------------------------------
+   Admin Site hanya melihat menu yang ia perlukan untuk mengetik lembar
+   Daily Activity: Beranda, Buat Laporan Harian (langkah demi langkah),
+   Laporan Saya, Progress Tanki, Ukur Tanki, dan Cara Input.
+   Project Control tetap bisa menginput dengan formulir yang sama dan
+   memilih tampilan langkah atau satu halaman.
+   ============================================================ */
+const LANGKAH = [
+  [1, "Identitas", "Tanggal, tanki, permit, jam kerja"],
+  [2, "Pekerjaan", "Centang plat yang selesai + kegiatan pendukung"],
+  [3, "Orang & bahan", "Manpower, material, peralatan"],
+  [4, "Foto & lembar", "Foto bukti dan lembar bertanda tangan"],
+  [5, "QC · HSSE · Kendala", "Isi bila ada"],
+  [6, "Periksa & kirim", "Cek kekurangan lalu kirim"]
+];
+function pakaiLangkah() {
+  try { const v = localStorage.getItem("hbm_form_langkah"); if (v === "1") return true; if (v === "0") return false; } catch (e) { }
+  return isSite();
+}
+function aturLangkah(nyala) { try { localStorage.setItem("hbm_form_langkah", nyala ? "1" : "0"); } catch (e) { } }
+function stepperHtml(n) {
+  return `<div class="card lkbar noprint"><div class="body">
+    <div class="lksteps">${LANGKAH.map(l => `<button class="lkstep ${l[0] === n ? "on" : l[0] < n ? "lewat" : ""}" data-lkgo="${l[0]}">
+      <span class="lkno">${l[0] < n ? "✓" : l[0]}</span><span class="lkt">${esc(l[1])}</span></button>`).join("")}</div>
+    <div class="row mt8"><span class="small grow"><b>Langkah ${n} dari ${LANGKAH.length}: ${esc(LANGKAH[n - 1][1])}</b>
+      <span class="muted"> — ${esc(LANGKAH[n - 1][2])}</span></span>
+      <button class="btn sm" id="lkMode">Tampilkan satu halaman</button></div></div></div>`;
+}
+
+/* Kekurangan laporan sebelum dikirim — sama dengan pemeriksaan saat Kirim,
+   ditampilkan lebih dulu supaya Admin tidak bolak-balik ditolak. */
+function cekKirim(d) {
+  const wajib = [], saran = [];
+  if (!d.report_date) wajib.push(["Tanggal laporan belum diisi.", 1]);
+  if (!d.bamk_id) wajib.push(["Tanki belum dipilih.", 1]);
+  const keg = (d.kegiatan || []).filter(k => String(k.activity || "").trim());
+  if (!prVol(d.progress).length && !keg.length) wajib.push(["Belum ada pekerjaan coating (plat dicentang) maupun kegiatan pendukung.", 2]);
+  if (d.progress.some(p => nz(p.actual_qty) <= 0)) wajib.push(["Ada baris pekerjaan coating tanpa luas.", 2]);
+  if (!d.manpower.length) saran.push(["Manpower belum diisi — tekan “Salin dari kemarin” bila regunya sama.", 3]);
+  if (d.manpower.some(m => !m.pihak || !m.category)) wajib.push(["Ada manpower tanpa Pihak atau Position.", 3]);
+  if (!d.permit_no && !(d.hsse || {}).permit_status) wajib.push(["Permit No. atau status PTW belum diisi.", 1]);
+  if (!d.photos.length && !d.scan_url) wajib.push(["Belum ada foto bukti atau pindaian lembar bertanda tangan.", 4]);
+  if (!d.scan_url) saran.push(["Pindaian/foto lembar Daily Activity bertanda tangan belum diunggah.", 4]);
+  if (!d.supervisor_name) wajib.push(["Nama pengawas (Prepared By) belum diisi.", 6]);
+  return { wajib, saran };
+}
+function ringkasDraftHtml(d) {
+  const w = bamkOf(d.bamk_id), pr = prVol(d.progress), keg = (d.kegiatan || []).filter(k => String(k.activity || "").trim());
+  const orang = d.manpower.reduce((a, m) => a + nz(m.worker_count), 0);
+  const c = cekKirim(d);
+  return `<div class="card" data-lk="6"><h3>Periksa sebelum dikirim</h3><div class="body">
+    ${c.wajib.length ? `<div class="note stop"><b>Masih ada ${c.wajib.length} yang wajib dilengkapi:</b>
+      ${c.wajib.map(x => `<div class="mt8">• ${esc(x[0])} <button class="btn sm" data-lkgo="${x[1]}">Ke langkah ${x[1]}</button></div>`).join("")}</div>`
+      : `<div class="note" style="border-left-color:var(--teal)"><b>Semua yang wajib sudah lengkap.</b> Laporan siap dikirim.</div>`}
+    ${c.saran.length ? `<div class="note warn mt8">${c.saran.map(x => `<div>• ${esc(x[0])} <button class="btn sm" data-lkgo="${x[1]}">Ke langkah ${x[1]}</button></div>`).join("")}</div>` : ""}
+    <div class="tw mt12"><table><tbody>
+      <tr><th style="width:170px">Tanggal · Tanki</th><td>${esc(dateID(d.report_date))} · <b>${esc(w ? tankNo(w.tank_id) : "—")}</b> ${w ? "· BAMK " + esc(w.bamk_no) : ""}</td></tr>
+      <tr><th>Permit · Jam kerja</th><td>${esc(d.permit_no || "—")} · ${esc(d.work_hours || "—")} · cuaca ${esc(d.weather || "—")}</td></tr>
+      <tr><th>Pekerjaan coating</th><td>${pr.length ? pr.map(p => `<div>${esc((tahapOf(p.stage_id) || {}).stage_name || "")} — ${esc(bagianLabel(p.part))}:
+        <b>${fmt(p.actual_qty, 2)} m²</b>${ringkasKode(bacaPanel(p.work_package)) ? ` <span class="tiny num">(${esc(ringkasKode(bacaPanel(p.work_package)))})</span>` : ""}</div>`).join("")
+      + `<div class="mt8"><b>Jumlah ${fmt(pr.reduce((a, p) => a + nz(p.actual_qty), 0), 2)} m²</b></div>` : "—"}</td></tr>
+      <tr><th>Kegiatan pendukung</th><td>${keg.length ? keg.map(k => esc(k.activity)).join("; ") : "—"}</td></tr>
+      <tr><th>Manpower</th><td>${fmt0(orang)} orang${d.manpower.length ? ` <span class="tiny muted">(${d.manpower.filter(m => m.pihak === "HBM").length} baris HBM · ${d.manpower.filter(m => m.pihak === "Palda").length} baris Palda)</span>` : ""}</td></tr>
+      <tr><th>Material · Peralatan</th><td>${d.materials.length} material · ${(d.equipment || []).length} alat</td></tr>
+      <tr><th>Foto · Lembar</th><td>${d.photos.length} foto · lembar bertanda tangan ${d.scan_url ? "<b>sudah</b>" : "belum"} diunggah</td></tr>
+      <tr><th>QC · PTW · Kendala</th><td>${esc((d.qc || {}).inspection_type || "tidak ada inspeksi")} · PTW ${esc((d.hsse || {}).permit_status || (d.permit_no ? "AKTIF" : "—"))} · ${esc((d.issue || {}).category || "tidak ada kendala")}</td></tr>
+    </tbody></table></div></div></div>`;
+}
+
+/* ---------- BERANDA ADMIN ---------- */
+function laporanTanggal(bamk_id, tgl) { return DB.dailies.find(x => x.bamk_id === bamk_id && x.report_date === tgl) || null; }
+function mulaiLaporan(bamk_id) {
+  const ada = laporanTanggal(bamk_id, today());
+  if (ada) {
+    if (ada.status === "APPROVED" && !can("review")) return showDaily(ada.daily_id);
+    S.f.lk = 1; return loadDraft(ada.daily_id);
+  }
+  S.draft = newDraft(); S.draft.bamk_id = bamk_id; S.f.lk = 1; go("daily-new");
+}
+VIEWS["admin-home"] = {
+  html() {
+    const tgl = today(), aktif = bamkAktif();
+    const milik = DB.dailies.filter(d => d.admin_user_id === S.user.user_id);
+    const balik = DB.dailies.filter(d => d.status === "REJECTED");
+    const draf = milik.filter(d => d.status === "DRAFT");
+    const kartu = aktif.map(w => {
+      const t = tankOf(w.tank_id), pt = petaTanki(w.tank_id), lap = laporanTanggal(w.bamk_id, tgl);
+      const p = persenBamk(w.bamk_id), sisa = sisaHariSPK(w);
+      return `<div class="card adm"><div class="body">
+        <div class="spread"><div><div class="eyebrow">${esc(areaName(w.area_id))} · BAMK ${esc(w.bamk_no)}</div>
+          <div style="font-size:22px;font-weight:800">${esc(t ? t.tank_no : "—")}</div></div>
+          <div class="right"><div style="font-size:22px;font-weight:800" class="num">${fmt(p, 1)}%</div><div class="tiny muted">progress terbobot</div></div></div>
+        ${barHtml(p)}
+        <div class="small mt8">Laporan hari ini: ${lap ? statusBadge(lap.status, lap.revision_no) : `<b style="color:var(--amber)">belum ada</b>`}
+          ${sisa !== null ? ` · <span class="${sisa <= 3 ? "" : "muted"}" ${sisa <= 3 ? `style="color:var(--red);font-weight:700"` : ""}>${sisa < 0 ? "SPK lewat " + -sisa + " hari" : "sisa SPK " + sisa + " hari"}</span>` : ""}</div>
+        <div class="small muted mt8">Peta panel: ${pt ? (pt.kunci ? `<b style="color:var(--teal)">terkunci</b> — ${esc(ringkasPeta(pt))}` : `draft, menunggu dikunci Project Control`) : `belum ada — luas masih diketik`}</div>
+        <div class="row mt12">
+          <button class="btn p" data-mulai="${w.bamk_id}">${lap ? (lap.status === "APPROVED" && !can("review") ? "Lihat laporan hari ini" : "Lanjutkan laporan hari ini") : "Isi laporan hari ini"}</button>
+          ${pt && pt.kunci ? `<button class="btn" data-lihatpeta="${w.tank_id}">Progress plat</button>` : ""}
+          ${pt ? `<button class="btn" data-cetakpeta="${w.tank_id}">Cetak peta</button>` : `<button class="btn" data-ukur="${w.tank_id}">Isi hasil ukur</button>`}
+        </div></div></div>`;
+    }).join("");
+    return `
+      <div class="card"><div class="body">
+        <div style="font-size:18px;font-weight:800">Halo, ${esc(S.user.user_name)}</div>
+        <div class="small muted">${esc(dateID(tgl))} · tugas Anda: mengetik lembar Daily Activity yang sudah ditandatangani ke aplikasi.</div>
+        <div class="row mt12">
+          <button class="btn" id="admBlanko">Cetak blanko Daily Activity</button>
+          <button class="btn" id="admPanduan">Cara input</button>
+          <button class="btn" id="admDaftar">Laporan saya</button>
+        </div></div></div>
+      ${balik.length ? `<div class="note stop mt16"><b>${balik.length} laporan dikembalikan — perbaiki dulu.</b>
+        ${balik.map(x => `<div class="mt8"><span class="num" style="font-weight:700">${esc(x.return_code || "—")}</span>
+          <span class="tiny muted"> · ${esc(dateID(x.report_date))} · ${esc(tankNo(x.tank_id))}</span>
+          <div class="small">${esc(x.review_note || "tanpa catatan")}</div>
+          <button class="btn a sm mt8" data-perbaiki="${x.daily_id}">Perbaiki sekarang</button></div>`).join("")}</div>` : ""}
+      ${draf.length ? `<div class="note warn mt16"><b>${draf.length} laporan masih draft</b> — belum terkirim ke Project Control.
+        ${draf.map(x => `<div class="mt8">${esc(dateID(x.report_date))} · ${esc(tankNo(x.tank_id))}
+          <button class="btn sm" data-perbaiki="${x.daily_id}">Lanjutkan</button></div>`).join("")}</div>` : ""}
+      <h3 class="mt16" style="margin-bottom:8px">Tanki yang sedang dikerjakan</h3>
+      ${aktif.length ? `<div class="grid g2">${kartu}</div>` : `<div class="card"><div class="empty"><b>Belum ada tanki aktif</b>
+        Pekerjaan baru bisa dilaporkan setelah SPK terbit dan BAMK aktif. Hubungi Project Control HBM.</div></div>`}`;
+  },
+  bind() {
+    $$("[data-mulai]").forEach(b => b.onclick = () => mulaiLaporan(b.dataset.mulai));
+    $$("[data-perbaiki]").forEach(b => b.onclick = () => { S.f.lk = 1; loadDraft(b.dataset.perbaiki); });
+    $$("[data-lihatpeta]").forEach(b => b.onclick = () => { S.f.admPeta = b.dataset.lihatpeta; go("admin-peta"); });
+    $$("[data-cetakpeta]").forEach(b => b.onclick = () => cetakPetaPanel(b.dataset.cetakpeta));
+    $$("[data-ukur]").forEach(b => b.onclick = () => petaModal(b.dataset.ukur));
+    $("#admBlanko").onclick = () => cetakDailyActivity(null);
+    $("#admPanduan").onclick = () => go("admin-panduan");
+    $("#admDaftar").onclick = () => go("daily-list");
+  }
+};
+
+/* ---------- PROGRESS TANKI (lihat saja) ---------- */
+VIEWS["admin-peta"] = {
+  html() {
+    const daftar = DB.tanks.filter(t => petaTerkunci(t.tank_id) && bamkTanki(t.tank_id));
+    if (!daftar.length) return `<div class="card"><div class="empty"><b>Belum ada tanki dengan peta panel terkunci</b>
+      Peta disiapkan dari hasil ukur lapangan (menu Ukur Tanki), lalu dikunci Project Control.</div></div>`;
+    const pilih = daftar.find(t => t.tank_id === S.f.admPeta) || daftar[0];
+    S.f.admPeta = pilih.tank_id;
+    const W = bamkTanki(pilih.tank_id), TH = tahapAktif();
+    return `<div class="card"><div class="body">
+      <div class="row"><label class="f" style="margin:0;min-width:200px"><span>Tanki</span><select id="apTank">${daftar.map(t =>
+        `<option value="${t.tank_id}" ${t.tank_id === pilih.tank_id ? "selected" : ""}>${esc(t.tank_no)}</option>`).join("")}</select></label>
+        <span class="grow small muted">BAMK ${esc(W.bamk_no)} · progress terbobot <b>${fmt(persenBamk(W.bamk_id), 1)}%</b></span>
+        <button class="btn sm" id="apCetak">Cetak peta</button></div>
+      <div class="tw mt12"><table><thead><tr><th>Bagian</th>${TH.map(x => `<th class="n">${esc(x.stage_name)}</th>`).join("")}</tr></thead>
+        <tbody>${BAGIAN.map(b => `<tr><td>${esc(b[1])}</td>${TH.map(x => {
+          const kap = volBagian(W, b[0]), k = kumulatif(W.bamk_id, b[0], x.stage_id, null);
+          return `<td class="n tiny">${fmt(k, 1)} / ${fmt(kap, 1)}<div class="muted">${fmt(kap ? k / kap * 100 : 0, 0)}%</div></td>`;
+        }).join("")}</tr>`).join("")}</tbody></table></div>
+      <div id="apBox" class="mt12"></div>
+      <div class="tiny muted mt8">Layar ini hanya untuk melihat. Plat yang sudah selesai tidak bisa dicentang lagi di laporan berikutnya.</div>
+    </div></div>`;
+  },
+  bind() {
+    if (!$("#apTank")) return;
+    $("#apTank").onchange = e => { S.f.admPeta = e.target.value; render(); };
+    const tid = S.f.admPeta, W = bamkTanki(tid);
+    pasangPemilih($("#apBox"), { peta: petaTerkunci(tid), W: W, done: keadaanPanel(W.bamk_id, null).f, sel: {}, baca: true, bagian: "SHELL" });
+    $("#apCetak").onclick = () => cetakPetaPanel(tid);
+  }
+};
+
+/* ---------- UKUR TANKI (isi hasil ukur → dikunci Project Control) ---------- */
+VIEWS["admin-ukur"] = {
+  html() {
+    const ids = new Set(bamkAktif().map(w => w.tank_id));
+    const daftar = DB.tanks.filter(t => ids.has(t.tank_id) || petaTanki(t.tank_id));
+    return `<div class="note">Isi hasil ukur lapangan untuk tanki yang akan/sedang dikerjakan: tiap course (tinggi, jumlah plat,
+      jarak sambungan tegak pertama dari tangga) dan atap (jumlah cincin dan plat tiap cincin). Gambarnya terbentuk sendiri.
+      Sesudah disimpan, <b>Project Control memeriksa lalu mengunci</b> peta — baru setelah itu laporan harian diisi dengan mencentang plat.</div>
+      <div class="card mt16"><div class="tw"><table><thead><tr><th>Tanki</th><th class="n">Ø / Tinggi</th><th>Peta</th><th>Susunan</th><th></th></tr></thead>
+      <tbody>${daftar.length ? daftar.map(t => {
+        const p = petaTanki(t.tank_id);
+        return `<tr><td><b>${esc(t.tank_no)}</b><div class="tiny muted">${esc(areaName(t.area_id))}</div></td>
+          <td class="n tiny">${fmt(t.shell_diameter_m, 2)} / ${fmt(t.tank_height_m, 2)}</td><td>${statusPetaHtml(t)}</td>
+          <td class="tiny">${p ? esc(ringkasPeta(p)) : "—"}</td>
+          <td class="right"><button class="btn sm ${p ? "" : "a"}" data-ukur="${t.tank_id}">${p ? (p.kunci ? "Lihat" : "Ubah hasil ukur") : "Isi hasil ukur"}</button>
+            ${p ? `<button class="btn sm" data-cetakpeta="${t.tank_id}">Cetak</button>` : ""}</td></tr>`;
+      }).join("") : `<tr><td colspan="5"><div class="empty">Belum ada tanki aktif.</div></td></tr>`}</tbody></table></div></div>`;
+  },
+  bind() {
+    $$("[data-ukur]").forEach(b => b.onclick = () => petaModal(b.dataset.ukur));
+    $$("[data-cetakpeta]").forEach(b => b.onclick = () => cetakPetaPanel(b.dataset.cetakpeta));
+  }
+};
+
+/* ---------- CARA INPUT ---------- */
+VIEWS["admin-panduan"] = {
+  html() {
+    const TH = tahapAktif();
+    const L = (no, judul, isi) => `<div class="card"><div class="body"><div class="row" style="align-items:flex-start;flex-wrap:nowrap">
+      <span class="lkno besar">${no}</span><div class="grow"><b>${judul}</b><div class="small mt8">${isi}</div></div></div></div></div>`;
+    return `<div class="note">Satu lembar Daily Activity bertanda tangan = satu laporan per tanki per hari. Ketik apa yang tertulis saja;
+      yang tidak ada di lembar boleh dikosongkan. Data tersimpan di HP/laptop dan terkirim sendiri ke kantor begitu ada internet.</div>
+      ${L(1, "Identitas", "Buka <b>Beranda</b> → tekan <b>Isi laporan hari ini</b> pada tanki yang dikerjakan. Periksa tanggal, lalu ketik Permit No. dan jam kerja dari lembar.")}
+      ${L(2, "Pekerjaan", `Pilih tahap (${TH.map((t, i) => `<b>${singkatTahap(t, i)}</b> ${esc(t.stage_name)}`).join(", ")}), lalu ketuk plat sesuai kolom
+        <b>Kode Panel</b> di lembar — contoh <span class="num">C2: S3–S5</span> berarti course 2, plat 3 sampai 5. Atap: <span class="num">R1: S1–S4</span> = cincin tepi, plat 1–4.
+        Ketuk 1× = selesai penuh, 2× = ½ plat, 3× = batal. Luasnya dihitung sendiri — jangan menaksir. Plat abu-abu belum boleh (tahap sebelumnya belum selesai).
+        Kegiatan tanpa luas (pindah scaffolding, menunggu izin) masuk <b>Kegiatan pendukung</b>.`)}
+      ${L(3, "Orang & bahan", "Tekan <b>Salin dari kemarin</b> pada Manpower, lalu hapus yang tidak hadir. Setiap orang harus punya Position dan Pihak (HBM / Palda / Vendor). Material dan peralatan diisi bila ada di lembar.")}
+      ${L(4, "Foto & lembar", "Ambil foto lembar Daily Activity yang sudah ditandatangani dan unggah di <b>Laporan hard copy</b>. Tambahkan foto kegiatan bila ada.")}
+      ${L(5, "QC · HSSE · Kendala", "Isi hanya bila ada inspeksi, catatan HSSE, atau kendala hari itu.")}
+      ${L(6, "Periksa & kirim", "Layar terakhir menampilkan ringkasan dan daftar yang masih kurang. Isi nama pengawas (Prepared By), lalu tekan <b>Kirim laporan</b>. Belum selesai? Tekan <b>Simpan draft</b> dan lanjutkan dari Beranda.")}
+      <div class="note warn mt16">Laporan yang sudah dikirim masih bisa diubah sampai disetujui Project Control. Laporan tidak bisa Anda hapus sendiri —
+        hubungi Project Control bila ada yang salah. Bila dikembalikan, laporan muncul merah di Beranda dengan catatannya.</div>`;
+  }
+};
+
 VIEWS["daily-list"] = {
   html() {
     const f = S.f.dl || (S.f.dl = { from: "", to: "", wo: "", st: "" });
@@ -3787,9 +5015,9 @@ function showDaily(id) {
     ${pr.length ? `<h4 class="mt16">Progress</h4>` : `<div class="note mt16">Tidak ada pekerjaan coating pada hari ini.</div>`}
     <div class="tw" ${pr.length ? "" : `style="display:none"`}><table><thead><tr><th>Bagian</th><th>Tahap</th><th>Aktivitas</th>
       <th class="n">Luas (m²)</th><th class="n">Bobot</th><th class="n">Setara selesai</th></tr></thead>
-    <tbody>${pr.map(p => { const t = tahapOf(p.stage_id), bt = bobotTahap(p.stage_id);
+    <tbody>${pr.map(p => { const t = tahapOf(p.stage_id), bt = bobotTahap(p.stage_id), kp = ringkasKode(bacaPanel(p.work_package));
       return `<tr><td>${esc(bagianLabel(p.part))}</td><td>${esc(t ? t.stage_name : "—")}</td>
-        <td class="tiny">${esc(p.activity)}</td><td class="n">${fmt(p.actual_qty, 2)}</td>
+        <td class="tiny">${esc(p.activity)}${kp ? `<div><b>Panel:</b> <span class="num">${esc(kp)}</span></div>` : ""}</td><td class="n">${fmt(p.actual_qty, 2)}</td>
         <td class="n tiny">${fmt(bt, 0)}%</td><td class="n">${fmt(nz(p.actual_qty) * bt / 100, 2)}</td></tr>`; }).join("")}</tbody>
       <tfoot><tr><th colspan="3" class="right">TOTAL</th>
         <th class="n">${fmt(pr.reduce((a, p) => a + nz(p.actual_qty), 0), 2)}</th><th></th>
@@ -3852,7 +5080,9 @@ function cetakDailyActivity(id) {
     const t = tahapOf(p.stage_id), kap = volBagian(w, p.part);
     const kum = kumulatif(d.bamk_id, p.part, p.stage_id, null);
     uraian.push({
-      desc: bagianLabel(p.part).split(" (")[0] + " — " + (t ? t.stage_name : "—") + (p.activity ? ": " + p.activity : ""),
+      desc: bagianLabel(p.part).split(" (")[0] + " — " + (t ? t.stage_name : "—") +
+        (p.activity && p.activity !== (t ? t.stage_name : "") ? ": " + p.activity : ""),
+      kode: ringkasKode(bacaPanel(p.work_package)),
       luas: fmt(p.actual_qty, 2),
       target: rencana === null ? "" : fmt(rencana, 0) + "%",
       actual: kap > 0 ? fmt(Math.min(100, kum / kap * 100), 0) + "%" : "",
@@ -3860,11 +5090,11 @@ function cetakDailyActivity(id) {
     });
   });
   kg.forEach(k => uraian.push({
-    desc: k.activity || "", luas: "—", target: fmt(k.target_qty, 0) + "%",
+    desc: k.activity || "", kode: "—", luas: "—", target: fmt(k.target_qty, 0) + "%",
     actual: fmt(k.pct_complete, 0) + "%", rem: k.work_package || ""
   }));
   const minUraian = d ? Math.max(4, uraian.length) : 7;
-  while (uraian.length < minUraian) uraian.push({ desc: "", luas: "", target: "", actual: "", rem: "" });
+  while (uraian.length < minUraian) uraian.push({ desc: "", kode: "", luas: "", target: "", actual: "", rem: "" });
 
   const nMat = d ? Math.max(4, mt.length) : 6, nMp = d ? Math.max(6, mp.length) : 12;
   const matRows = [], mpRows = [];
@@ -3910,24 +5140,26 @@ function cetakDailyActivity(id) {
     <div class="hbm"><div><b>HUDAYA</b><small>BAYANAKA MANDIRI, PT.</small></div>${logo}</div>
   </div>
   <table>
-    <tr><td class="lbl" colspan="3" style="width:34%">DATE</td><td class="lbl" colspan="5">LOCATION PERTAMINA RU V BALIKPAPAN</td></tr>
-    <tr><td colspan="3" class="c" style="height:18px"><b>${esc(tgl)}</b></td><td colspan="5" class="h1" rowspan="2">DAILY ACTIVITY</td></tr>
+    <tr><td class="lbl" colspan="3" style="width:27%">DATE</td><td class="lbl" colspan="6">LOCATION PERTAMINA RU V BALIKPAPAN</td></tr>
+    <tr><td colspan="3" class="c" style="height:18px"><b>${esc(tgl)}</b></td><td colspan="6" class="h1" rowspan="2">DAILY ACTIVITY</td></tr>
     <tr><td colspan="3" class="lbl">PT. HUDAYA BAYANAKA MANDIRI</td></tr>
     <tr><th rowspan="2" style="width:11%">Permit No.</th><th rowspan="2" style="width:8%">Location</th><th rowspan="2" style="width:8%">Tank No.</th>
-      <th colspan="5">${esc(c.project_name || "UNIT RATE PENGECATAN TANGKI DI AREA OIL MOVEMENT").toUpperCase()}</th></tr>
-    <tr><th>DESCRIPTION</th><th style="width:7%">Luas hari ini<br>(m²)</th><th style="width:6%">Target<br>%</th><th style="width:6%">Actual<br>%</th><th style="width:17%">REMARKS</th></tr>
+      <th colspan="6">${esc(c.project_name || "UNIT RATE PENGECATAN TANGKI DI AREA OIL MOVEMENT").toUpperCase()}</th></tr>
+    <tr><th>DESCRIPTION</th><th style="width:15%">KODE PANEL<br><span style="font-weight:400;font-size:8.5px">course : segmen</span></th><th style="width:7%">Luas hari ini<br>(m²)</th><th style="width:6%">Target<br>%</th><th style="width:6%">Actual<br>%</th><th style="width:17%">REMARKS</th></tr>
     ${uraian.map((u, i) => `<tr class="isi">
       ${i === 0 ? `<td rowspan="${uraian.length}" class="c">${esc(ch.permit_no)}</td>
         <td rowspan="${uraian.length}" class="c">${esc(d ? areaName(d.area_id) : "")}</td>
         <td rowspan="${uraian.length}" class="c"><b>${esc(d ? tankNo(d.tank_id) : "")}</b></td>` : ""}
-      <td>${esc(u.desc)}</td><td class="r num">${esc(u.luas)}</td><td class="c num">${esc(u.target)}</td>
+      <td>${esc(u.desc)}</td><td style="font-size:9.5px">${esc(u.kode)}</td><td class="r num">${esc(u.luas)}</td><td class="c num">${esc(u.target)}</td>
       <td class="c num">${esc(u.actual)}</td><td style="font-size:9.5px">${esc(u.rem)}</td></tr>`).join("")}
   </table>
   <div class="ket">${d
     ? `Baris pekerjaan coating: Target % = rencana kumulatif tanki menurut SPK sampai tanggal ini; Actual % = kumulatif bagian &amp; tahap terhadap volume BAMK.
        ${w ? `Progress tanki terbobot ${fmt(persenBamk(d.bamk_id), 1)}%.` : ""} Kegiatan pendukung tidak menambah luas.`
-    : `Pekerjaan coating: tulis Bagian (Shell / Acc / Roof) dan Tahap (${esc(tahapAktif().map(t => t.stage_name).join(" / "))}) di Description, luas hari ini di kolom m².
-       Kegiatan lain (pindah scaffolding, housekeeping, menunggu izin): kolom m² dikosongkan, isi Target % dan Actual %.`}</div>
+    : `Pekerjaan coating: tulis Bagian (Shell / Acc / Roof) dan Tahap (${esc(tahapAktif().map(t => t.stage_name).join(" / "))}) di Description,
+       lalu <b>Kode Panel</b> yang selesai penuh hari ini sesuai tanda di tanki (contoh: <b>C2: S3–S5</b> · atap <b>R: S1–S4</b> · <b>ACC-1</b>).
+       Tanki yang sudah punya peta panel: kolom m² tidak perlu diisi, luas dihitung sistem dari kode panel.
+       Kegiatan lain (pindah scaffolding, housekeeping, menunggu izin): kolom kode &amp; m² dikosongkan, isi Target % dan Actual %.`}</div>
 
   <div class="bawah">
     <div>
@@ -4001,7 +5233,7 @@ function cetakLaporanHarian(id) {
   <tbody>${pr.length ? pr.map(p => {
     const t = tahapOf(p.stage_id), b = bobotTahap(p.stage_id);
     return `<tr><td>${esc(bagianLabel(p.part))}</td><td>${esc(t ? t.stage_name : "—")}</td>
-      <td>${esc(p.activity || "—")}</td><td class="num">${fmt(p.actual_qty, 2)}</td>
+      <td>${esc(p.activity || "—")}${ringkasKode(bacaPanel(p.work_package)) ? `<div class="mut">Panel: ${esc(ringkasKode(bacaPanel(p.work_package)))}</div>` : ""}</td><td class="num">${fmt(p.actual_qty, 2)}</td>
       <td class="num">${fmt(b, 0)}%</td><td class="num">${fmt(nz(p.actual_qty) * b / 100, 2)}</td></tr>`;
   }).join("") : `<tr><td colspan="6"><i>Tidak ada progress pada hari ini.</i></td></tr>`}</tbody>
   <tfoot><tr><th colspan="3" style="text-align:right">JUMLAH</th>
@@ -6925,7 +8157,7 @@ VIEWS.master = {
   html() {
     const tab = S.tab || "tank";
     const T = { area: "Area", tank: "Tanki", spk: "SPK Pertamina", job: "Job Register",
-      bamk: "BAMK ke Pelaksana", eng: "Engineering", stage: "Tahapan", scope: "Scope",
+      bamk: "BAMK ke Pelaksana", eng: "Engineering", peta: "Peta Panel", stage: "Tahapan", scope: "Scope",
       coating: "Sistem Cat", calendar: "Kalender Kerja", target: "Target Plan" };
     let body = "";
     if (tab === "area") body = `
@@ -7071,6 +8303,9 @@ VIEWS.master = {
       }).join("") : `<tr><td colspan="9"><div class="empty"><b>Belum ada Job</b>Job terbentuk sendiri saat BAMK dibuat, atau tambahkan manual di sini.</div></td></tr>`}
       </tbody></table></div>`;
 
+    /* ---------- V2.9 PETA PANEL ---------- */
+    if (tab === "peta") body = htmlTabPeta();
+
     /* ---------- ENGINEERING SURVEY (sheet 09) ---------- */
     if (tab === "eng") body = `
       <div class="row"><span class="small muted grow">Hasil ukur lapangan per tanki — dasar target yang paling dekat dengan kenyataan.</span>
@@ -7160,6 +8395,7 @@ VIEWS.master = {
     const tab = S.tab || "tank";
     if ($("#mNew")) $("#mNew").onclick = () => masterModal(tab, null);
     $$("[data-ed]").forEach(b => b.onclick = () => masterModal(tab, b.dataset.ed));
+    if (tab === "peta") pasangTabPeta();
   }
 };
 /* Baris mana yang harus diisi saat Simpan ditekan. Kalau sinkron sempat
@@ -7407,7 +8643,8 @@ function masterModal(tab, id) {
         <option value="CONFIRMED" ${t.scope_status === "CONFIRMED" ? "selected" : ""}>Confirmed</option>
         <option value="REFERENCE" ${t.scope_status === "REFERENCE" ? "selected" : ""}>Reference</option></select></label>
       <label class="f"><span>Revisi</span><input type="text" id="xRev" value="${esc(t.revision)}"></label></div>
-      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(t.notes || "")}"></label>
+      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(catatanTanki(t))}"></label>
+      ${bacaPeta(t.notes).peta ? `<div class="tiny muted">Tanki ini punya peta panel (Master Data › Peta Panel). Peta tetap tersimpan saat tanki ini disimpan.</div>` : ""}
       <div id="xLuas" class="mt12"></div>`;
     onSave = () => {
       const rec = sasaranSimpan(DB.tanks, "tank_id", id, t); if (!rec) return false;
@@ -7415,7 +8652,8 @@ function masterModal(tab, id) {
         tank_no: $("#xNo").value, area_id: $("#xArea").value, tank_type: $("#xType").value,
         shell_diameter_m: nz($("#xD").value), tank_height_m: nz($("#xH").value),
         baseline_qty: nz($("#xQ").value), baseline_unit: $("#xU").value,
-        scope_status: $("#xSs").value, revision: $("#xRev").value, notes: $("#xNote").value
+        scope_status: $("#xSs").value, revision: $("#xRev").value,
+        notes: tulisPeta(bacaPeta(rec.notes).peta, $("#xNote").value)
       });
       if (!rec.tank_no) return toast("Nomor tanki wajib diisi.", "err");
       if (!id) DB.tanks.push(rec); audit(id ? "UPDATE" : "CREATE", "03_TANK_MASTER", rec.tank_id, "", rec.tank_no); return true;
