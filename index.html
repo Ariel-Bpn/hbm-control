@@ -463,7 +463,7 @@ table.wk td:first-child,table.wk th:first-child{min-width:190px}
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "3.1";
+const APP_VERSI = "3.2";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
 const CODEGS_VERSI = "2.3";
@@ -2229,10 +2229,9 @@ function petaModal(tank_id) {
   const t = tankOf(tank_id); if (!t) return;
   const lama = bacaPeta(t.notes).peta;
   const H = nz(t.tank_height_m), D = nz(t.shell_diameter_m), C = Math.PI * D;
-  const p = normalPeta(lama ? JSON.parse(JSON.stringify(lama)) : {
-    course: H > 0 ? [{ h: H, n: C > 0 ? Math.max(1, Math.round(C / 4)) : 8, geser: 0 }] : [],
-    atap: [{ n: 8, lebar: 0 }], survei: { tgl: today(), oleh: "" }
-  });
+  const p = normalPeta(lama ? JSON.parse(JSON.stringify(lama)) : Object.assign(
+    H > 0 && D > 0 ? petaBaku(D, H) : { course: [], atap: [{ n: 8, lebar: 0 }] },
+    { survei: { tgl: today(), oleh: "" }, note: H > 0 && D > 0 ? "Pola baku zona kerja (course ±3 m, segmen ±3 m keliling)" : "" }));
   const kunci = !!p.kunci, W = bamkTanki(tank_id);
   const dis = kunci ? "disabled" : "";
   const angka = v => nz(String(v == null ? "" : v).replace(",", "."));
@@ -2320,7 +2319,7 @@ function petaModal(tank_id) {
     <div class="tw mt8"><table><thead><tr><th>Course</th><th>Tinggi (m)</th><th>Jumlah plat</th><th class="n">Panjang/plat</th>
       <th>Geser sambungan pertama (m)</th><th class="n">Luas/plat</th></tr></thead><tbody id="pmCourse"></tbody></table></div>
     ${kunci ? "" : `<div class="row mt8"><button class="btn sm" id="pmCAdd">+ Course</button><button class="btn sm" id="pmCDel">− Course teratas</button>
-      <button class="btn sm" id="pmCRata">Bagi rata tinggi tanki</button><button class="btn sm" id="pmCPlat">Hitung jumlah plat dari panjang standar</button></div>`}
+      <button class="btn sm p" id="pmBaku">Pakai pola baku (zona kerja ±3 m)</button><button class="btn sm" id="pmCRata">Bagi rata tinggi tanki</button><button class="btn sm" id="pmCPlat">Hitung jumlah plat dari panjang standar</button></div>`}
     <div class="small mt8" id="pmCek"></div>
     <div class="grid g2 mt12">
       <div><h4>Tampak atas <span class="tiny muted">cincin dari tepi</span></h4>
@@ -2342,7 +2341,7 @@ function petaModal(tank_id) {
   /* Admin Site boleh mengisi hasil ukur; mengunci, membuka kunci, dan
      menghapus peta hanya Project Control. */
   const foot = kunci
-    ? (petaSudahDipakai(tank_id) || !isPC() ? "" : `<button class="btn danger" id="pmBuka">Buka kunci</button>`) + `<button class="btn" id="pmCetak">Cetak peta</button>`
+    ? (petaSudahDipakai(tank_id) || !isPC() ? "" : `<button class="btn danger" id="pmBuka">Buka kunci</button>`) + `<button class="btn" id="pmCetak">Cetak peta</button>` + (W ? `<button class="btn" id="pmPeg">Cetak pegangan</button>` : "")
     : (lama && isPC() ? `<button class="btn danger" id="pmHapus">Hapus peta</button>` : "") +
       (isPC() ? `<button class="btn" id="pmDraft">Simpan draft</button><button class="btn p" id="pmKunci">Simpan &amp; kunci</button>`
         : `<button class="btn p" id="pmDraft">Simpan hasil ukur</button>`);
@@ -2366,6 +2365,15 @@ function petaModal(tank_id) {
       tabelCourse(); segarkan();
     };
     $("#pmCDel").onclick = () => { p.course.pop(); tabelCourse(); segarkan(); };
+    $("#pmBaku").onclick = () => {
+      if (H <= 0 || D <= 0) return toast("Isi diameter dan tinggi tanki di Master Data › Tanki dulu.", "err");
+      const b = petaBaku(D, H); p.course = b.course; p.atap = b.atap;
+      if (!$("#pmOleh").value.trim()) $("#pmOleh").value = S.user ? S.user.user_name : "";
+      if (!$("#pmTgl").value) $("#pmTgl").value = today();
+      if (!$("#pmNote").value.trim()) $("#pmNote").value = "Pola baku zona kerja (course ±3 m, segmen ±3 m keliling)";
+      tabelCourse(); tabelAtap(); segarkan();
+      toast("Pola baku: " + b.course.length + " course × " + b.course[0].n + " segmen, atap " + b.atap.map(r => r.n).join(" + ") + " sektor. Periksa lalu kunci.", "ok");
+    };
     $("#pmCRata").onclick = () => {
       const n = p.course.length || 1; if (H <= 0) return toast("Tinggi tanki di Master Data masih kosong.", "err");
       if (!p.course.length) p.course.push({ h: 0, n: 8, geser: 0 });
@@ -2412,6 +2420,7 @@ function petaModal(tank_id) {
   if ($("#pmDraft")) $("#pmDraft").onclick = () => simpan(false);
   if ($("#pmKunci")) $("#pmKunci").onclick = () => simpan(true);
   if ($("#pmCetak")) $("#pmCetak").onclick = () => cetakPetaPanel(tank_id);
+  if ($("#pmPeg")) $("#pmPeg").onclick = () => cetakPegangan(W.bamk_id);
   if ($("#pmHapus")) $("#pmHapus").onclick = () => {
     if (!confirmBox("Hapus draft peta panel tanki " + t.tank_no + "?")) return;
     simpanPetaTanki(tank_id, null);
@@ -4946,7 +4955,7 @@ VIEWS.jadwal = {
       ${isPC() && p.mulai && p.akhir ? `<div class="mt12"><button class="btn p" id="jdBuat">Susun jadwal dari pola baku</button></div>` : ""}</div></div></div>`;
     return `<div class="card"><div class="body">
       <div class="row">${pil}<span class="grow"></span>
-        <button class="btn sm" id="jdUbah">${isPC() ? "Ubah jadwal" : "Lihat rincian"}</button><button class="btn sm" id="jdCetak">Cetak</button></div>
+        <button class="btn sm" id="jdUbah">${isPC() ? "Ubah jadwal" : "Lihat rincian"}</button><button class="btn sm" id="jdCetak">Cetak</button><button class="btn sm" id="jdPeg">Cetak pegangan kode plat &amp; target</button></div>
       <div class="kpis mt12" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
         ${[["Periode SPK", esc(dateID(p.mulai)) + " – " + esc(dateID(p.akhir))], ["Hari kerja", hk.length + " HK (Sen–Jum)"],
         ["Hari ini", nKini > hk.length ? "setelah SPK" : "HK " + nKini + " dari " + hk.length], ["Rencana s/d hari ini", fmt(ren, 1) + "%"],
@@ -4964,6 +4973,7 @@ VIEWS.jadwal = {
     if ($("#jdBuat")) $("#jdBuat").onclick = () => { const W = bamkOf(S.f.jdBamk); if (pastikanJadwal(W, true)) { save(); render(); toast("Jadwal kerja tersusun.", "ok"); } };
     if ($("#jdUbah")) $("#jdUbah").onclick = () => jadwalModal(S.f.jdBamk);
     if ($("#jdCetak")) $("#jdCetak").onclick = () => cetakJadwal(S.f.jdBamk);
+    if ($("#jdPeg")) $("#jdPeg").onclick = () => cetakPegangan(S.f.jdBamk);
   }
 };
 function cetakJadwal(bamk_id) {
@@ -4981,6 +4991,166 @@ function cetakJadwal(bamk_id) {
     <h2>Kurva S</h2>${svgKurvaJadwal(W, J)}
     <h2>Status record per minggu (m²)</h2>${htmlMingguan(W, J)}`;
   cetakDokumen("Jadwal Kerja & Progress — Tangki " + tankNo(W.tank_id), "Rencana hari kerja vs realisasi laporan harian", isi, { lanskap: true });
+}
+
+/* ============================================================
+   V3.2 — POLA BAKU ZONA KERJA & CETAK "PEGANGAN KODE PLAT"
+   ------------------------------------------------------------
+   Untuk tanki berikutnya cukup isi diameter & tinggi di Master Data,
+   tekan "Pakai pola baku" di peta panel, kunci — lalu pegangan
+   (kode plat, luas, bobot, Actual %, Target % harian) dicetak dari
+   aplikasi. Semua angka diturunkan dari volume BAMK dan jadwal SPK,
+   jadi jumlahnya selalu = volume BAMK = 100 %.
+   ============================================================ */
+/* Pola baku: course ±3 m tinggi, segmen ±3 m keliling (kelipatan 4,
+   minimal 8). Atap: sektor sejajar segmen dinding; tanki Ø > 12 m
+   diberi 2 cincin (cincin dalam separuh jumlah sektor). */
+function petaBaku(D, H) {
+  const C = Math.PI * nz(D), nc = Math.max(1, Math.round(nz(H) / 3));
+  const seg = Math.max(8, 4 * Math.round(C / 3 / 4));
+  const h = Math.floor(nz(H) / nc * 10000) / 10000;
+  const course = [];
+  for (let i = 0; i < nc; i++) course.push({ h: i === nc - 1 ? Math.round((nz(H) - h * (nc - 1)) * 10000) / 10000 : h, n: seg, geser: 0 });
+  const atap = nz(D) > 12 ? [{ n: seg, lebar: 0 }, { n: seg / 2, lebar: 0 }] : [{ n: seg, lebar: 0 }];
+  return { course, atap };
+}
+
+function cetakPegangan(bamk_id) {
+  const W = bamkOf(bamk_id); if (!W) return;
+  const t = tankOf(W.tank_id), p = petaTerkunci(W.tank_id) || petaTanki(W.tank_id);
+  if (!p) return toast("Tanki " + tankNo(W.tank_id) + " belum punya peta panel. Buka Peta panel › Pakai pola baku › Simpan & kunci.", "err");
+  pastikanJadwal(W);
+  const J = jadwalBamk(W), hk = J ? daftarHK(W) : [], TH = tahapAktif();
+  const P = daftarPanel(p, W), V = volBamk(W), D = nz(t.shell_diameter_m), H = tinggiPeta(p), C = Math.PI * D;
+  const f2 = x => fmt(x, 2), f3 = x => fmt(x, 3);
+  const nama = { SHELL: "Shell (dinding)", ROOF: "Roof (atap)", ACC: "Accessories" };
+  const kel = { SHELL: P.filter(x => x.part === "SHELL"), ROOF: P.filter(x => x.part === "ROOF"), ACC: P.filter(x => x.part === "ACC") };
+  const sama = arr => arr.length && arr.every(x => Math.abs(x.luas - arr[0].luas) < 0.005);
+  const singkat = s => s.stage_name.replace(/Persiapan permukaan/i, "Blasting");
+
+  /* --- gambar bentangan dinding --- */
+  const sx = 640 / Math.max(C, 1), sy = 230 / Math.max(H, 1), s = Math.min(sx, sy * 1.6);
+  const gw = C * s, gh = H * s / (s / sy > 1 ? 1 : 1), ky = 230 / Math.max(H, 1);
+  const warna = ["#F6E3C8", "#D9EED3", "#D6E4F5", "#F3D9E6", "#E6E1F5", "#E1F2F0"];
+  let svgB = `<svg viewBox="-70 -34 ${gw + 130} ${230 + 72}" style="width:100%;max-height:330px">`;
+  let yb = 230;
+  p.course.forEach((c, ci) => {
+    const hpx = c.h * ky, y0 = yb - hpx, L = C / c.n;
+    for (let k = 1; k <= c.n; k++) {
+      const m = (nz(c.geser) + (k - 1) * L) % C, parts = m + L > C + 1e-9 ? [[m, C - m], [0, m + L - C]] : [[m, L]];
+      parts.forEach(([a, w]) => { svgB += `<rect x="${a * s}" y="${y0}" width="${w * s}" height="${hpx}" fill="${warna[ci % 6]}" stroke="#222" stroke-width=".8"/>`; });
+      const big = parts.reduce((x, q) => q[1] > x[1] ? q : x), cx = (big[0] + big[1] / 2) * s;
+      const fs = Math.max(5, Math.min(11, big[1] * s / 5.2));
+      svgB += `<text x="${cx}" y="${y0 + hpx / 2 - 1}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="#0E2233">C${ci + 1}-S${k}</text>`;
+      svgB += `<text x="${cx}" y="${y0 + hpx / 2 + fs}" font-size="${fs * .75}" text-anchor="middle" fill="#333">${f2(P.find(q => q.kode === "C" + (ci + 1) + "-S" + k).luas)}</text>`;
+    }
+    svgB += `<text x="-6" y="${y0 + hpx / 2}" font-size="8" font-weight="700" text-anchor="end">C${ci + 1} · ${f2(c.h)} m</text>`;
+    yb = y0;
+  });
+  svgB += `<rect x="-3" y="-4" width="6" height="238" fill="#C9A100"/><rect x="${gw - 3}" y="-4" width="6" height="238" fill="#C9A100"/>
+    <text x="0" y="250" font-size="8" font-weight="700" fill="#8A6D00" text-anchor="middle">▲ titik 0 = ${esc(p.ref || "Tangga")}</text>
+    <text x="${gw / 2}" y="250" font-size="7.5" text-anchor="middle">S1 → S${p.course[0] ? p.course[0].n : ""} searah jarum jam dilihat dari atas · angka kecil = luas m²</text>
+    <text x="${gw / 2}" y="-14" font-size="9" font-weight="700" fill="#B3261E" text-anchor="middle">Keliling π × ${f2(D)} = ${f2(C)} m · tinggi ${f2(H)} m</text></svg>`;
+
+  /* --- gambar tampak atas --- */
+  const Rp = 130, rr = kel.ROOF.length ? kel.ROOF[0].rMax || D / 2 : D / 2, k0 = Rp / Math.max(rr, 0.01);
+  const titik = (r, a) => [r * Math.cos(a * Math.PI / 180), r * Math.sin(a * Math.PI / 180)];
+  let svgA = `<svg viewBox="-160 -150 360 300" style="width:62%;display:block;margin:0 auto">`;
+  kel.ROOF.forEach(x => {
+    const a0 = (x.s - 1) * 360 / x.n, a1 = x.s * 360 / x.n, ro = x.rOut * k0, ri = Math.max(x.rIn * k0, 0);
+    const [x1, y1] = titik(ro, a0), [x2, y2] = titik(ro, a1), [x3, y3] = titik(ri, a1), [x4, y4] = titik(ri, a0), big = a1 - a0 > 180 ? 1 : 0;
+    svgA += `<path d="M${x1},${y1} A${ro},${ro} 0 ${big} 1 ${x2},${y2} L${x3},${y3} ${ri > 0 ? `A${ri},${ri} 0 ${big} 0 ${x4},${y4}` : ""} Z" fill="${x.s % 2 ? "#D6E4F5" : "#E8EEF4"}" stroke="#222" stroke-width=".8"/>`;
+    const [tx, ty] = titik((ro + ri) / 2, (a0 + a1) / 2), fs = Math.max(5, Math.min(10, (ro - ri) / 4.5, ((ro + ri) / 2) * (a1 - a0) * Math.PI / 180 / 4.2));
+    svgA += `<text x="${tx}" y="${ty}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="#0E2233">${esc(x.kode)}</text>
+      <text x="${tx}" y="${ty + fs}" font-size="${fs * .75}" text-anchor="middle">${f2(x.luas)}</text>`;
+  });
+  svgA += `<circle r="9" fill="#fff" stroke="#222"/><rect x="${Rp}" y="-3" width="16" height="6" fill="#C9A100"/>
+    <text x="${Rp + 4}" y="-8" font-size="8" font-weight="700" fill="#8A6D00">${esc(p.ref || "Tangga")}</text>
+    <text x="0" y="${Rp + 16}" font-size="8" font-weight="700" text-anchor="middle">Ø ${f2(D)} m · dilihat dari atas · searah jarum jam dari titik 0</text></svg>`;
+
+  /* --- bobot --- */
+  const baris = [];
+  ["SHELL", "ROOF", "ACC"].forEach(b => {
+    const v = volBagian(W, b); if (v <= 0 || !kel[b].length) return;
+    const grup = {};
+    kel[b].forEach(x => { const g = b === "SHELL" ? "Course " + x.c : b === "ROOF" ? (p.atap.length > 1 ? "Cincin " + x.ring : "Sektor") : x.kode + " " + (x.nama || ""); (grup[g] = grup[g] || []).push(x); });
+    Object.keys(grup).forEach(g => {
+      const a = grup[g], l = a[0].luas, nil = l / V * 100;
+      baris.push(`<tr><td>${esc(nama[b])}</td><td>${esc(g)}</td><td class="c">${a.length > 1 ? esc(a[0].kode) + " … " + esc(a[a.length - 1].kode) : esc(a[0].kode)}</td>
+        <td class="c">${a.length}</td><td class="n">${f2(l)}</td><td class="n">${f3(l / v * 100)}%</td><td class="n"><b>${f3(nil)}%</b></td>
+        ${TH.map(s => `<td class="n">${f3(nil * nz(s.weight_pct) / 100)}%</td>`).join("")}</tr>`);
+    });
+    baris.push(`<tr class="tot"><td colspan="3"><b>Jumlah ${esc(nama[b])}</b></td><td class="c">${kel[b].length}</td><td class="n"><b>${f2(v)}</b></td><td class="n">100%</td><td class="n"><b>${f2(v / V * 100)}%</b></td>${TH.map(() => "<td></td>").join("")}</tr>`);
+  });
+  const jumlahKode = P.length;
+
+  /* --- tabel cepat --- */
+  const cepat = ["SHELL", "ROOF"].filter(b => sama(kel[b])).map(b => {
+    const n = kel[b].length;
+    const per = Math.min(8, n), rows = [];
+    for (let i = 0; i < n; i += per) rows.push(`<tr>${Array.from({ length: per }, (_, j) => i + j < n ? `<td class="c"><b>${i + j + 1}</b> = ${fmt((i + j + 1) / n * 100, 1)}%</td>` : "<td></td>").join("")}</tr>`);
+    return `<div style="flex:1 1 100%"><b>${esc(nama[b])}</b> — ${n} kode, satu kode = ${f2(100 / n)}% · jumlah kode selesai = Actual %<table class="kc" style="width:100%">${rows.join("")}</table></div>`;
+  }).join("");
+
+  /* --- jadwal & target harian --- */
+  let jadwal = "", harian = "";
+  if (J && hk.length) {
+    const BL = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"], HR = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+    const tg = iso => { const d = new Date(iso + "T00:00:00"); return HR[d.getDay()] + ", " + d.getDate() + " " + BL[d.getMonth()]; };
+    jadwal = `<table><tr><th>Kegiatan</th><th>HK</th><th>Tanggal</th><th>Durasi</th><th>Target per hari</th></tr>${J.akt.map(a => {
+      const e = aktSelesai(a), kerja = a.jenis === "KERJA", n = kerja ? kel[a.bag].length : 0;
+      return `<tr class="${a.jenis === "KERJA" ? "" : "ins"}"><td>${a.jenis === "INSP" || a.jenis === "SELESAI" ? "◆ " : ""}${esc(labelAkt(a))}</td><td class="c">HK ${a.m}${a.d > 1 ? "–" + e : ""}</td>
+        <td class="c">${esc(hk[a.m - 1] ? tg(hk[a.m - 1]) : "-")}${a.d > 1 && hk[e - 1] ? " – " + esc(tg(hk[e - 1])) : ""}</td><td class="c">${a.d}</td>
+        <td class="n">${kerja ? f2(lajuAkt(W, a)) + " m²" + (a.bag !== "ACC" ? " ≈ " + fmt(n / a.d, 1) + " kode" : "") : ""}</td></tr>`;
+    }).join("")}</table>`;
+    const kol = [];
+    ["SHELL", "ROOF", "ACC"].forEach(b => { if (volBagian(W, b) > 0) TH.forEach(s => kol.push({ b, s, a: J.akt.find(a => a.jenis === "KERJA" && a.bag === b && a.st === s.stage_id) })); });
+    harian = `<table class="hr"><tr><th>HK</th><th>Tanggal</th>${kol.map(k => `<th>${esc(k.b === "SHELL" ? "Shell" : k.b === "ROOF" ? "Roof" : "Acc")}<br>${esc(singkat(k.s))}</th>`).join("")}<th>Kegiatan lain / inspeksi</th><th>Target tanki</th></tr>
+      ${hk.map((iso, i) => {
+        const n = i + 1, lain = J.akt.filter(a => a.jenis !== "KERJA" && aktifPadaHK(a, n)).map(a => a.n.split(" —")[0]);
+        return `<tr class="${lain.some(x => /Inspeksi|selesai/i.test(x)) ? "ins" : ""}"><td class="c">${n}</td><td>${esc(tg(iso))}</td>${kol.map(k => {
+          if (!k.a) return `<td class="c">–</td>`;
+          const fr = Math.min(1, Math.max(0, (n - k.a.m + 1) / k.a.d)); if (fr <= 0) return `<td class="c">–</td>`;
+          const jml = kel[k.b].length;
+          return `<td class="c">${fmt(fr * 100, 0)}%${k.b !== "ACC" ? " (" + (fr >= 1 ? jml : Math.floor(fr * jml + 1e-9)) + ")" : ""}</td>`;
+        }).join("")}<td class="tiny">${esc(lain.join("; "))}</td><td class="n"><b>${fmt(rencanaPersenHK(W, J, n), 1)}%</b></td></tr>`;
+      }).join("")}</table>`;
+  }
+
+  const isi = `<style>
+      table{border-collapse:collapse;width:100%;margin:4px 0 8px} th,td{border:1px solid #B5C2CE;padding:3px 5px;font-size:9px;vertical-align:middle}
+      th{background:#DCE8F5} .c{text-align:center} .n{text-align:right;font-variant-numeric:tabular-nums} tr.tot td{background:#FFF3C4}
+      tr.ins td{background:#F1ECFA} .hr td,.hr th{font-size:7.6px;padding:2px 3px} .kc{width:auto;margin:2px 0} .kc td{font-size:8px;padding:1px 6px}
+      .cp{display:flex;gap:18px;flex-wrap:wrap} .box{border:1.5px solid #0E6E6B;background:#E1F0EF;padding:6px 9px;margin:6px 0;font-size:9.5px}
+      ol li,ul li{margin:2px 0;font-size:9.5px} .tiny{font-size:7.5px} h2{page-break-after:avoid}
+      *{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>
+    <table style="width:auto"><tr><th>Tanki</th><td>${esc(tankNo(W.tank_id))} — ${esc(areaName(W.area_id))} · Ø ${f2(D)} m × T ${f2(nz(t.tank_height_m))} m</td></tr>
+      <tr><th>SPK / BAMK</th><td>${esc(spkNo(W.spk_id))} · ${esc(W.bamk_no)}</td></tr>
+      <tr><th>Volume BAMK</th><td>${["SHELL", "ROOF", "ACC"].map(b => esc(nama[b]) + " " + f2(volBagian(W, b)) + " m² (" + f2(volBagian(W, b) / V * 100) + "%)").join(" + ")} = <b>${f2(V)} m² = 100%</b></td></tr>
+      <tr><th>Peta</th><td>${esc(ringkasPeta(p))}${p.kunci ? " · dikunci " + esc(dateID(p.kunci.tgl)) : " · <b style='color:#B23A2F'>DRAFT — belum dikunci</b>"}</td></tr></table>
+    <div class="box"><b>Target %</b> berasal dari jadwal kerja SPK (bagian 4–5). <b>Actual %</b> berasal dari kode plat yang SELESAI PENUH (bagian 3). Keduanya tidak ditaksir.</div>
+    <h2>1. Kode plat</h2>
+    <ul><li><b>Titik 0 = ${esc(p.ref || "tangga")}</b>; S1, S2, … searah jarum jam bila dilihat dari atas. Sektor atap bernomor sama berada di atas segmen dinding bernomor sama.</li>
+      <li>Batas segmen setiap <b>${f2(C / (p.course[0] ? p.course[0].n : 1))} m</b> keliling — tandai di handrail atap dan kaki dinding. Batas course di ketinggian
+        ${p.course.slice(0, -1).map((c, i) => f2(p.course.slice(0, i + 1).reduce((a, x) => a + x.h, 0)) + " m").join(", ") || "-"} dari dasar.</li>
+      <li>Penulisan: dinding <b>C2-S5</b>, atap <b>${esc(kel.ROOF[0] ? kel.ROOF[0].kode : "R-S1")}</b>, perlengkapan <b>ACC-1</b>; berurutan boleh <b>C1 : S1 – S4</b>.</li></ul>
+    <h3>Bentangan dinding luar (dibuka)</h3>${svgB}
+    <h3>Tampak atas</h3>${svgA}
+    <h2>2. Luas dan bobot setiap kode</h2>
+    <p>Nilai satu kode terhadap progres tanki = luas kode ÷ ${f2(V)} × bobot tahap (${TH.map(s => esc(singkat(s)) + " " + fmt(s.weight_pct, 0) + "%").join(", ")}). Jumlah ${jumlahKode} kode = ${f2(V)} m² = 100%.</p>
+    <table><tr><th>Bagian</th><th>Kelompok</th><th>Kode</th><th>Jml</th><th>Luas/kode (m²)</th><th>% bagian</th><th>% tanki (semua tahap)</th>${TH.map(s => `<th>${esc(singkat(s))} ${fmt(s.weight_pct, 0)}%</th>`).join("")}</tr>${baris.join("")}</table>
+    <h2>3. Menghitung Actual %</h2>
+    <p>Per baris Daily Activity (bagian — tahap), kumulatif: <b>Actual % = luas kode selesai ÷ luas bagian × 100</b>${sama(kel.SHELL) ? " — untuk dinding sama dengan jumlah panel selesai ÷ " + kel.SHELL.length : ""}${sama(kel.ROOF) ? ", atap jumlah sektor ÷ " + kel.ROOF.length : ""}.
+      Progres tanki = Σ (luas kode selesai × bobot tahap) ÷ ${f2(V)}.</p>
+    ${cepat ? `<div class="cp">${cepat}</div>` : ""}
+    <ol><li>Kode dihitung hanya bila <b>selesai penuh</b>${p.half ? " (atau ½ bila disepakati)" : ""}.</li><li>Urutan tahap dijaga: primer setelah blasting, finish setelah primer.</li>
+      <li>Satu kode tidak dihitung dua kali untuk tahap yang sama; rework/touch-up tidak menambah persen.</li>
+      <li>Inspeksi, mobilisasi, scaffolding, menunggu izin = kegiatan lain, tidak menambah persen.</li><li>Bila tulisan tangan berbeda, yang dipakai hitungan kode plat.</li></ol>
+    <h2>4. Jadwal kerja (patokan Target %)</h2>
+    ${J ? `<p>${hk.length} hari kerja (Senin–Jumat, 07.00–16.00). <b>Target % kegiatan pada HK ke-n = (n − HK mulai + 1) ÷ durasi × 100</b>, maksimal 100%.</p>${jadwal}` : `<p><b>Jadwal kerja belum tersusun</b> — isi tanggal mulai & selesai SPK/BAMK.</p>`}
+    ${harian ? `<h2>5. Target harian — kumulatif sampai sore hari itu</h2><p class="tiny">Sel: Target % (jumlah kode, dibulatkan ke bawah). Baris ungu = hari inspeksi.</p>${harian}` : ""}
+`;
+  cetakDokumen("Pegangan Kode Plat & Progres — Tangki " + tankNo(W.tank_id), "Kode plat, luas, bobot, Actual % dan Target % harian", isi, {});
 }
 
 /* ============================================================
@@ -5090,7 +5260,7 @@ VIEWS["admin-home"] = {
           <button class="btn" data-blanko="${w.bamk_id}">Cetak blanko hari ini</button>
           <button class="btn" data-jadwal="${w.bamk_id}">Jadwal & progress</button>
           ${pt && pt.kunci ? `<button class="btn" data-lihatpeta="${w.tank_id}">Progress plat</button>` : ""}
-          ${pt ? `<button class="btn" data-cetakpeta="${w.tank_id}">Cetak peta</button>` : `<button class="btn" data-ukur="${w.tank_id}">Isi hasil ukur</button>`}
+          ${pt ? `<button class="btn" data-cetakpeta="${w.tank_id}">Cetak peta</button><button class="btn" data-pegangan="${w.bamk_id}">Pegangan kode plat</button>` : `<button class="btn" data-ukur="${w.tank_id}">Isi hasil ukur</button>`}
         </div></div></div>`;
     }).join("");
     return `
@@ -5121,6 +5291,7 @@ VIEWS["admin-home"] = {
     $$("[data-cetakpeta]").forEach(b => b.onclick = () => cetakPetaPanel(b.dataset.cetakpeta));
     $$("[data-ukur]").forEach(b => b.onclick = () => petaModal(b.dataset.ukur));
     $$("[data-blanko]").forEach(b => b.onclick = () => cetakDailyActivity(null, b.dataset.blanko, today()));
+    $$("[data-pegangan]").forEach(b => b.onclick = () => cetakPegangan(b.dataset.pegangan));
     $$("[data-jadwal]").forEach(b => b.onclick = () => { S.f.jdBamk = b.dataset.jadwal; go("jadwal"); });
     $("#admBlanko").onclick = () => cetakDailyActivity(null);
     $("#admPanduan").onclick = () => go("admin-panduan");
