@@ -324,6 +324,13 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
     <div class="pinpad" id="lgPad"></div>
     <button class="btn p mt12" id="lgGo" style="width:100%;justify-content:center;padding:11px">Masuk</button>
     <div id="lgErr" class="note stop mt12 hide"></div>
+    <div id="lgSync" class="note warn mt12 hide">
+      <b>Perangkat ini belum tersambung ke kantor.</b>
+      <div class="small mt8">Daftar pengguna dan PIN baru ada di server. Isi kata sandi sinkronisasi
+        (minta ke Project Control HBM), lalu tekan tombol di bawah. Cukup sekali per perangkat.</div>
+      <input type="password" id="lgTok" class="mt8" placeholder="kata sandi sinkronisasi" autocomplete="off">
+      <button class="btn a mt8" id="lgTarik" style="width:100%;justify-content:center">Ambil data pengguna &amp; coba lagi</button>
+    </div>
     <div class="mt16 center" style="font-size:12.5px;font-weight:600;color:var(--ink-2)">
       Silakan masukkan No. PIN Anda!
     </div>
@@ -1482,7 +1489,7 @@ const SYNC_KEY = {
 function sidikBaris(r) {
   let s = "";
   for (const k in r) {
-    if (k === "_ts") continue;
+    if (k === "_ts" || k === "last_login") continue;
     const v = r[k];
     s += k + "=" + (typeof v === "string" && v.length > 200 ? v.length + ":" + v.slice(0, 40) : v) + ";";
   }
@@ -2149,13 +2156,62 @@ function initLogin() {
     dots();
   };
   $("#lgPin").addEventListener("input", dots);
-  $("#lgPin").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
-  $("#lgGo").onclick = doLogin;
+  $("#lgPin").addEventListener("keydown", e => { if (e.key === "Enter") { LG.sudahTarik = false; doLogin(); } });
+  $("#lgGo").onclick = () => { LG.sudahTarik = false; doLogin(); };
+  pasangPanelSambung();
   dots();
 }
 function dots() {
   const n = $("#lgPin").value.length;
   $("#lgDots").innerHTML = [0, 1, 2, 3].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("");
+}
+/* ---------- V2.8 — TARIK DAFTAR PENGGUNA DARI LAYAR MASUK ----------
+   Perangkat baru (atau yang lama tidak dibuka) hanya mengenal PIN bawaan.
+   Yang diambil dari server di sini HANYA tabel pengguna, supaya tidak ada
+   data lain yang tertimpa sebelum orangnya dikenali. */
+const LG = { sudahTarik: false, jalan: false };
+async function tarikPenggunaLalu(pin) {
+  const err = $("#lgErr"), box = $("#lgSync");
+  if (!syncSiap()) {
+    err.textContent = "PIN tidak dikenali di perangkat ini.";
+    err.classList.remove("hide"); box.classList.remove("hide");
+    LG.pinTertunda = pin;
+    return;
+  }
+  if (LG.jalan) return;
+  LG.jalan = true;
+  err.textContent = "Memeriksa PIN ke server\u2026"; err.classList.remove("hide");
+  const r = await serverCall({ action: "pull" }, 60000);
+  LG.jalan = false; LG.sudahTarik = true;
+  if (!r || !r.ok) {
+    const salahSandi = /sandi|token/i.test((r && r.pesan) || "");
+    err.textContent = salahSandi ? "Kata sandi sinkronisasi salah. Periksa lagi."
+      : "Server tidak dapat dihubungi (" + ((r && r.pesan) || "tanpa jawaban") + "). PIN tidak dapat diperiksa.";
+    if (salahSandi) { DB.config.sync.token = ""; save(); box.classList.remove("hide"); }
+    LG.sudahTarik = false; return;
+  }
+  const daftar = r.tables && r.tables.users;
+  if (!Array.isArray(daftar) || !daftar.length) {
+    err.textContent = "Server tidak mengirim daftar pengguna. Masuk dulu dengan PIN Project Control di perangkat ini, lalu tekan Sinkronkan.";
+    return;
+  }
+  terapkanServer({ users: daftar });
+  bangunSidik(); save();
+  box.classList.add("hide");
+  $("#lgPin").value = pin; dots();
+  doLogin();
+}
+function pasangPanelSambung() {
+  const b = $("#lgTarik"); if (!b) return;
+  b.onclick = () => {
+    const tok = $("#lgTok").value.trim();
+    if (!tok) return toast("Isi kata sandi sinkronisasi dulu.", "err");
+    DB.config.sync = DB.config.sync || {};
+    if (!DB.config.sync.url && SYNC_BAWAAN.url) DB.config.sync.url = SYNC_BAWAAN.url;
+    DB.config.sync.token = tok; DB.config.sync.auto = true; save();
+    LG.sudahTarik = false;
+    tarikPenggunaLalu(LG.pinTertunda || $("#lgPin").value.trim());
+  };
 }
 /* Masuk cukup dengan PIN. Sistem mengenali penggunanya dari PIN itu sendiri,
    sehingga daftar nama pengguna tidak pernah ditampilkan di layar masuk. */
@@ -2165,9 +2221,13 @@ function doLogin() {
   if (pin.length < 4) { err.textContent = "PIN minimal 4 angka."; err.classList.remove("hide"); return; }
   const u = DB.users.find(x => x.active && String(x.pin) === pin);
   if (!u) {
+    /* V2.8 — daftar pengguna di perangkat ini bisa basi: PIN yang diganti di
+       perangkat lain baru ada di server. Sebelum menolak, tanyakan server. */
+    if (!LG.sudahTarik) return tarikPenggunaLalu(pin);
     err.textContent = "PIN tidak dikenali. Hubungi Project Control HBM bila PIN Anda lupa.";
     err.classList.remove("hide"); $("#lgPin").value = ""; dots(); return;
   }
+  LG.sudahTarik = false;
   err.classList.add("hide");
   u.last_login = new Date().toISOString();
   S.user = u; audit("LOGIN", "23_USER_MASTER", u.user_id, "", u.user_name); save();
