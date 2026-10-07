@@ -316,6 +316,10 @@ input:disabled,select:disabled,textarea:disabled{background:#F2F5F7;color:var(--
 .lknav{position:sticky;bottom:0;z-index:5;box-shadow:0 -4px 14px rgba(19,36,51,.10)}
 @media (max-width:700px){ .lkstep .lkt{display:none} .lkstep.on .lkt{display:inline} }
 .card.adm .eyebrow{margin-bottom:2px}
+.mpj{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.mprow{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:#FBFCFD}
+.mph{display:flex;align-items:center;gap:6px}.mph b{flex:1 1 auto;font-size:12.5px}
+.mpn{display:flex;gap:4px;align-items:center;margin-top:5px}.mpn input{flex:1 1 auto;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:5px}
 
 /* ---------- V2.9 PETA PANEL ---------- */
 .ppchips{display:flex;gap:6px;flex-wrap:wrap}
@@ -3935,11 +3939,10 @@ VIEWS["daily-new"] = {
     </div></div>
 
     <div class="grid g2" data-lk="3">
-      <div class="card"><h3>3 · Manpower <button class="btn sm" id="copyMp">Salin dari kemarin</button>
-        <button class="btn a sm" id="addMp">+ Tambah orang</button></h3>
+      <div class="card"><h3>3 · Manpower <button class="btn sm" id="copyMp">Salin dari kemarin</button></h3>
         <div class="body"><div id="mpList"></div>
-          <div class="tiny muted mt8">Isi satu baris per orang seperti di lembar Daily Activity (Orang = 1).
-            Bila lebih mudah, satu baris boleh untuk beberapa orang sekaligus — kosongkan nama dan isi jumlahnya.</div></div></div>
+          <div class="tiny muted mt8">Sama dengan tabel Manpower di lembar: tekan <b>+ Nama</b> pada jabatannya lalu ketik nama.
+            Nama yang dikosongkan tidak dihitung.</div></div></div>
       <div class="card"><h3>4 · Material <button class="btn a sm" id="addMt">+ Tambah</button></h3>
         <div class="body"><div id="mtList"></div></div></div>
     </div>
@@ -4233,29 +4236,27 @@ VIEWS["daily-new"] = {
        masih kosong, supaya tidak perlu memilih dua kali. */
     $("#dPermit").oninput = () => { if ($("#dPermit").value.trim() && !$("#hPermit").value) $("#hPermit").value = "AKTIF"; };
 
-    /* --- tenaga kerja --- */
+    /* --- tenaga kerja: per jabatan, seperti tabel Manpower di lembar Daily Activity --- */
     const drawMp = () => {
-      const total = d.manpower.reduce((a, m) => a + nz(m.worker_count), 0);
-      $("#mpList").innerHTML = d.manpower.length ? d.manpower.map((m, i) => `
-        <div class="entry"><div class="eh"><b>Orang ke-${i + 1}</b><button class="btn d sm" data-dm="${i}">Hapus</button></div>
-          <div class="fg c2">
-            <label class="f"><span>Name</span><input type="text" data-m="notes" data-i="${i}" value="${esc(m.notes || "")}"
-              placeholder="nama pekerja" autocomplete="off"></label>
-            <label class="f"><span>Position</span><select data-m="category" data-i="${i}">${listOpts(MANPOWER_CATS, m.category, "— pilih posisi —")}</select></label>
-          </div>
-          <div class="fg c2">
-            <label class="f"><span>Pihak</span><select data-m="pihak" data-i="${i}">${listOpts(PIHAK_MP, m.pihak, "— pilih pihak —")}</select></label>
-            <label class="f"><span>Orang</span><input type="number" min="0" data-m="worker_count" data-i="${i}" value="${m.worker_count}"></label>
-          </div></div>`).join("") + `<div class="small mt8"><b>Total: ${fmt0(total)} orang</b></div>`
-        : `<div class="empty">Belum ada data tenaga kerja.</div>`;
-      $$("#mpList [data-m]").forEach(el => el.oninput = () => d.manpower[+el.dataset.i][el.dataset.m] = el.value);
-      $$("#mpList select[data-m]").forEach(el => el.onchange = () => d.manpower[+el.dataset.i][el.dataset.m] = el.value);
+      const jab = MANPOWER_CATS.slice();
+      d.manpower.forEach(m => { if (m.category && jab.indexOf(m.category) < 0) jab.push(m.category); });
+      const total = d.manpower.reduce((a, m) => a + (String(m.notes || "").trim() || nz(m.worker_count) > 1 ? nz(m.worker_count) : 0), 0);
+      $("#mpList").innerHTML = `<div class="mpj">${jab.map(j => {
+        const baris = d.manpower.map((m, i) => ({ m, i })).filter(x => x.m.category === j);
+        return `<div class="mprow"><div class="mph"><b>${esc(j)}</b> <span class="tiny muted">${baris.filter(x => String(x.m.notes || "").trim()).length || ""}</span>
+          <button class="btn sm" data-tmp="${esc(j)}">+ Nama</button></div>
+          ${baris.map(x => `<div class="mpn"><input type="text" data-mn="${x.i}" value="${esc(x.m.notes || "")}" placeholder="nama" autocomplete="off">
+            ${nz(x.m.worker_count) > 1 ? `<span class="tiny muted">${fmt0(x.m.worker_count)} org</span>` : ""}
+            <button class="btn d sm" data-dm="${x.i}" title="hapus">✕</button></div>`).join("")}</div>`;
+      }).join("")}</div><div class="small mt8"><b>Total: <span id="mpTot">${fmt0(total)}</span> orang</b></div>`;
+      const hitung = () => { const e = $("#mpTot"); if (e) e.textContent = fmt0(d.manpower.reduce((a, m) => a + (String(m.notes || "").trim() || nz(m.worker_count) > 1 ? nz(m.worker_count) : 0), 0)); };
+      $$("#mpList [data-mn]").forEach(el => el.oninput = () => { d.manpower[+el.dataset.mn].notes = el.value; hitung(); });
       $$("#mpList [data-dm]").forEach(b => b.onclick = () => { d.manpower.splice(+b.dataset.dm, 1); drawMp(); });
-    };
-    /* Pihak baris baru mengikuti baris di atasnya — biasanya satu regu dari pihak yang sama. */
-    $("#addMp").onclick = () => {
-      const atas = d.manpower[d.manpower.length - 1];
-      d.manpower.push({ pihak: atas ? atas.pihak : "", category: "", worker_count: 1, notes: "" }); drawMp();
+      $$("#mpList [data-tmp]").forEach(b => b.onclick = () => {
+        d.manpower.push({ pihak: "", category: b.dataset.tmp, worker_count: 1, notes: "" }); drawMp();
+        const isian = $$("#mpList [data-mn]").filter(e => d.manpower[+e.dataset.mn].category === b.dataset.tmp);
+        if (isian.length) isian[isian.length - 1].focus();
+      });
     };
     /* Regu lapangan jarang berganti dari hari ke hari: salin nama, posisi
        dan pihak dari laporan terakhir tanki ini, lalu hapus yang tidak hadir. */
@@ -4267,7 +4268,7 @@ VIEWS["daily-new"] = {
       if (!lalu) return toast("Belum ada laporan sebelumnya untuk tanki ini.", "err");
       const mp = DB.manpower.filter(m => m.daily_id === lalu.daily_id);
       if (!mp.length) return toast("Laporan sebelumnya tidak punya data manpower.", "err");
-      d.manpower = mp.map(m => ({ pihak: m.pihak || "", category: m.category || "", worker_count: nz(m.worker_count) || 1, notes: m.notes || "" }));
+      d.manpower = mp.map(m => ({ pihak: "", category: m.category || "", worker_count: nz(m.worker_count) || 1, notes: m.notes || "" }));
       drawMp();
       toast("Manpower disalin dari laporan " + dateID(lalu.report_date) + ". Hapus yang tidak hadir hari ini.", "ok");
     };
@@ -4524,6 +4525,8 @@ function commitDaily(status) {
   if (d.kegiatan.some(k => nz(k.target_pct) < 0 || nz(k.target_pct) > 100 || nz(k.actual_pct) < 0 || nz(k.actual_pct) > 100))
     return toast("Target % dan Actual % kegiatan harus di antara 0 dan 100.", "err");
   if (d.permit_no && !d.hsse.permit_status) d.hsse.permit_status = "AKTIF";
+  /* V2.9 — manpower diisi per jabatan; slot nama yang dibiarkan kosong dibuang. */
+  d.manpower = (d.manpower || []).filter(m => String(m.notes || "").trim() || nz(m.worker_count) > 1);
   if (FINAL) {
     if (!d.progress.length && !d.kegiatan.length)
       return toast("Isi minimal satu baris: pekerjaan coating (2a) atau kegiatan pendukung (2b).", "err");
@@ -4540,8 +4543,8 @@ function commitDaily(status) {
       return toast("Isi minimal satu baris: pekerjaan coating (2a) atau kegiatan pendukung (2b).", "err");
     if (d.progress.some(p => !p.part || !p.stage_id)) return toast("Setiap baris progress harus punya bagian dan tahap.", "err");
     if (d.progress.some(p => !p.activity)) return toast("Pilih aktivitas pada setiap baris progress.", "err");
-    if (d.manpower.some(m => !m.pihak || !m.category))
-      return toast("Setiap baris tenaga kerja harus menyebut pihak (HBM / Palda / Vendor) dan kategorinya.", "err");
+    if (d.manpower.some(m => !m.category))
+      return toast("Setiap nama tenaga kerja harus berada di bawah jabatannya.", "err");
     if (d.progress.some(p => nz(p.actual_qty) < 0)) return toast("Luas tidak boleh negatif.", "err");
     if (d.progress.some(p => nz(p.actual_qty) === 0))
       return toast("Ada baris pekerjaan coating (2a) tanpa luas. Isi luasnya, atau hapus barisnya bila hari ini hanya kegiatan pendukung.", "err");
@@ -4707,8 +4710,7 @@ function cekKirim(d) {
   const keg = (d.kegiatan || []).filter(k => String(k.activity || "").trim());
   if (!prVol(d.progress).length && !keg.length) wajib.push(["Belum ada pekerjaan coating (plat dicentang) maupun kegiatan pendukung.", 2]);
   if (d.progress.some(p => nz(p.actual_qty) <= 0)) wajib.push(["Ada baris pekerjaan coating tanpa luas.", 2]);
-  if (!d.manpower.length) saran.push(["Manpower belum diisi — tekan “Salin dari kemarin” bila regunya sama.", 3]);
-  if (d.manpower.some(m => !m.pihak || !m.category)) wajib.push(["Ada manpower tanpa Pihak atau Position.", 3]);
+  if (!d.manpower.some(m => String(m.notes || "").trim() || nz(m.worker_count) > 1)) saran.push(["Belum ada nama manpower yang diisi.", 3]);
   if (!d.permit_no && !(d.hsse || {}).permit_status) wajib.push(["Permit No. atau status PTW belum diisi.", 1]);
   if (!d.photos.length && !d.scan_url) wajib.push(["Belum ada foto bukti atau pindaian lembar bertanda tangan.", 4]);
   if (!d.scan_url) saran.push(["Pindaian/foto lembar Daily Activity bertanda tangan belum diunggah.", 4]);
@@ -4717,7 +4719,6 @@ function cekKirim(d) {
 }
 function ringkasDraftHtml(d) {
   const w = bamkOf(d.bamk_id), pr = prVol(d.progress), keg = (d.kegiatan || []).filter(k => String(k.activity || "").trim());
-  const orang = d.manpower.reduce((a, m) => a + nz(m.worker_count), 0);
   const c = cekKirim(d);
   return `<div class="card" data-lk="6"><h3>Periksa sebelum dikirim</h3><div class="body">
     ${c.wajib.length ? `<div class="note stop"><b>Masih ada ${c.wajib.length} yang wajib dilengkapi:</b>
@@ -4731,7 +4732,9 @@ function ringkasDraftHtml(d) {
         <b>${fmt(p.actual_qty, 2)} m²</b>${ringkasKode(bacaPanel(p.work_package)) ? ` <span class="tiny num">(${esc(ringkasKode(bacaPanel(p.work_package)))})</span>` : ""}</div>`).join("")
       + `<div class="mt8"><b>Jumlah ${fmt(pr.reduce((a, p) => a + nz(p.actual_qty), 0), 2)} m²</b></div>` : "—"}</td></tr>
       <tr><th>Kegiatan pendukung</th><td>${keg.length ? keg.map(k => esc(k.activity)).join("; ") : "—"}</td></tr>
-      <tr><th>Manpower</th><td>${fmt0(orang)} orang${d.manpower.length ? ` <span class="tiny muted">(${d.manpower.filter(m => m.pihak === "HBM").length} baris HBM · ${d.manpower.filter(m => m.pihak === "Palda").length} baris Palda)</span>` : ""}</td></tr>
+      <tr><th>Manpower</th><td>${fmt0(d.manpower.filter(m => String(m.notes || "").trim() || nz(m.worker_count) > 1).reduce((a, m) => a + nz(m.worker_count), 0))} orang${(() => {
+        const g = {}; d.manpower.filter(m => String(m.notes || "").trim()).forEach(m => { g[m.category] = (g[m.category] || 0) + nz(m.worker_count); });
+        const t = Object.keys(g).map(k => k + " " + g[k]).join(" · "); return t ? ` <span class="tiny muted">(${esc(t)})</span>` : ""; })()}</td></tr>
       <tr><th>Material · Peralatan</th><td>${d.materials.length} material · ${(d.equipment || []).length} alat</td></tr>
       <tr><th>Foto · Lembar</th><td>${d.photos.length} foto · lembar bertanda tangan ${d.scan_url ? "<b>sudah</b>" : "belum"} diunggah</td></tr>
       <tr><th>QC · PTW · Kendala</th><td>${esc((d.qc || {}).inspection_type || "tidak ada inspeksi")} · PTW ${esc((d.hsse || {}).permit_status || (d.permit_no ? "AKTIF" : "—"))} · ${esc((d.issue || {}).category || "tidak ada kendala")}</td></tr>
@@ -4767,6 +4770,7 @@ VIEWS["admin-home"] = {
         <div class="small muted mt8">Peta panel: ${pt ? (pt.kunci ? `<b style="color:var(--teal)">terkunci</b> — ${esc(ringkasPeta(pt))}` : `draft, menunggu dikunci Project Control`) : `belum ada — luas masih diketik`}</div>
         <div class="row mt12">
           <button class="btn p" data-mulai="${w.bamk_id}">${lap ? (lap.status === "APPROVED" && !can("review") ? "Lihat laporan hari ini" : "Lanjutkan laporan hari ini") : "Isi laporan hari ini"}</button>
+          <button class="btn" data-blanko="${w.bamk_id}">Cetak blanko</button>
           ${pt && pt.kunci ? `<button class="btn" data-lihatpeta="${w.tank_id}">Progress plat</button>` : ""}
           ${pt ? `<button class="btn" data-cetakpeta="${w.tank_id}">Cetak peta</button>` : `<button class="btn" data-ukur="${w.tank_id}">Isi hasil ukur</button>`}
         </div></div></div>`;
@@ -4798,6 +4802,7 @@ VIEWS["admin-home"] = {
     $$("[data-lihatpeta]").forEach(b => b.onclick = () => { S.f.admPeta = b.dataset.lihatpeta; go("admin-peta"); });
     $$("[data-cetakpeta]").forEach(b => b.onclick = () => cetakPetaPanel(b.dataset.cetakpeta));
     $$("[data-ukur]").forEach(b => b.onclick = () => petaModal(b.dataset.ukur));
+    $$("[data-blanko]").forEach(b => b.onclick = () => cetakDailyActivity(null, b.dataset.blanko));
     $("#admBlanko").onclick = () => cetakDailyActivity(null);
     $("#admPanduan").onclick = () => go("admin-panduan");
     $("#admDaftar").onclick = () => go("daily-list");
@@ -4873,7 +4878,7 @@ VIEWS["admin-panduan"] = {
         <b>Kode Panel</b> di lembar — contoh <span class="num">C2: S3–S5</span> berarti course 2, plat 3 sampai 5. Atap: <span class="num">R1: S1–S4</span> = cincin tepi, plat 1–4.
         Ketuk 1× = selesai penuh, 2× = ½ plat, 3× = batal. Luasnya dihitung sendiri — jangan menaksir. Plat abu-abu belum boleh (tahap sebelumnya belum selesai).
         Kegiatan tanpa luas (pindah scaffolding, menunggu izin) masuk <b>Kegiatan pendukung</b>.`)}
-      ${L(3, "Orang & bahan", "Tekan <b>Salin dari kemarin</b> pada Manpower, lalu hapus yang tidak hadir. Setiap orang harus punya Position dan Pihak (HBM / Palda / Vendor). Material dan peralatan diisi bila ada di lembar.")}
+      ${L(3, "Orang & bahan", "Manpower tersusun per jabatan seperti di lembar: tekan <b>+ Nama</b> pada jabatannya lalu ketik nama. Regu sama dengan kemarin? Tekan <b>Salin dari kemarin</b> lalu hapus (✕) yang tidak hadir. Material dan peralatan diisi bila ada di lembar.")}
       ${L(4, "Foto & lembar", "Ambil foto lembar Daily Activity yang sudah ditandatangani dan unggah di <b>Laporan hard copy</b>. Tambahkan foto kegiatan bila ada.")}
       ${L(5, "QC · HSSE · Kendala", "Isi hanya bila ada inspeksi, catatan HSSE, atau kendala hari itu.")}
       ${L(6, "Periksa & kirim", "Layar terakhir menampilkan ringkasan dan daftar yang masih kurang. Isi nama pengawas (Prepared By), lalu tekan <b>Kirim laporan</b>. Belum selesai? Tekan <b>Simpan draft</b> dan lanjutkan dari Beranda.")}
@@ -5025,7 +5030,7 @@ function showDaily(id) {
     ${kg.length ? `<h4 class="mt16">Kegiatan pendukung <span class="tiny muted">tidak menambah luas</span></h4><div class="tw"><table><thead><tr><th>Description</th>
       <th class="n">Target %</th><th class="n">Actual %</th><th>Remarks</th></tr></thead><tbody>${kg.map(k => `<tr><td>${esc(k.activity)}</td>
       <td class="n">${fmt(k.target_qty, 0)}</td><td class="n">${fmt(k.pct_complete, 0)}</td><td class="tiny">${esc(k.work_package || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
-    ${mp.length ? `<h4 class="mt16">Manpower</h4><div class="tw"><table><thead><tr><th>Name</th><th>Position</th><th>Pihak</th><th class="n">Orang</th></tr></thead><tbody>${mp.map(m => `<tr><td>${esc(m.notes || "—")}</td><td>${esc(m.category)}</td><td class="tiny">${esc(m.pihak || "—")}</td><td class="n">${fmt0(m.worker_count)}</td></tr>`).join("")}<tr><th colspan="3">Total</th><th class="n">${fmt0(mp.reduce((a, m) => a + nz(m.worker_count), 0))}</th></tr></tbody></table></div>` : ""}
+    ${mp.length ? `<h4 class="mt16">Manpower</h4><div class="tw"><table><thead><tr><th>Name</th><th>Position</th><th class="n">Orang</th></tr></thead><tbody>${mp.map(m => `<tr><td>${esc(m.notes || "—")}</td><td>${esc(m.category)}</td><td class="n">${fmt0(m.worker_count)}</td></tr>`).join("")}<tr><th colspan="2">Total</th><th class="n">${fmt0(mp.reduce((a, m) => a + nz(m.worker_count), 0))}</th></tr></tbody></table></div>` : ""}
     ${mt.length ? `<h4 class="mt16">Material</h4><div class="tw"><table><thead><tr><th>Item</th><th class="n">Jumlah</th><th>Satuan</th><th>DO</th><th>Request / Stock by</th></tr></thead><tbody>${mt.map(m => `<tr><td>${esc(m.item)}</td><td class="n">${fmt(m.qty, 2)}</td><td>${esc(m.unit)}</td><td>${esc(m.do_no)}</td><td class="tiny">${esc(m.notes || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <div class="fg c2 mt16 small">
       <div><div class="eyebrow">QC</div>${qc ? esc(qc.inspection_type + " — " + qc.result + (qc.rework_required ? " (perlu rework)" : "")) : "—"}</div>
@@ -5054,143 +5059,167 @@ function showDaily(id) {
     toast("Mengunduh " + ph.length + " foto.", "ok");
   };
 }
-/* ---------- V2.7 — CETAK LEMBAR "DAILY ACTIVITY" ----------
-   Tata letaknya sengaja mengikuti lembar yang sudah dipakai tim lapangan
-   (Permit No. · Location · Tank No. · Description · Target % · Actual % ·
-   Remarks, lalu Material, Manpower dan tiga kolom tanda tangan), ditambah dua
-   kolom yang dibutuhkan aplikasi: Luas (m²) dan Pihak.
-   id = null mencetak blanko untuk diisi tangan. */
-function cetakDailyActivity(id) {
+/* ---------- V2.9 — LEMBAR "DAILY ACTIVITY" = URUTAN ISIAN APLIKASI ----------
+   Satu tata letak untuk dua keperluan:
+     · blanko (id kosong) — dicetak pagi, diisi tangan di lapangan, tabelnya
+       sudah berisi daftar tahap × bagian, jabatan manpower, dan jenis alat,
+       jadi tim tinggal mengisi;
+     · laporan terisi (id ada) — dicetak dari data yang sudah diketik.
+   Nomor bagian sama dengan layar Buat Laporan Harian (1, 2a, 2b, 3, 4, 4b,
+   6, 7, 8, 9), sehingga Admin mengetik dari atas ke bawah tanpa melompat.
+   bamk_id (opsional) mengisi kepala blanko dengan tanki yang dituju. */
+function cetakDailyActivity(id, bamk_id) {
   const c = DB.config || {};
   const d = id ? byId(DB.dailies, "daily_id", id) : null;
   if (id && !d) return;
-  const w = d ? bamkOf(d.bamk_id) : null;
+  const w = d ? bamkOf(d.bamk_id) : (bamk_id ? bamkOf(bamk_id) : null);
   const semua = d ? DB.progress.filter(p => p.daily_id === id) : [];
   const pr = prVol(semua), kg = prKeg(semua);
   const mp = d ? DB.manpower.filter(p => p.daily_id === id) : [];
   const mt = d ? DB.materials.filter(p => p.daily_id === id) : [];
+  const eq = d ? (DB.equipment || []).filter(p => p.daily_id === id) : [];
   const hs = d ? DB.hsse.find(x => x.daily_id === id) : null;
+  const qc = d ? DB.qc.find(x => x.daily_id === id) : null;
   const kn = d ? DB.issues.filter(x => x.daily_id === id) : [];
   const ch = bacaCatatanHsse(hs ? hs.remarks : "");
-  const rencana = d && w ? rencanaPersenSampai(w, d.report_date) : null;
+  const TH = tahapAktif();
+  const pt = w ? petaTerkunci(w.tank_id) : null;
+  const kotak = on => `<span class="cb">${on ? "✓" : ""}</span>`;
+  const pilihan = (daftar, nilai) => daftar.map(x => `<span class="op">${kotak(nilai != null && String(nilai).toUpperCase() === String(x).toUpperCase())} ${esc(x)}</span>`).join("");
+  const isi = v => esc(v == null ? "" : v);
 
-  /* Baris uraian: pekerjaan coating dulu, lalu kegiatan pendukung. */
-  const uraian = [];
-  pr.forEach(p => {
-    const t = tahapOf(p.stage_id), kap = volBagian(w, p.part);
-    const kum = kumulatif(d.bamk_id, p.part, p.stage_id, null);
-    uraian.push({
-      desc: bagianLabel(p.part).split(" (")[0] + " — " + (t ? t.stage_name : "—") +
-        (p.activity && p.activity !== (t ? t.stage_name : "") ? ": " + p.activity : ""),
-      kode: ringkasKode(bacaPanel(p.work_package)),
-      luas: fmt(p.actual_qty, 2),
-      target: rencana === null ? "" : fmt(rencana, 0) + "%",
-      actual: kap > 0 ? fmt(Math.min(100, kum / kap * 100), 0) + "%" : "",
-      rem: kap > 0 ? "kumulatif " + fmt(kum, 2) + " / " + fmt(kap, 2) + " m²" : ""
-    });
+  /* 2a — pekerjaan coating: blanko berisi semua pasangan bagian × tahap. */
+  const baris2a = [];
+  if (d) pr.forEach(p => {
+    const kap = volBagian(w, p.part), kum = kumulatif(d.bamk_id, p.part, p.stage_id, null);
+    baris2a.push({ b: bagianLabel(p.part).split(" (")[0], t: (tahapOf(p.stage_id) || {}).stage_name || "—",
+      kode: ringkasKode(bacaPanel(p.work_package)), luas: fmt(p.actual_qty, 2),
+      akt: kap > 0 ? fmt(Math.min(100, kum / kap * 100), 0) + "%" : "" });
   });
-  kg.forEach(k => uraian.push({
-    desc: k.activity || "", kode: "—", luas: "—", target: fmt(k.target_qty, 0) + "%",
-    actual: fmt(k.pct_complete, 0) + "%", rem: k.work_package || ""
-  }));
-  const minUraian = d ? Math.max(4, uraian.length) : 7;
-  while (uraian.length < minUraian) uraian.push({ desc: "", kode: "", luas: "", target: "", actual: "", rem: "" });
+  else BAGIAN.forEach(b => TH.forEach(t => baris2a.push({ b: b[1].split(" (")[0], t: t.stage_name, kode: "", luas: "", akt: "" })));
+  if (d && !baris2a.length) baris2a.push({ b: "—", t: "Tidak ada pekerjaan coating", kode: "", luas: "", akt: "" });
 
-  const nMat = d ? Math.max(4, mt.length) : 6, nMp = d ? Math.max(6, mp.length) : 12;
-  const matRows = [], mpRows = [];
-  for (let i = 0; i < nMat; i++) matRows.push(mt[i] || null);
-  for (let i = 0; i < nMp; i++) mpRows.push(mp[i] || null);
+  /* 2b — kegiatan pendukung */
+  const baris2b = kg.map(k => ({ a: k.activity || "", tg: fmt(k.target_qty, 0) + "%", ac: fmt(k.pct_complete, 0) + "%", r: k.work_package || "" }));
+  while (baris2b.length < (d ? 1 : 3)) baris2b.push({ a: "", tg: "", ac: "", r: "" });
+
+  /* 3 — manpower per jabatan */
+  const jab = MANPOWER_CATS.slice();
+  mp.forEach(m => { if (m.category && jab.indexOf(m.category) < 0) jab.push(m.category); });
+  const baris3 = jab.map(j => {
+    const orang = mp.filter(m => m.category === j);
+    return { j, nama: orang.map(m => (m.notes || "") + (nz(m.worker_count) > 1 ? " (" + fmt0(m.worker_count) + ")" : "")).filter(Boolean).join(", "),
+      n: orang.reduce((a, m) => a + nz(m.worker_count), 0) };
+  }).filter(r => !d || r.n > 0);
   const totalOrang = mp.reduce((a, m) => a + nz(m.worker_count), 0);
 
-  const logo = `<img src="${logoAktif()}" style="height:44px">`;
-  const tgl = d ? dateID(d.report_date) : "";
-  const catatan = d ? [
-    d.weather ? "Cuaca: " + d.weather : "",
-    hs ? "PTW " + (hs.permit_status || "-") + " · Toolbox " + (hs.toolbox_status || "-") + " · Fit to work " + (hs.fit_to_work || "-") : "",
-    kn.length ? "Kendala: " + kn.map(k => k.description + (k.owner_side ? " (PIC " + k.owner_side + ")" : "")).join("; ") : "",
-    d.general_notes || ""
-  ].filter(Boolean) : [];
+  /* 4 — material, 4b — peralatan */
+  const baris4 = mt.slice(); while (baris4.length < (d ? 1 : 4)) baris4.push(null);
+  const baris4b = d ? eq.map(e => ({ j: e.equipment_name, n: fmt0(e.qty), st: e.status, jam: nz(e.hours) ? fmt(e.hours, 1) : "", k: e.notes || "" }))
+    : ALAT_JENIS.filter(x => x !== "Lainnya").map(j => ({ j, n: "", st: null, jam: "", k: "" })).concat([{ j: "Lainnya: ..........", n: "", st: null, jam: "", k: "" }]);
 
-  const html = `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Daily Activity ${esc(tgl)}</title>
+  const tgl = d ? dateID(d.report_date) : "";
+  const tanki = d ? tankNo(d.tank_id) : (w ? tankNo(w.tank_id) : "");
+  const lokasi = d ? areaName(d.area_id) : (w ? areaName(w.area_id) : "");
+  const kat8 = ["TEKNIS", "IZIN", "MATERIAL", "CUACA", "TENAGA KERJA", "PERALATAN", "LAINNYA"];
+  const k8 = kn[0] || {};
+  const html = `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Daily Activity ${esc(tanki)} ${esc(tgl)}</title>
   <style>
-    @page { size: A4 landscape; margin: 9mm 10mm; }
-    * { box-sizing:border-box }
-    body { font-family: Arial, "Segoe UI", sans-serif; color:#111; margin:0; font-size:10.5px }
-    .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px }
-    .ptm { font-weight:800; font-size:15px; letter-spacing:.3px; line-height:1.1 }
-    .ptm small { display:block; font-weight:600; font-size:9.5px; color:#B3261E; letter-spacing:.6px }
+    @page { size: A4 portrait; margin: 8mm 9mm; }
+    * { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+    body { font-family: Arial, "Segoe UI", sans-serif; color:#111; margin:0; font-size:9.6px; line-height:1.25 }
+    .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:3px }
+    .ptm { font-weight:800; font-size:14px; letter-spacing:.3px; line-height:1.1 }
+    .ptm small { display:block; font-weight:600; font-size:9px; color:#B3261E; letter-spacing:.6px }
     .hbm { display:flex; align-items:center; gap:8px; text-align:right }
-    .hbm b { font-size:15px; letter-spacing:.5px } .hbm small { display:block; font-size:9px }
+    .hbm b { font-size:14px } .hbm small { display:block; font-size:8.5px }
+    .jdl { text-align:center; border:1.5px solid #111; padding:3px; margin-bottom:4px }
+    .jdl b { font-size:14px; letter-spacing:1px } .jdl div { font-size:9px }
     table { border-collapse:collapse; width:100% }
-    td, th { border:1px solid #111; padding:3px 5px; vertical-align:top }
-    th { font-weight:700; text-align:center; background:#F1F3F5; font-size:10px }
-    .c { text-align:center } .r { text-align:right } .num { font-variant-numeric:tabular-nums }
-    .h1 { font-weight:800; font-size:13px; text-align:center }
-    .lbl { font-weight:700; text-align:center }
-    .isi td { height:19px }
-    .bawah { display:grid; grid-template-columns: 44fr 56fr; gap:8px; margin-top:7px }
-    .ttd td { text-align:center; height:58px; vertical-align:bottom; font-weight:700 }
-    .ttd th { height:auto }
-    .ket { font-size:9px; color:#444; margin-top:4px }
-    .cat { margin-top:6px; border:1px solid #111; padding:4px 6px; min-height:30px }
-    @media print { .noprint { display:none } }
+    td, th { border:1px solid #111; padding:2px 4px; vertical-align:top }
+    th { font-weight:700; background:#EDF0F3; font-size:9px; text-align:center }
+    .sec { margin-top:5px; font-weight:800; font-size:10px; background:#0E2233; color:#fff; padding:2px 5px }
+    .sec span { font-weight:400; font-size:8.5px; opacity:.85 }
+    .lbl { background:#F5F7F9; font-weight:700; width:16% }
+    .r { text-align:right } .c { text-align:center } .num { font-variant-numeric:tabular-nums }
+    .tulis td { height:17px } .tulis2 td { height:24px }
+    .cb { display:inline-block; width:10px; height:10px; border:1px solid #111; line-height:9px; text-align:center; font-size:9px; font-weight:700; vertical-align:-1px }
+    .op { margin-right:8px; white-space:nowrap }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:6px }
+    .abu { color:#666; font-size:8.5px }
+    .ttd td { text-align:center; height:52px; vertical-align:bottom; font-weight:700 }
+    .ket { font-size:8.3px; color:#333; margin-top:3px }
   </style></head><body>
-  <div class="top">
-    <div class="ptm">PERTAMINA<small>PATRA NIAGA</small></div>
-    <div class="hbm"><div><b>HUDAYA</b><small>BAYANAKA MANDIRI, PT.</small></div>${logo}</div>
-  </div>
+  <div class="top"><div class="ptm">PERTAMINA<small>PATRA NIAGA</small></div>
+    <div class="hbm"><div><b>HUDAYA</b><small>BAYANAKA MANDIRI, PT.</small></div><img src="${logoAktif()}" style="height:38px"></div></div>
+  <div class="jdl"><b>DAILY ACTIVITY</b><div>${esc((c.project_name || "UNIT RATE PEKERJAAN PENGECATAN TANGKI — AREA OIL MOVEMENT RU V").toUpperCase())} · LOCATION PERTAMINA RU V BALIKPAPAN</div></div>
+
+  <div class="sec">1 · IDENTITAS LAPORAN</div>
   <table>
-    <tr><td class="lbl" colspan="3" style="width:27%">DATE</td><td class="lbl" colspan="6">LOCATION PERTAMINA RU V BALIKPAPAN</td></tr>
-    <tr><td colspan="3" class="c" style="height:18px"><b>${esc(tgl)}</b></td><td colspan="6" class="h1" rowspan="2">DAILY ACTIVITY</td></tr>
-    <tr><td colspan="3" class="lbl">PT. HUDAYA BAYANAKA MANDIRI</td></tr>
-    <tr><th rowspan="2" style="width:11%">Permit No.</th><th rowspan="2" style="width:8%">Location</th><th rowspan="2" style="width:8%">Tank No.</th>
-      <th colspan="6">${esc(c.project_name || "UNIT RATE PENGECATAN TANGKI DI AREA OIL MOVEMENT").toUpperCase()}</th></tr>
-    <tr><th>DESCRIPTION</th><th style="width:15%">KODE PANEL<br><span style="font-weight:400;font-size:8.5px">course : segmen</span></th><th style="width:7%">Luas hari ini<br>(m²)</th><th style="width:6%">Target<br>%</th><th style="width:6%">Actual<br>%</th><th style="width:17%">REMARKS</th></tr>
-    ${uraian.map((u, i) => `<tr class="isi">
-      ${i === 0 ? `<td rowspan="${uraian.length}" class="c">${esc(ch.permit_no)}</td>
-        <td rowspan="${uraian.length}" class="c">${esc(d ? areaName(d.area_id) : "")}</td>
-        <td rowspan="${uraian.length}" class="c"><b>${esc(d ? tankNo(d.tank_id) : "")}</b></td>` : ""}
-      <td>${esc(u.desc)}</td><td style="font-size:9.5px">${esc(u.kode)}</td><td class="r num">${esc(u.luas)}</td><td class="c num">${esc(u.target)}</td>
-      <td class="c num">${esc(u.actual)}</td><td style="font-size:9.5px">${esc(u.rem)}</td></tr>`).join("")}
+    <tr><td class="lbl">Tanggal</td><td style="width:34%"><b>${isi(tgl)}</b></td><td class="lbl">Tank No.</td><td><b>${isi(tanki)}</b>${w ? ` <span class="abu">· BAMK ${esc(w.bamk_no)}</span>` : ""}</td></tr>
+    <tr><td class="lbl">Permit No.</td><td>${isi(ch.permit_no)}</td><td class="lbl">Location</td><td>${isi(lokasi)}</td></tr>
+    <tr><td class="lbl">Jam kerja</td><td>${isi(ch.work_hours)}</td><td class="lbl">Cuaca</td><td>${pilihan(["Cerah", "Berawan", "Hujan Ringan", "Hujan Deras", "Angin Kencang"], d ? d.weather : null)}</td></tr>
+  </table>
+
+  <div class="sec">2a · PEKERJAAN COATING <span>— tulis kode plat yang SELESAI PENUH hari ini; luas &amp; persen dihitung aplikasi</span></div>
+  <table class="tulis"><tr><th style="width:15%">Bagian</th><th style="width:20%">Tahap</th><th>Kode Plat <span class="abu">(course : plat, mis. C2: S3–S5 · R1: S1–S4 · ACC-1)</span></th>
+    <th style="width:11%">Luas (m²)<div class="abu">aplikasi</div></th><th style="width:10%">Actual %<div class="abu">aplikasi</div></th></tr>
+    ${baris2a.map(r => `<tr><td>${isi(r.b)}</td><td>${isi(r.t)}</td><td class="num">${isi(r.kode)}</td><td class="r num">${isi(r.luas)}</td><td class="c num">${isi(r.akt)}</td></tr>`).join("")}
+  </table>
+  ${pt ? `<div class="ket">Peta ${esc(tankNo(w.tank_id))}: ${esc(ringkasPeta(pt))}. Plat setengah jadi ditulis dengan (½), contoh C1: S5 (½).</div>` : ""}
+
+  <div class="sec">2b · KEGIATAN PENDUKUNG <span>— tidak menambah luas (pindah scaffolding, housekeeping, menunggu izin, dll.)</span></div>
+  <table class="tulis"><tr><th>Description</th><th style="width:10%">Target %</th><th style="width:10%">Actual %</th><th style="width:30%">Remarks</th></tr>
+    ${baris2b.map(r => `<tr><td>${isi(r.a)}</td><td class="c">${isi(r.tg)}</td><td class="c">${isi(r.ac)}</td><td>${isi(r.r)}</td></tr>`).join("")}
+  </table>
+
+  <div class="sec">3 · MANPOWER <span>— tulis nama di baris jabatannya</span></div>
+  <table class="${d ? "" : "tulis2"}"><tr><th style="width:20%">Position</th><th>Nama</th><th style="width:9%">Jumlah</th></tr>
+    ${baris3.map(r => `<tr><td><b>${isi(r.j)}</b></td><td>${isi(r.nama)}</td><td class="c num">${d ? fmt0(r.n) : ""}</td></tr>`).join("")}
+    <tr><th colspan="2" class="r">TOTAL ORANG</th><th class="num">${d ? fmt0(totalOrang) : ""}</th></tr>
+  </table>
+
+  <div class="grid2">
+    <div><div class="sec">4 · MATERIAL</div>
+      <table class="tulis"><tr><th>Material</th><th style="width:13%">Qty</th><th style="width:13%">Unit</th><th style="width:17%">No. DO</th><th style="width:22%">Request / Stock by</th></tr>
+        ${baris4.map(m => `<tr><td>${isi(m ? m.item : "")}</td><td class="r num">${m ? fmt(m.qty, m.qty % 1 ? 2 : 0) : ""}</td><td class="c">${isi(m ? m.unit : "")}</td><td>${isi(m ? m.do_no : "")}</td><td>${isi(m ? m.notes || "" : "")}</td></tr>`).join("")}
+      </table></div>
+    <div><div class="sec">4b · PERALATAN</div>
+      <table class="tulis"><tr><th>Jenis alat</th><th style="width:9%">Unit</th><th style="width:46%">Status</th><th style="width:10%">Jam</th></tr>
+        ${baris4b.map(e => `<tr><td>${isi(e.j)}</td><td class="c">${isi(e.n)}</td><td style="font-size:8.5px">${pilihan(["Operasi", "Standby", "Rusak"], e.st)}</td><td class="c">${isi(e.jam)}</td></tr>`).join("")}
+      </table></div>
+  </div>
+
+  <div class="grid2">
+    <div><div class="sec">6 · QC / INSPEKSI</div>
+      <table><tr><td class="lbl" style="width:28%">Jenis inspeksi</td><td style="height:${d ? "auto" : "28px"}">${isi(qc ? qc.inspection_type : "")}</td></tr>
+        <tr><td class="lbl">Hasil</td><td>${pilihan(["PASS", "FAIL", "HOLD"], qc ? qc.result : null)} ${kotak(qc && qc.rework_required)} Perlu rework</td></tr>
+        <tr><td class="lbl">No. dokumen</td><td style="height:16px">${isi(qc ? qc.reference_no : "")}</td></tr>
+        <tr><td class="lbl">Diketahui MA-4</td><td>${kotak(qc && qc.ma4_known)} Sudah · tgl ${isi(qc && qc.ma4_date ? dateID(qc.ma4_date) : "............")}</td></tr></table></div>
+    <div><div class="sec">7 · HSSE</div>
+      <table><tr><td class="lbl" style="width:28%">Status PTW</td><td>${pilihan(["Aktif", "Tidak aktif", "Ditunda"], hs ? hs.permit_status : null)}</td></tr>
+        <tr><td class="lbl">Toolbox meeting</td><td>${pilihan(["Sudah", "Belum"], hs ? hs.toolbox_status : null)}</td></tr>
+        <tr><td class="lbl">Fit to work</td><td>${pilihan(["OK", "Ada catatan"], hs ? hs.fit_to_work : null)}</td></tr>
+        <tr><td class="lbl">Temuan kritis</td><td style="height:16px">${isi(hs ? hs.critical_finding : "")}</td></tr></table></div>
+  </div>
+
+  <div class="sec">8 · KENDALA HARI INI <span>— kosongkan bila tidak ada</span></div>
+  <table><tr><td class="lbl">Kategori</td><td colspan="3" style="font-size:8.6px">${pilihan(kat8, k8.category || null)}</td></tr>
+    <tr><td class="lbl">Uraian</td><td style="height:${d ? "auto" : "22px"}">${isi(k8.description || "")}</td><td class="lbl">Dampak</td><td style="width:26%">${isi(k8.impact || "")}</td></tr>
+    <tr><td class="lbl">Tindakan</td><td style="height:${d ? "auto" : "22px"}">${isi(k8.action || "")}</td><td class="lbl">PIC</td><td>${isi([k8.owner_side, k8.owner].filter(Boolean).join(" — "))}</td></tr></table>
+
+  <div class="sec">9 · CATATAN PENGAWAS</div>
+  <table><tr><td style="height:${d ? "auto" : "34px"}">${isi(d ? d.general_notes : "")}</td></tr></table>
+
+  <table class="ttd" style="margin-top:6px">
+    <tr><th>Prepared By :</th><th>Acknowledge By :</th><th>Approved By :</th></tr>
+    <tr><td>${isi(d ? d.supervisor_name || "" : "")}</td><td></td><td></td></tr>
   </table>
   <div class="ket">${d
-    ? `Baris pekerjaan coating: Target % = rencana kumulatif tanki menurut SPK sampai tanggal ini; Actual % = kumulatif bagian &amp; tahap terhadap volume BAMK.
-       ${w ? `Progress tanki terbobot ${fmt(persenBamk(d.bamk_id), 1)}%.` : ""} Kegiatan pendukung tidak menambah luas.`
-    : `Pekerjaan coating: tulis Bagian (Shell / Acc / Roof) dan Tahap (${esc(tahapAktif().map(t => t.stage_name).join(" / "))}) di Description,
-       lalu <b>Kode Panel</b> yang selesai penuh hari ini sesuai tanda di tanki (contoh: <b>C2: S3–S5</b> · atap <b>R: S1–S4</b> · <b>ACC-1</b>).
-       Tanki yang sudah punya peta panel: kolom m² tidak perlu diisi, luas dihitung sistem dari kode panel.
-       Kegiatan lain (pindah scaffolding, housekeeping, menunggu izin): kolom kode &amp; m² dikosongkan, isi Target % dan Actual %.`}</div>
-
-  <div class="bawah">
-    <div>
-      <table>
-        <tr><th colspan="5" style="text-align:left">MATERIAL</th></tr>
-        <tr><th style="width:8%">No.</th><th>Material</th><th style="width:13%">Qty</th><th style="width:13%">Unit</th><th style="width:28%">Request/Stock By</th></tr>
-        ${matRows.map((m, i) => `<tr class="isi"><td class="c">${m ? i + 1 : ""}</td><td>${esc(m ? m.item : "")}</td>
-          <td class="r num">${m ? fmt(m.qty, m.qty % 1 ? 2 : 0) : ""}</td><td class="c">${esc(m ? m.unit : "")}</td>
-          <td style="font-size:9.5px">${esc(m ? (m.notes || "") : "")}</td></tr>`).join("")}
-      </table>
-      ${d ? `<div class="cat"><b>Catatan:</b> ${catatan.length ? catatan.map(esc).join(" · ") : ""}</div>`
-        : `<div class="cat"><b>Catatan / kendala:</b></div>`}
-    </div>
-    <div>
-      <table>
-        <tr><th colspan="5" style="text-align:left">MANPOWER</th></tr>
-        <tr><th style="width:7%">No.</th><th>NAME</th><th style="width:24%">POSITION</th><th style="width:12%">PIHAK</th><th style="width:18%">HOUR</th></tr>
-        ${mpRows.map((m, i) => `<tr class="isi"><td class="c">${m ? i + 1 : ""}</td>
-          <td>${esc(m ? (m.notes || "") + (nz(m.worker_count) > 1 ? " (" + fmt0(m.worker_count) + " orang)" : "") : "")}</td>
-          <td>${esc(m ? m.category : "")}</td><td class="c">${esc(m ? (m.pihak || "") : "")}</td>
-          ${i === 0 ? `<td rowspan="${mpRows.length}" class="c" style="vertical-align:middle">${esc(ch.work_hours)}</td>` : ""}</tr>`).join("")}
-        ${d ? `<tr><td colspan="3" class="r"><b>TOTAL</b></td><td class="c"><b>${fmt0(totalOrang)}</b></td><td></td></tr>` : ""}
-      </table>
-      <table class="ttd" style="margin-top:7px">
-        <tr><th>Prepared By :</th><th>Acknowledge By :</th><th>Approved By :</th></tr>
-        <tr><td>${esc(d ? (d.supervisor_name || "") : "")}</td><td></td><td></td></tr>
-      </table>
-    </div>
-  </div>
-  ${d ? `<div class="ket">Dicetak dari HBM Integrated Project Control System · ${esc(d.daily_id)}${d.revision_no ? " · revisi ke-" + d.revision_no : ""} ·
-    ${esc(dateID(today()))} ${jamLokal(new Date().toISOString())}</div>` : ""}
+    ? `Luas &amp; Actual % dihitung HBM Integrated Project Control System dari kode plat terhadap volume BAMK. ${w ? "Progress tanki terbobot " + fmt(persenBamk(d.bamk_id), 1) + "%." : ""}
+       Dicetak ${esc(dateID(today()))} ${jamLokal(new Date().toISOString())} · ${esc(d.daily_id)}${d.revision_no ? " · revisi ke-" + d.revision_no : ""}.`
+    : `Satu lembar = satu tanki, satu hari. Nomor bagian sama dengan layar aplikasi. Bagian 2a hanya untuk plat yang selesai penuh (atau tulis (½));
+       jangan menaksir persen. Foto kegiatan &amp; foto lembar bertanda tangan diunggah di aplikasi (bagian 5).`}</div>
   </body></html>`;
   const win = window.open("", "_blank");
   if (!win) return toast("Jendela cetak diblokir peramban. Izinkan pop-up lalu ulangi.", "err");
@@ -5247,11 +5276,11 @@ function cetakLaporanHarian(id) {
     <div class="mut">Kegiatan pendukung tidak menambah luas dan tidak menjadi dasar tagihan.</div>`;
 
   if (mp.length) isi += `<h2>Tenaga kerja</h2>
-    <table><thead><tr><th style="width:110px">Pihak</th><th>Kategori</th>
-      <th class="num" style="width:80px">Orang</th><th>Nama / keterangan</th></tr></thead>
-    <tbody>${mp.map(m => `<tr><td>${esc(m.pihak || "—")}</td><td>${esc(m.category)}</td>
+    <table><thead><tr><th>Position</th>
+      <th class="num" style="width:80px">Orang</th><th>Nama</th></tr></thead>
+    <tbody>${mp.map(m => `<tr><td>${esc(m.category)}</td>
       <td class="num">${fmt(m.worker_count, 0)}</td><td>${esc(m.notes || "")}</td></tr>`).join("")}</tbody>
-    <tfoot><tr><th colspan="2" style="text-align:right">TOTAL</th>
+    <tfoot><tr><th style="text-align:right">TOTAL</th>
       <th class="num">${fmt(mp.reduce((a, m) => a + nz(m.worker_count), 0), 0)}</th><th></th></tr></tfoot></table>`;
 
   if (mt.length) isi += `<h2>Material &amp; peralatan</h2>
@@ -5390,8 +5419,6 @@ function periksaLaporan(id) {
     fmt(luas, 2) + " m² dilaporkan selesai tanpa seorang pun tercatat bekerja.");
   if (luas === 0 && orang > 0 && !kn.length && !kg.length) add("warn", "Tenaga hadir tetapi progress nol",
     orang + " orang tercatat hadir tanpa hasil dan tanpa kendala tercatat. Mestinya ada alasannya.");
-  if (mp.some(m => !m.pihak)) add("warn", "Ada tenaga kerja tanpa pihak",
-    "Baris tenaga kerja yang tidak menyebut HBM atau Palda membuat rekap orang-hari tidak bisa dibelah per pihak.");
   const tahapCat = new Set(pr.filter(p => nz(p.actual_qty) > 0)
     .map(p => (tahapOf(p.stage_id) || {}).stage_code));
   if (luas > 0 && !mt.length && (tahapCat.has("T2") || tahapCat.has("T3")))
@@ -5433,8 +5460,6 @@ function periksaLaporan(id) {
     "Bagian dan tahap yang sama diisi lebih dari satu baris. Satukan supaya tidak terbaca dobel saat verifikasi.");
   if (pr.some(p => nz(p.actual_qty) === 0)) add("warn", "Ada baris progress berisi nol",
     "Baris tanpa luas tidak ada gunanya — hapus saja.");
-  if (luas > 0 && !mp.some(m => m.pihak === "Palda")) add("warn", "Tidak ada tenaga Palda",
-    "Pekerjaan fisik dikerjakan pelaksana, tetapi tidak ada tenaga Palda tercatat hari ini.");
   /* Pengecatan tanpa inspeksi sama sekali sepanjang tanki adalah tanda bahaya. */
   const adaQCdiBamk = DB.qc.some(x => x.bamk_id === d.bamk_id && x.inspection_type);
   const persen = w ? persenBamk(d.bamk_id) : 0;
