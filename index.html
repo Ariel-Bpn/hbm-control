@@ -502,7 +502,7 @@ label.pilihfoto input{position:absolute;right:6px;top:6px;width:18px;height:18px
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "3.3";
+const APP_VERSI = "3.5";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
 const CODEGS_VERSI = "2.3";
@@ -1389,7 +1389,53 @@ const PERM = {
   /* V3.3 — Safety Officer: dashboard lapangan + input HSE & K3 */
   HSE_OFFICER: ["dash_view", "hse_view", "hse_input"]
 };
-function can(p) { return S.user ? (PERM[S.user.role] || []).indexOf(p) >= 0 : false; }
+/* V3.4 — izin bisa diatur Project Control (Pengaturan › Hak Akses) dan ikut
+   tersinkron lewat tabel documents. Tanpa pengaturan, dipakai PERM bawaan. */
+const HAK_DOC = "HAK_AKSES";
+const IZIN_KUNCI_PC = ["settings", "users", "master"];
+const IZIN_DAFTAR = [
+  ["Dashboard & kendali", [["dash", "Dashboard lengkap (angka komersial)"], ["dash_view", "Dashboard lapangan"], ["tanks_view", "Status tanki"],
+    ["kendali", "Active Tank Control"], ["scurve", "Kurva S & baseline (ubah)"], ["scurve_view", "Kurva S (lihat)"], ["notif", "Pusat peringatan"]]],
+  ["Lapangan", [["admin_home", "Beranda lapangan"], ["daily_input", "Buat & ubah laporan harian sendiri"], ["daily_all", "Lihat semua laporan harian"],
+    ["daily_edit_all", "Ubah laporan harian siapa pun"], ["admin_peta", "Lihat progress plat"], ["admin_ukur", "Isi hasil ukur tanki"],
+    ["admin_panduan", "Cara input"], ["jadwal_view", "Jadwal & progress"]]],
+  ["HSE & K3", [["hse_view", "Lihat HSE & K3"], ["hse_input", "Input HSE & K3"], ["hse_hapus", "Hapus catatan HSE"]]],
+  ["Laporan", [["lap_view", "Daily / Weekly / Monthly Report"], ["lap_edit", "Isian & setelan laporan"], ["reports", "Rekap & laporan"]]],
+  ["Verifikasi", [["review", "Review & verifikasi"], ["accept", "BAKP"], ["billable", "Gerbang layak tagih"]]],
+  ["Komersial", [["money", "Lihat nilai rupiah"], ["boq", "BOQ (ubah)"], ["boq_view", "BOQ (lihat)"], ["billing", "Tagihan (ubah)"],
+    ["billing_view", "Tagihan (lihat)"], ["finance", "Invoice & pembayaran (ubah)"], ["finance_view", "Invoice (lihat)"], ["documents", "Register dokumen"]]],
+  ["Lain-lain", [["issues", "Kendala (ubah)"], ["issues_view", "Kendala (lihat)"], ["meeting", "Rapat & tindak lanjut"], ["pesan", "Pesan"],
+    ["sync_panel", "Panel sinkronisasi"]]],
+  ["Administrasi", [["master", "Master data"], ["settings", "Pengaturan"], ["users", "Pengguna & hak akses"], ["audit", "Log audit"]]]
+];
+let HAK_CACHE = { sig: null, o: {} }, IZIN_CACHE = { k: null, s: null };
+function hakAkses() {
+  const d = (DB.documents || []).find(x => x.document_type === HAK_DOC);
+  const sig = d ? String(d.remarks || "") : "";
+  if (HAK_CACHE.sig !== sig) {
+    let o = (d && bukaJson("HAK", d.remarks).o) || {};
+    /* Hanya pengaturan yang disimpan oleh akun Project Control yang dipakai. */
+    const pembuat = o.oleh_id ? byId(DB.users, "user_id", o.oleh_id) : null;
+    if (o.roles && (!pembuat || pembuat.role !== "PROJECT_CONTROL")) o = {};
+    HAK_CACHE = { sig, o };
+  }
+  return HAK_CACHE.o;
+}
+function izinPeran(role) {
+  const H = hakAkses();
+  return (H.roles && Array.isArray(H.roles[role])) ? H.roles[role] : (PERM[role] || []);
+}
+function izinSet(u) {
+  if (!u) return new Set();
+  const H = hakAkses(), k = u.user_id + "|" + u.role + "|" + HAK_CACHE.sig;
+  if (IZIN_CACHE.k === k) return IZIN_CACHE.s;
+  const s = new Set(izinPeran(u.role)), ov = (H.users || {})[u.user_id] || {};
+  (ov.izinkan || []).forEach(x => s.add(x)); (ov.tolak || []).forEach(x => s.delete(x));
+  if (u.role === "PROJECT_CONTROL") IZIN_KUNCI_PC.forEach(x => s.add(x));
+  IZIN_CACHE = { k, s };
+  return s;
+}
+function can(p) { return S.user ? izinSet(S.user).has(p) : false; }
 function isSite() { return S.user && S.user.role === "ADMIN_SITE"; }
 function isPC() { return S.user && S.user.role === "PROJECT_CONTROL"; }
 
@@ -1410,8 +1456,9 @@ const ACTIVITIES = [
   "Holiday test / porosity test", "Pembongkaran scaffolding",
   "Pembersihan akhir & demobilisasi", "Standby - cuaca / izin / material", "Lainnya"
 ];
-const MANPOWER_CATS = ["Spv / QC", "Project Control", "Safety Man", "Blaster Painter",
-  "RAT Level 2", "RAT Level 3", "Helper", "Driver", "Operator"];
+/* V3.4 — sama dengan tabel Manpower Status di Weekly Report. */
+const MANPOWER_CATS = ["Foreman", "RAT", "Blaster Painter", "QC Inspector", "Helper",
+  "Site Coordinator", "Project Control", "Safety Officer", "Safety Man", "Driver"];
 
 /* ---------- V2.7 — MENYESUAIKAN LEMBAR "DAILY ACTIVITY" TIM LAPANGAN ----------
    Tim lapangan melapor dengan lembar Daily Activity: Permit No., Location,
@@ -1432,7 +1479,11 @@ const MANPOWER_CATS = ["Spv / QC", "Project Control", "Safety Man", "Blaster Pai
    [PTW:..] dan [JAM:..], lalu dipisah lagi saat dibaca. */
 const KEG = "KEG";
 const isKeg = p => !!p && p.part === KEG;
-const prVol = arr => (arr || []).filter(p => !isKeg(p));
+const BQ = "BQ";
+const isBq = p => !!p && p.part === BQ;
+const isVideo = p => !!p && p.photo_type === "VIDEO";
+const prVol = arr => (arr || []).filter(p => !isKeg(p) && !isBq(p));
+const prBq = arr => (arr || []).filter(isBq);
 const prKeg = arr => (arr || []).filter(isKeg);
 const KEGIATAN_PENDUKUNG = ["Mobilisasi peralatan & personel", "Pemindahan scaffolding",
   "Pemasangan scaffolding / RAT rigging", "Pembongkaran scaffolding", "Housekeeping / pembersihan area",
@@ -1477,8 +1528,9 @@ const DECISION_BY = ["Project Control", "Operasional", "Finance", "Marketing", "
 /* ---------- PERALATAN HARIAN (Blueprint V2.9 sheet 21) ----------
    Dicatat agar klaim standby dan alasan keterlambatan punya bukti, bukan
    sekadar keterangan lisan saat rapat. */
-const ALAT_JENIS = ["Kompresor", "Blasting pot", "Airless sprayer", "Genset", "Scaffolding",
-  "Peralatan rope access", "Dehumidifier", "Pompa", "Kendaraan angkut", "Lainnya"];
+const ALAT_JENIS = ["Air Compressor", "Sand Pot", "Air Manifold", "Breathing Air Filter", "Airless Spray Machine",
+  "Genset", "Scaffolding", "Peralatan rope access", "Dehumidifier", "Pompa", "Kendaraan angkut", "Lainnya"];
+const MATERIAL_WR = ["JOTAMASTIC 85 ALU", "JOTAMASTIC 85 GREY", "HARDTOP XP II PGA", "Thinner", "Silica Sand", "Rust Inhibitor", "Air bersih"];
 const ALAT_STATUS = ["OPERASI", "STANDBY", "RUSAK", "PERBAIKAN"];
 const ALAT_PIHAK = ["HBM", "Palda", "Sewa"];
 
@@ -1676,7 +1728,7 @@ function acceptedQtyOfBamk(bamk_id) {
 }
 function actualQtyOfBamk(bamk_id) {
   const ok = new Set(DB.dailies.filter(d => d.bamk_id === bamk_id && d.status !== "REJECTED").map(d => d.daily_id));
-  return DB.progress.filter(p => ok.has(p.daily_id)).reduce((a, p) => a + nz(p.actual_qty), 0);
+  return DB.progress.filter(p => ok.has(p.daily_id) && !isBq(p)).reduce((a, p) => a + nz(p.actual_qty), 0);
 }
 function verifiedQtyOfTank(tank_id) {
   return DB.bamk.filter(w => w.tank_id === tank_id).reduce((a, w) => a + verifiedQtyOfBamk(w.bamk_id), 0);
@@ -1982,7 +2034,7 @@ function keadaanPanel(bamk_id, kecuali, tanpaAwal) {
 function luasTanpaPanel(bamk_id) {
   const ok = dailyIdsOfBamk(bamk_id, null), out = {};
   DB.progress.forEach(p => {
-    if (!ok.has(p.daily_id) || isKeg(p) || bacaPanel(p.work_package).length) return;
+    if (!ok.has(p.daily_id) || isKeg(p) || isBq(p) || bacaPanel(p.work_package).length) return;
     const k = p.part + "|" + p.stage_id; out[k] = (out[k] || 0) + nz(p.actual_qty);
   });
   return out;
@@ -3220,7 +3272,7 @@ function doLogin() {
   S.user = u; audit("LOGIN", "23_USER_MASTER", u.user_id, "", u.user_name); save();
   $("#login").style.display = "none";
   $("#shell").classList.add("on");
-  S.view = can("dash") ? "dashboard" : can("admin_home") ? "admin-home" : can("dash_view") ? "dashboard" : can("hse_view") ? "hse" : "daily-new";
+  S.view = halamanPertama() || "dashboard";
   boot();
 }
 function logout() {
@@ -3323,6 +3375,7 @@ function boot() {
   try { aturAutoSync(); } catch (e) { }
   try { pasangPemicuSinkron(); } catch (e) { }
   try { jadwalOtomatisSemua(); } catch (e) { }
+  try { if (can("boq") && perbaruiBoqLapangan()) save(); } catch (e) { }
   render();
   try { perbaruiLencana(); } catch (e) { }
   /* Tarik data begitu masuk, supaya yang dilihat pengguna adalah keadaan
@@ -3359,6 +3412,19 @@ const TITLES = {
   pesan: ["Pesan", "Koordinasi antar peran, per tanki dan umum"]
 };
 function render() {
+  /* V3.4 — penjaga pusat: halaman apa pun yang tidak diizinkan dialihkan,
+     dari mana pun asalnya (menu, tombol, tautan peringatan, drill-down). */
+  if (S.user && !bolehHalaman(S.view)) {
+    const alt = halamanPertama();
+    if (S.view) toast("Halaman itu tidak diizinkan untuk peran Anda.", "err");
+    S.view = alt;
+    if (!alt) {
+      $("#pgTitle").textContent = "Akses ditolak"; $("#pgSub").textContent = "";
+      paintNav();
+      $("#view").innerHTML = `<div class="card"><div class="empty"><b>Belum ada halaman yang diizinkan</b>Hubungi Project Control HBM untuk membuka hak akses.</div></div>`;
+      return;
+    }
+  }
   const t = TITLES[S.view] || ["—", ""];
   $("#pgTitle").textContent = t[0]; $("#pgSub").textContent = t[1];
   paintNav();
@@ -3615,7 +3681,7 @@ VIEWS.dashboard = {
     const bulan = monthOf(today());
     const actBulan = DB.dailies.filter(d => monthOf(d.report_date) === bulan && d.status !== "REJECTED")
       .map(d => d.daily_id);
-    const qBulan = DB.progress.filter(p => actBulan.indexOf(p.daily_id) >= 0).reduce((a, p) => a + nz(p.actual_qty), 0);
+    const qBulan = DB.progress.filter(p => actBulan.indexOf(p.daily_id) >= 0 && !isBq(p)).reduce((a, p) => a + nz(p.actual_qty), 0);
     const ver = DB.verifications.filter(v => v.status === "VERIFIED").reduce((a, v) => a + nz(v.verified_qty), 0);
     const acc = DB.acceptances.filter(a => a.status === "ACCEPTED").reduce((a, x) => a + nz(x.accepted_qty), 0);
     const billReady = DB.billables.filter(b => b.gate_status === "READY").reduce((a, b) => a + nz(b.billable_qty), 0);
@@ -3846,7 +3912,7 @@ function newDraft() {
     general_notes: "", status: "DRAFT", revision_no: 0, scan_url: "",
     supervisor_side: PENGAWAS[0], supervisor_name: "",
     progress: [], kegiatan: [], manpower: [], materials: [], equipment: [], photos: [],
-    panel: {}, modeManual: false,
+    panel: {}, modeManual: false, boq: {}, rencana_besok: "",
     permit_no: "", work_hours: "07.00 – 16.00",
     qc: { inspection_type: "", result: "", rework_required: false, reference_no: "", remarks: "", ma4_known: false, ma4_date: "" },
     hsse: { permit_status: "", toolbox_status: "", fit_to_work: "", critical_finding: "", remarks: "" },
@@ -3879,6 +3945,9 @@ function loadDraft(id) {
      pilihan panel. Laporan lama (sebelum peta dikunci) tetap diketik luasnya. */
   const wPeta = bamkOf(d.bamk_id), ptPeta = wPeta ? petaTerkunci(wPeta.tank_id) : null;
   S.draft.panel = progressKePilihan(S.draft.progress);
+  S.draft.boq = {};
+  prBq(DB.progress.filter(p => p.daily_id === id)).forEach(p => { S.draft.boq[p.scope_id] = nz(S.draft.boq[p.scope_id]) + nz(p.actual_qty); });
+  S.draft.rencana_besok = rencanaBesokTersimpan(d.report_date, d.tank_id);
   S.draft.modeManual = !!(ptPeta && S.draft.progress.length && S.draft.progress.some(p => !bacaPanel(p.work_package).length));
   go("daily-new");
 }
@@ -4008,12 +4077,14 @@ VIEWS["daily-new"] = {
         tetapi <b>tidak</b> dihitung sebagai progress pengecatan maupun dasar tagihan.</div>
     </div></div>
 
+    ${htmlBoqHarian(d)}
+
     <div class="card" data-lk="3"><h3>3 · Manpower <button class="btn sm" id="copyMp">Salin dari kemarin</button></h3>
       <div class="body"><div id="mpList"></div>
         <div class="tiny muted mt8">Sama dengan tabel Manpower di lembar: tekan <b>+ Nama</b> pada jabatannya lalu ketik nama. Nama yang dikosongkan tidak dihitung.</div></div></div>
 
     <div class="grid g2" data-lk="4">
-      <div class="card"><h3>4 · Material <button class="btn a sm" id="addMt">+ Tambah</button></h3><div class="body"><div id="mtList"></div></div></div>
+      <div class="card"><h3>4 · Material <button class="btn a sm" id="addMt">+ Tambah</button></h3><div class="body"><datalist id="mtOpts">${MATERIAL_WR.map(x => `<option value="${esc(x)}">`).join("")}</datalist><div id="mtList"></div></div></div>
       <div class="card"><h3>4 · Alat <button class="btn a sm" id="addEq">+ Tambah</button></h3><div class="body"><div id="eqList"></div>
         <div class="tiny muted mt8">Alat Standby/Rusak = bukti tertulis bila keterlambatan dipersoalkan.</div></div></div>
     </div>
@@ -4035,6 +4106,7 @@ VIEWS["daily-new"] = {
         <label class="f"><span>Kendala</span><select id="iCat">${listOpts(["CUACA", "IZIN", "MATERIAL", "PERALATAN", "TENAGA KERJA", "TEKNIS", "LAINNYA"], d.issue.category, "Tidak ada kendala")}</select></label>
         <label class="f"><span>Uraian kendala &amp; tindakan</span><input type="text" id="iDesc" value="${esc(d.issue.description)}" placeholder="mis. hujan 13.00–15.00, pekerjaan berhenti"></label>
       </div>
+      <label class="f"><span>Rencana kerja besok (Next Day Planning)</span><textarea id="dBesok" rows="2" placeholder="satu butir per baris — tampil di Daily Report bagian 1, kolom kanan">${esc(d.rencana_besok || "")}</textarea></label>
       <label class="f"><span>Catatan pengawas</span><textarea id="dNotes" placeholder="Ringkasan kegiatan, koordinasi, rencana besok">${esc(d.general_notes)}</textarea></label>
       <div class="fg c2">
         <label class="f"><span>Prepared By (nama pengawas) <em>*</em></span><input type="text" id="dSupName" value="${esc(d.supervisor_name)}" placeholder="nama di kolom Prepared By"></label>
@@ -4052,6 +4124,9 @@ VIEWS["daily-new"] = {
         <label class="f grow" style="margin-bottom:0"><span>Keterangan</span><input type="text" id="phCap" placeholder="mis. blasting shell sisi utara"></label>
         <label class="btn a" style="margin-top:14px">Ambil / pilih foto
           <input type="file" id="phFile" accept="image/*" capture="environment" multiple hidden></label>
+        <label class="btn" style="margin-top:14px">Rekam / pilih video
+          <input type="file" id="vdFile" accept="video/*" capture="environment" hidden></label>
+        <button class="btn" id="vdLink" style="margin-top:14px">Tempel tautan video</button>
       </div>
       <div class="photos mt12" id="phList"></div>
     </div></div>
@@ -4078,7 +4153,7 @@ VIEWS["daily-new"] = {
     const pull = () => {
       if (!$("#dDate")) return;
       d.report_date = nilai("#dDate", d.report_date); d.bamk_id = nilai("#dWo", d.bamk_id);
-      d.weather = nilai("#dWeather", d.weather); d.general_notes = nilai("#dNotes", d.general_notes);
+      d.weather = nilai("#dWeather", d.weather); d.general_notes = nilai("#dNotes", d.general_notes); d.rencana_besok = nilai("#dBesok", d.rencana_besok || "");
       d.permit_no = String(nilai("#dPermit", d.permit_no) || "").trim(); d.work_hours = String(nilai("#dJam", d.work_hours) || "").trim();
       d.supervisor_side = nilai("#dSupSide", d.supervisor_side); d.supervisor_name = nilai("#dSupName", d.supervisor_name);
       const q = d.qc || {}, h = d.hsse || {}, i = d.issue || {};
@@ -4277,6 +4352,7 @@ VIEWS["daily-new"] = {
       });
       $$("#kegList [data-dk]").forEach(b => b.onclick = () => { d.kegiatan.splice(+b.dataset.dk, 1); drawKeg(); });
     };
+    pasangBoqHarian(d);
     $("#addKeg").onclick = () => { d.kegiatan.push({ activity: "", target_pct: 100, actual_pct: "", remarks: "" }); drawKeg(); };
     drawKeg();
 
@@ -4326,7 +4402,7 @@ VIEWS["daily-new"] = {
     const drawMt = () => {
       $("#mtList").innerHTML = d.materials.length ? d.materials.map((m, i) => `
         <div class="entry"><div class="eh"><b>Material ${i + 1}</b><button class="btn d sm" data-dt="${i}">Hapus</button></div>
-          <label class="f"><span>Item</span><input type="text" data-t="item" data-i="${i}" value="${esc(m.item)}"></label>
+          <label class="f"><span>Item</span><input type="text" list="mtOpts" autocomplete="off" data-t="item" data-i="${i}" value="${esc(m.item)}"></label>
           <div class="fg c3">
             <label class="f"><span>Jumlah</span><input type="number" step="any" min="0" data-t="qty" data-i="${i}" value="${m.qty}"></label>
             <label class="f"><span>Satuan</span><input type="text" data-t="unit" data-i="${i}" value="${esc(m.unit)}"></label>
@@ -4346,7 +4422,7 @@ VIEWS["daily-new"] = {
       $("#eqList").innerHTML = d.equipment.length ? d.equipment.map((m, i) => `
         <div class="entry"><div class="eh"><b>Alat ${i + 1}</b><button class="btn d sm" data-de="${i}">Hapus</button></div>
           <div class="fg c3">
-            <label class="f"><span>Jenis alat</span><select data-e="equipment_name" data-i="${i}">${listOpts(ALAT_JENIS, m.equipment_name, "— pilih alat —")}</select></label>
+            <label class="f"><span>Jenis alat</span><select data-e="equipment_name" data-i="${i}">${listOpts(m.equipment_name && ALAT_JENIS.indexOf(m.equipment_name) < 0 ? [m.equipment_name].concat(ALAT_JENIS) : ALAT_JENIS, m.equipment_name, "— pilih alat —")}</select></label>
             <label class="f"><span>Pemilik</span><select data-e="pihak" data-i="${i}">${listOpts(ALAT_PIHAK, m.pihak, "— pilih pihak —")}</select></label>
             <label class="f"><span>Status</span><select data-e="status" data-i="${i}">${listOpts(ALAT_STATUS, m.status, "— pilih status —")}</select></label>
           </div>
@@ -4364,14 +4440,10 @@ VIEWS["daily-new"] = {
 
     /* --- foto --- */
     const drawPh = () => {
-      $("#phList").innerHTML = d.photos.map((p, i) => `
-        <div class="ph"><span class="tag">${esc(fotoLabel(p))}</span>
-          <button class="x" data-dph="${i}">✕</button>
-          <img src="${p.file_url}" alt="">
-          <a class="dl" download="${esc(photoName(d, p, i))}" href="${p.file_url}">Unduh</a>
-          <div class="cap">${esc(fotoCap(p) || "—")}</div></div>`).join("")
-        || `<div class="empty" style="grid-column:1/-1">Belum ada foto. Cukup foto lembar bertanda tangan di atas, atau tambah foto kegiatan.</div>`;
-      $$("#phList [data-dph]").forEach(b => b.onclick = () => { d.photos.splice(+b.dataset.dph, 1); drawPh(); });
+      $("#phList").innerHTML = d.photos.map((p, i) => htmlMedia(p, { hapus: `data-dph="${i}"`, ubah: `data-eph="${i}"`, unduh: photoName(d, p, i) })).join("")
+        || `<div class="empty" style="grid-column:1/-1">Belum ada foto atau video. Cukup foto lembar bertanda tangan di atas, atau tambah foto/video kegiatan.</div>`;
+      $$("#phList [data-dph]").forEach(b => b.onclick = () => { if (!confirmBox("Hapus foto/video ini dari laporan?")) return; d.photos.splice(+b.dataset.dph, 1); drawPh(); });
+      $$("#phList [data-eph]").forEach(b => b.onclick = () => { const i = +b.dataset.eph; editMedia(d.photos[i], v => { Object.assign(d.photos[i], v); drawPh(); }); });
     };
     pasangPindaian("dScan");
     const kotakScan = $("#dScan");
@@ -4384,6 +4456,16 @@ VIEWS["daily-new"] = {
         berkasScan.onchange = e => { bawaan(e); const t = setInterval(serap, 400); setTimeout(() => clearInterval(t), 20000); };
       }
     }
+    if ($("#vdFile")) $("#vdFile").onchange = e => {
+      const f = e.target.files[0]; e.target.value = "";
+      const st = $("#phTahap").value, cap = $("#phCap").value;
+      unggahVideo(f, url => { d.photos.push({ photo_type: "VIDEO", file_url: url, caption: tulisFotoCap(st, cap), taken_at: new Date().toISOString() }); drawPh(); });
+    };
+    if ($("#vdLink")) $("#vdLink").onclick = () => {
+      const u = mintaTautanVideo(); if (!u) return;
+      d.photos.push({ photo_type: "VIDEO", file_url: u, caption: tulisFotoCap($("#phTahap").value, $("#phCap").value), taken_at: new Date().toISOString() });
+      drawPh();
+    };
     $("#phFile").onchange = e => {
       const files = Array.from(e.target.files || []);
       files.forEach(f => shrink(f, url => {
@@ -4507,6 +4589,7 @@ function ringkasLaporan(id) {
     ptw: hs.permit_status || "-",
     pengawas: d.supervisor_name || "",
     catatan: d.general_notes || "",
+    boq: prBq(semua).map(p => (p.work_package || "") + "=" + fmt(p.actual_qty, 2)).sort().join("; "),
     kegiatan: prKeg(semua).map(p => (p.activity || "") + " " + fmt(p.target_qty, 0) + "/" + fmt(p.pct_complete, 0) + "%" +
       (p.work_package ? " (" + p.work_package + ")" : "")).join("; "),
     permit: bacaCatatanHsse(hs.remarks).permit_no,
@@ -4536,6 +4619,7 @@ function bedaLaporan(a, b) {
   teks("No. Permit", a.permit, b.permit);
   teks("Jam kerja", a.jam, b.jam);
   teks("Kegiatan pendukung", a.kegiatan, b.kegiatan);
+  teks("Progress BOQ", a.boq, b.boq);
   teks("Nama manpower", a.nama, b.nama);
   teks("Nama pengawas", a.pengawas, b.pengawas);
   if ((a.catatan || "") !== (b.catatan || "")) L.push("Catatan umum diubah");
@@ -4576,8 +4660,8 @@ function commitDaily(status) {
   /* V2.9 — manpower diisi per jabatan; slot nama yang dibiarkan kosong dibuang. */
   d.manpower = (d.manpower || []).filter(m => String(m.notes || "").trim() || nz(m.worker_count) > 1);
   if (FINAL) {
-    if (!d.progress.length && !d.kegiatan.length)
-      return toast("Isi minimal satu baris: pekerjaan coating (2a) atau kegiatan pendukung (2b).", "err");
+    if (!d.progress.length && !d.kegiatan.length && !adaBoqHarian(d))
+      return toast("Isi minimal satu baris: pekerjaan coating, kegiatan lain, atau Progress Status Record (BOQ).", "err");
     if (d.progress.some(p => !p.part || !p.stage_id)) return toast("Setiap baris pekerjaan coating harus punya bagian dan tahap.", "err");
     if (d.progress.some(p => nz(p.actual_qty) <= 0))
       return toast("Ada baris pekerjaan coating (2a) tanpa luas. Isi luasnya, atau hapus barisnya.", "err");
@@ -4587,8 +4671,8 @@ function commitDaily(status) {
     d.progress.forEach(p => { if (!p.activity) { const t = tahapOf(p.stage_id); p.activity = t ? t.stage_name : "Pekerjaan coating"; } });
   }
   if (status === "SUBMITTED") {
-    if (!d.progress.length && !d.kegiatan.length)
-      return toast("Isi minimal satu baris: pekerjaan coating (2a) atau kegiatan pendukung (2b).", "err");
+    if (!d.progress.length && !d.kegiatan.length && !adaBoqHarian(d))
+      return toast("Isi minimal satu baris: pekerjaan coating, kegiatan lain, atau Progress Status Record (BOQ).", "err");
     if (d.progress.some(p => !p.part || !p.stage_id)) return toast("Setiap baris progress harus punya bagian dan tahap.", "err");
     if (d.progress.some(p => !p.activity)) return toast("Pilih aktivitas pada setiap baris progress.", "err");
     if (d.manpower.some(m => !m.category))
@@ -4650,6 +4734,12 @@ function commitDaily(status) {
     activity: String(k.activity || "").trim(), work_package: String(k.remarks || "").trim(),
     target_qty: nz(k.target_pct), actual_qty: 0, unit: "%", pct_complete: nz(k.actual_pct)
   }));
+  Object.keys(d.boq || {}).forEach(bid => {
+    const q = angkaBq(d.boq[bid]); if (q <= 0) return;
+    const b = boqLapangan().find(x => x.boq_id === bid); if (!b) return;
+    DB.progress.push({ progress_id: uid("PR"), daily_id: id, bamk_id: d.bamk_id, part: BQ, stage_id: "", scope_id: bid,
+      activity: b.description, work_package: b.boq_code, target_qty: 0, actual_qty: q, unit: b.unit, pct_complete: 0 });
+  });
   d.manpower.forEach(m => DB.manpower.push({ manpower_id: uid("MP"), daily_id: id, bamk_id: d.bamk_id, pihak: m.pihak || "", category: m.category, worker_count: nz(m.worker_count), notes: m.notes || "" }));
   d.materials.forEach(m => DB.materials.push({ material_id: uid("MT"), daily_id: id, bamk_id: d.bamk_id, item: m.item, qty: nz(m.qty), unit: m.unit, do_no: m.do_no, notes: m.notes || "" }));
   (d.equipment || []).forEach(m => DB.equipment.push({
@@ -4692,7 +4782,7 @@ function commitDaily(status) {
     for (let i = DB.verifications.length - 1; i >= 0; i--) if (DB.verifications[i].daily_id === id) {
       tandaiHapus("verifications", DB.verifications[i].verification_id); DB.verifications.splice(i, 1);
     }
-    DB.progress.filter(p => p.daily_id === id && !isKeg(p)).forEach(p => DB.verifications.push({
+    DB.progress.filter(p => p.daily_id === id && !isKeg(p) && !isBq(p)).forEach(p => DB.verifications.push({
       verification_id: uid("VF"), progress_id: p.progress_id, daily_id: id, bamk_id: d.bamk_id,
       scope_id: p.scope_id || "", submitted_qty: nz(p.actual_qty), verified_qty: nz(p.actual_qty),
       verified_by: S.user.user_id, verified_date: d.report_date || today(), status: "VERIFIED",
@@ -4705,6 +4795,7 @@ function commitDaily(status) {
   }
   if (status === "SUBMITTED") logReview(id, wasRejected ? "REVISI" : "SUBMIT",
     wasRejected ? ("Laporan diperbaiki dan diajukan kembali (revisi ke-" + rev + ").") : "Laporan diajukan ke Project Control.");
+  try { simpanRencanaBesok(d.report_date, w.tank_id, d.rencana_besok); } catch (e) { }
   audit(d.daily_id ? "UPDATE" : "CREATE", "07_DAILY_REPORT", id, "",
     status + (beda.length ? " · " + beda.length + " perubahan" : ""));
   save();
@@ -5243,7 +5334,7 @@ function cekKirim(d) {
   if (!d.report_date) wajib.push(["Tanggal laporan belum diisi.", 1]);
   if (!d.bamk_id) wajib.push(["Tanki belum dipilih.", 1]);
   const keg = (d.kegiatan || []).filter(k => String(k.activity || "").trim());
-  if (!prVol(d.progress).length && !keg.length) wajib.push(["Belum ada pekerjaan coating (plat dicentang) maupun kegiatan pendukung.", 2]);
+  if (!prVol(d.progress).length && !keg.length && !adaBoqHarian(d)) wajib.push(["Belum ada pekerjaan coating, kegiatan lain, maupun volume BOQ.", 2]);
   if (d.progress.some(p => nz(p.actual_qty) <= 0)) wajib.push(["Ada baris pekerjaan coating tanpa luas.", 2]);
   if (!d.manpower.some(m => String(m.notes || "").trim() || nz(m.worker_count) > 1)) saran.push(["Belum ada nama manpower yang diisi.", 3]);
   if (!d.permit_no && !(d.hsse || {}).permit_status) wajib.push(["Permit No. atau status PTW belum diisi.", 1]);
@@ -5266,6 +5357,8 @@ function ringkasDraftHtml(d) {
       <tr><th>Pekerjaan coating</th><td>${pr.length ? pr.map(p => `<div>${esc((tahapOf(p.stage_id) || {}).stage_name || "")} — ${esc(bagianLabel(p.part))}:
         <b>${fmt(p.actual_qty, 2)} m²</b>${ringkasKode(bacaPanel(p.work_package)) ? ` <span class="tiny num">(${esc(ringkasKode(bacaPanel(p.work_package)))})</span>` : ""}</div>`).join("")
       + `<div class="mt8"><b>Jumlah ${fmt(pr.reduce((a, p) => a + nz(p.actual_qty), 0), 2)} m²</b></div>` : "—"}</td></tr>
+      <tr><th>Progress BOQ</th><td>${(() => { const L = boqLapangan().filter(b => angkaBq((d.boq || {})[b.boq_id]) > 0);
+        return L.length ? L.map(b => esc(b.boq_code) + " = <b>" + fqBq(angkaBq(d.boq[b.boq_id])) + " " + esc(b.unit) + "</b>").join(" · ") : "—"; })()}</td></tr>
       <tr><th>Kegiatan lain</th><td>${keg.length ? keg.map(k => esc(k.activity)).join("; ") : "—"}</td></tr>
       <tr><th>Manpower</th><td>${fmt0(d.manpower.filter(m => String(m.notes || "").trim() || nz(m.worker_count) > 1).reduce((a, m) => a + nz(m.worker_count), 0))} orang${(() => {
         const g = {}; d.manpower.filter(m => String(m.notes || "").trim()).forEach(m => { g[m.category] = (g[m.category] || 0) + nz(m.worker_count); });
@@ -5580,6 +5673,7 @@ function showDaily(id) {
     ${kg.length ? `<h4 class="mt16">Kegiatan pendukung <span class="tiny muted">tidak menambah luas</span></h4><div class="tw"><table><thead><tr><th>Description</th>
       <th class="n">Target %</th><th class="n">Actual %</th><th>Remarks</th></tr></thead><tbody>${kg.map(k => `<tr><td>${esc(k.activity)}</td>
       <td class="n">${fmt(k.target_qty, 0)}</td><td class="n">${fmt(k.pct_complete, 0)}</td><td class="tiny">${esc(k.work_package || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    ${htmlBoqLaporan(id)}
     ${mp.length ? `<h4 class="mt16">Manpower</h4><div class="tw"><table><thead><tr><th>Name</th><th>Position</th><th class="n">Orang</th></tr></thead><tbody>${mp.map(m => `<tr><td>${esc(m.notes || "—")}</td><td>${esc(m.category)}</td><td class="n">${fmt0(m.worker_count)}</td></tr>`).join("")}<tr><th colspan="2">Total</th><th class="n">${fmt0(mp.reduce((a, m) => a + nz(m.worker_count), 0))}</th></tr></tbody></table></div>` : ""}
     ${mt.length ? `<h4 class="mt16">Material</h4><div class="tw"><table><thead><tr><th>Item</th><th class="n">Jumlah</th><th>Satuan</th><th>DO</th><th>Request / Stock by</th></tr></thead><tbody>${mt.map(m => `<tr><td>${esc(m.item)}</td><td class="n">${fmt(m.qty, 2)}</td><td>${esc(m.unit)}</td><td>${esc(m.do_no)}</td><td class="tiny">${esc(m.notes || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <div class="fg c2 mt16 small">
@@ -5591,17 +5685,19 @@ function showDaily(id) {
     </div>
     ${is.length ? `<div class="note warn mt12"><b>Kendala:</b> ${is.map(i => esc(i.description + " (PIC " + picText(i) + ")")).join(" · ")}</div>` : ""}
     ${d.general_notes ? `<div class="mt12 small"><div class="eyebrow">Catatan ${esc(d.supervisor_side || "")} — ${esc(d.supervisor_name || "")}</div>${esc(d.general_notes)}</div>` : ""}
-    ${ph.length ? `<h4 class="mt16">Foto bukti <button class="btn sm" id="dlAll">Unduh semua foto</button></h4>
-      <div class="photos">${ph.map((p, i) => `<div class="ph"><span class="tag">${esc(p.photo_type)}</span><img src="${p.file_url}">
-      <a class="dl" download="${esc(photoName(d, p, i))}" href="${p.file_url}">Unduh</a>
-      <div class="cap">${esc(fotoCap(p))}</div></div>`).join("")}</div>` : ""}
+    ${ph.length || bolehKelolaMedia(d) ? `<h4 class="mt16">Foto &amp; video <span class="tiny muted">${ph.length}</span>
+      ${bolehKelolaMedia(d) ? `<button class="btn a sm" id="dlMedia">Tambah / ubah / hapus</button>` : ""}
+      ${ph.some(p => !isVideo(p)) ? `<button class="btn sm" id="dlAll">Unduh semua foto</button>` : ""}</h4>
+      <div class="photos">${ph.map((p, i) => htmlMedia(p, { unduh: photoName(d, p, i) })).join("")}</div>` : ""}
     <h4 class="mt16">Riwayat koordinasi</h4>${threadHtml(th)}`;
   openModal("Laporan Harian " + d.report_date, body,
-    `<button class="btn" id="dlDA">Cetak Daily Activity</button><button class="btn" id="dlCetak">Cetak laporan lengkap</button>`, true);
+    `<button class="btn" id="dlDA">Cetak Daily Activity</button><button class="btn" id="dlCetak">Cetak laporan lengkap</button><button class="btn p" id="dlWR">Cetak Daily Report (model WR)</button>`, true);
   if ($("#dlCetak")) $("#dlCetak").onclick = () => cetakLaporanHarian(id);
+  if ($("#dlWR")) $("#dlWR").onclick = () => cetakLaporanProyek(periodeLaporan("H", d.report_date));
+  if ($("#dlMedia")) $("#dlMedia").onclick = () => kelolaMediaLaporan(id);
   if ($("#dlDA")) $("#dlDA").onclick = () => cetakDailyActivity(id);
   if ($("#dlAll")) $("#dlAll").onclick = () => {
-    ph.forEach((p, i) => setTimeout(() => {
+    ph.filter(p => !isVideo(p)).forEach((p, i) => setTimeout(() => {
       const a = document.createElement("a");
       a.href = p.file_url; a.download = photoName(d, p, i);
       document.body.appendChild(a); a.click(); a.remove();
@@ -5930,7 +6026,8 @@ function cetakLaporanHarian(id) {
   const pr = prVol(DB.progress.filter(p => p.daily_id === id));
   const mp = DB.manpower.filter(p => p.daily_id === id);
   const mt = DB.materials.filter(p => p.daily_id === id);
-  const ph = DB.photos.filter(p => p.daily_id === id);
+  const ph = DB.photos.filter(p => p.daily_id === id && !isVideo(p));
+  const vdC = DB.photos.filter(p => p.daily_id === id && isVideo(p));
   const qc = DB.qc.find(x => x.daily_id === id);
   const hs = DB.hsse.find(x => x.daily_id === id);
   const kn = DB.issues.filter(x => x.daily_id === id);
@@ -6013,6 +6110,12 @@ function cetakLaporanHarian(id) {
         <div class="mut"><b>${esc(fotoLabel(p))}</b> &middot; ${esc(fotoCap(p))}</div></td>` +
       (i % 2 === 1 || i === ph.length - 1 ? (i % 2 === 0 ? "<td></td></tr>" : "</tr>") : "")).join("")}</tbody></table>`;
 
+  const bqC = prBq(DB.progress.filter(p => p.daily_id === id));
+  if (bqC.length) isi += `<h2>Progress Status Record (BOQ) hari ini</h2>
+    <table><thead><tr><th style="width:50px">No</th><th>Uraian</th><th class="num" style="width:80px">Volume</th><th style="width:60px">Satuan</th></tr></thead>
+    <tbody>${bqC.slice().sort((a, b) => bandingKode(a.work_package, b.work_package)).map(p => `<tr><td>${esc(p.work_package || "")}</td><td>${esc(p.activity || "")}</td>
+      <td class="num">${fqBq(p.actual_qty)}</td><td>${esc(p.unit || "")}</td></tr>`).join("")}</tbody></table>`;
+  if (vdC.length) isi += `<h2>Video</h2>${vdC.map(p => `<div><a href="${esc(p.file_url)}">${esc(fotoCap(p) || "Video")}</a></div>`).join("")}`;
   const rw = reviewsOf(id);
   if (rw.length) isi += `<h2>Riwayat koordinasi</h2>
     <table><thead><tr><th style="width:110px">Tindakan</th><th style="width:130px">Oleh</th>
@@ -6112,7 +6215,7 @@ function periksaLaporan(id) {
     "Tanpa foto kondisi awal, luas yang diklaim sulit dibuktikan saat verifikasi Pertamina.");
   if (luas > 0 && orang === 0) add("warn", "Ada progress tetapi tenaga kerja nol",
     fmt(luas, 2) + " m² dilaporkan selesai tanpa seorang pun tercatat bekerja.");
-  if (luas === 0 && orang > 0 && !kn.length && !kg.length) add("warn", "Tenaga hadir tetapi progress nol",
+  if (luas === 0 && orang > 0 && !kn.length && !kg.length && !prBq(DB.progress.filter(p => p.daily_id === id)).length) add("warn", "Tenaga hadir tetapi progress nol",
     orang + " orang tercatat hadir tanpa hasil dan tanpa kendala tercatat. Mestinya ada alasannya.");
   const tahapCat = new Set(pr.filter(p => nz(p.actual_qty) > 0)
     .map(p => (tahapOf(p.stage_id) || {}).stage_code));
@@ -6173,6 +6276,13 @@ function periksaLaporan(id) {
     add("warn", "Kegiatan pendukung belum mencapai target",
       kg.filter(k => nz(k.pct_complete) < nz(k.target_qty)).map(k => (k.activity || "") + " " + fmt(k.pct_complete, 0) + "% dari " + fmt(k.target_qty, 0) + "%").join("; ") +
       (kn.length ? "." : ". Tidak ada kendala tercatat yang menjelaskannya."));
+
+  prBq(DB.progress.filter(p => p.daily_id === id)).forEach(p => {
+    const b = boqLapangan().find(x => x.boq_id === p.scope_id); if (!b || nz(b.contract_qty) <= 0) return;
+    const acc = bqAkumulasi(b.boq_id, d.report_date);
+    if (acc > nz(b.contract_qty) + 1e-6) add("warn", "BOQ " + b.boq_code + " melebihi Q'ty kontrak",
+      "Akumulasi " + fqBq(acc) + " " + b.unit + " dari Q'ty " + fqBq(b.contract_qty) + ". Periksa angka harian atau ajukan addendum.");
+  });
 
   /* ---- sekadar diketahui ---- */
   if (luas === 0 && kg.length) add("info", "Hari tanpa pekerjaan coating",
@@ -6243,10 +6353,11 @@ function reviewModal(id) {
         <label class="f"><span>Terverifikasi</span><input type="number" step="any" min="0" data-vq="${i}" value="${p.actual_qty}"></label>
         <label class="f"><span>Catatan</span><input type="text" data-vr="${i}" placeholder="alasan bila berbeda"></label></div>`;
   }).join("") || `<div class="tiny muted" style="padding:8px 0">Tidak ada pekerjaan coating pada laporan ini — tidak ada luas yang diverifikasi.</div>`}</div>
+    ${htmlBoqLaporan(id)}
     ${kg.length ? `<div class="lines mt12"><div class="lh">Kegiatan pendukung (tidak diverifikasi sebagai luas)</div>
       ${kg.map(k => `<div class="small" style="padding:4px 0">${esc(k.activity)} — target ${fmt(k.target_qty, 0)}%, actual ${fmt(k.pct_complete, 0)}%
         ${k.work_package ? `<span class="tiny muted"> · ${esc(k.work_package)}</span>` : ""}</div>`).join("")}</div>` : ""}
-    ${ph.length ? `<div class="photos mt12">${ph.map(p => `<div class="ph"><span class="tag">${esc(fotoLabel(p))}</span><img src="${p.file_url}"><div class="cap">${esc(fotoCap(p))}</div></div>`).join("")}</div>`
+    ${ph.length ? `<div class="photos mt12">${ph.map(p => htmlMedia(p)).join("")}</div>`
       : `<div class="note stop mt12">Laporan ini tidak memiliki foto bukti.</div>`}
     <label class="f mt12"><span>Catatan review</span><textarea id="rvNote" placeholder="tulis apa yang perlu diperbaiki, atau catatan persetujuan"></textarea></label>
     <div class="row"><button type="button" class="btn sm" id="rvSalin">Susun catatan dari temuan</button>
@@ -7783,7 +7894,7 @@ VIEWS.scurve = {
 VIEWS.boq = {
   html() {
     const lihatHarga = can("money");
-    const rows = DB.boq.map(b => ({ b, r: boqRollup(b) }));
+    const rows = DB.boq.slice().sort((a, b) => bandingKode(a.boq_code, b.boq_code)).map(b => ({ b, r: boqRollup(b) }));
     const totKontrak = rows.reduce((a, x) => a + x.r.nilaiKontrak, 0);
     const totKlaim = rows.reduce((a, x) => a + x.r.nilaiKlaim, 0);
     const adaPlafon = rows.some(x => x.r.qtyKontrak > 0);
@@ -7801,11 +7912,11 @@ VIEWS.boq = {
       <div class="kpi violet"><div class="eyebrow">Siap diklaim</div><div class="v">${fmt(rows.reduce((a, x) => a + x.r.tersedia, 0), 1)}</div><div class="sub">BAKP disetujui, belum ditagihkan</div></div>
     </div>` : ""}
 
-    <div class="card mt16"><h3>Baris BOQ ${can("master") ? `<button class="btn a sm" id="bqNew">+ Baris BOQ</button>` : ""}</h3>
+    <div class="card mt16"><h3>Baris BOQ ${can("master") ? `<button class="btn sm" id="bqWR">Isi BOQ sesuai Weekly Report</button><button class="btn a sm" id="bqNew">+ Baris BOQ</button>` : ""}</h3>
       <div class="body flush"><div class="tw"><table>
       <thead><tr><th>Kode</th><th>Uraian</th><th>Sat</th><th class="n">Qty kontrak</th>
         ${lihatHarga ? `<th class="n">Harga satuan</th><th class="n">Nilai kontrak</th>` : ""}
-        <th class="n">BAKP disetujui</th><th class="n">Diklaim</th><th class="n">Siap klaim</th><th class="n">Sisa qty</th><th>Serapan</th>${can("master") ? "<th></th>" : ""}</tr></thead>
+        <th class="n">Realisasi lapangan</th><th class="n">BAKP disetujui</th><th class="n">Diklaim</th><th class="n">Siap klaim</th><th class="n">Sisa qty</th><th>Serapan</th>${can("master") ? "<th></th>" : ""}</tr></thead>
       <tbody>${rows.length ? rows.map(x => {
         const b = x.b, r = x.r;
         const warna = r.persen >= nz(DB.config.alarm_kritis) ? "red" : r.persen >= nz(DB.config.alarm_waspada) ? "amber" : "teal";
@@ -7813,12 +7924,12 @@ VIEWS.boq = {
         <td><b>${esc(b.boq_code)}</b></td><td class="tiny">${esc(b.description)}</td><td class="tiny">${esc(b.unit)}</td>
         <td class="n">${r.qtyKontrak ? fmt(r.qtyKontrak, 1) : `<span class="muted tiny">belum diisi</span>`}</td>
         ${lihatHarga ? `<td class="n">${nz(b.unit_price) ? rupiah(b.unit_price) : "—"}</td><td class="n">${r.nilaiKontrak ? rupiah(r.nilaiKontrak) : "—"}</td>` : ""}
-        <td class="n">${fmt(r.bakp, 1)}</td><td class="n">${fmt(r.klaim, 1)}</td>
+        <td class="n">${fqBq(bqAkumulasi(b.boq_id))}${b.active === false ? `<div class="tiny muted">nonaktif</div>` : ""}</td><td class="n">${fmt(r.bakp, 1)}</td><td class="n">${fmt(r.klaim, 1)}</td>
         <td class="n"><b>${fmt(r.tersedia, 1)}</b></td>
         <td class="n">${r.qtyKontrak ? fmt(r.sisaQty, 1) : "—"}</td>
         <td>${r.qtyKontrak ? `<span class="b ${warna}">${fmt(r.persen, 1)}%</span>` : `<span class="b gray">—</span>`}</td>
         ${can("master") ? `<td class="right"><button class="btn sm" data-bq="${b.boq_id}">Ubah</button></td>` : ""}</tr>`;
-      }).join("") : `<tr><td colspan="12"><div class="empty"><b>Belum ada baris BOQ</b>Masukkan BOQ resmi kontrak supaya plafon punya batas atas.</div></td></tr>`}
+      }).join("") : `<tr><td colspan="13"><div class="empty"><b>Belum ada baris BOQ</b>Masukkan BOQ resmi kontrak supaya plafon punya batas atas.</div></td></tr>`}
       </tbody></table></div></div></div>`;
   },
   bind() {
@@ -7834,7 +7945,9 @@ VIEWS.boq = {
           <label class="f"><span>Qty kontrak</span><input type="number" step="any" id="qQty" value="${nz(b.contract_qty)}"></label>
           <label class="f"><span>Harga satuan ke Pertamina</span><input type="number" step="any" id="qPrice" value="${nz(b.unit_price)}"></label>
           <label class="f"><span>Harga ke pelaksana</span><input type="number" step="any" id="qPalda" value="${nz(b.palda_price)}"></label>
-          <label class="f"><span>Kategori</span><select id="qCat">${["UTAMA", "PENDUKUNG", "TAMBAHAN"].map(x => `<option ${b.category === x ? "selected" : ""}>${x}</option>`).join("")}</select></label>
+          <label class="f"><span>Kelompok pekerjaan</span><input type="text" id="qCat" list="dlKelompokBoq" autocomplete="off" value="${esc(b.category || "")}" placeholder="mis. PEKERJAAN PERSIAPAN"></label>
+          <label class="f"><span>Status</span><select id="qAct"><option value="1" ${b.active !== false ? "selected" : ""}>Aktif — muncul di laporan</option><option value="0" ${b.active === false ? "selected" : ""}>Nonaktif</option></select></label>
+          ${daftarPilihan("dlKelompokBoq", BOQ_WR.map(r => r[4]), DB.boq.map(x => x.category))}
         </div>
         <label class="f"><span>Uraian <em>*</em></span><input type="text" id="qDesc" value="${esc(b.description)}"></label>
         <label class="f"><span>Catatan</span><input type="text" id="qNote" value="${esc(b.notes || "")}"></label>
@@ -7845,27 +7958,30 @@ VIEWS.boq = {
         Object.assign(rec, {
           boq_code: $("#qCode").value.trim(), description: $("#qDesc").value.trim(), unit: $("#qUnit").value.trim() || "m2",
           contract_qty: nz($("#qQty").value), unit_price: nz($("#qPrice").value), palda_price: nz($("#qPalda").value),
-          category: $("#qCat").value, notes: $("#qNote").value
+          category: $("#qCat").value.trim(), active: $("#qAct").value === "1", notes: $("#qNote").value
         });
         if (!rec.boq_code || !rec.description) return toast("Kode dan uraian wajib diisi.", "err");
         const r = boqRollup(rec);
         if (nz(rec.contract_qty) > 0 && r.klaim > nz(rec.contract_qty) + 0.0001)
           return toast("Qty kontrak lebih kecil dari yang sudah diklaim (" + fmt(r.klaim, 2) + " " + rec.unit + ").", "err");
         if (!id) DB.boq.push(rec);
+        perbaruiBoqLapangan();
         audit(id ? "UPDATE" : "CREATE", "04_BOQ_MASTER", rec.boq_id, "", rec.boq_code);
         save(); closeModal(); toast("Baris BOQ tersimpan.", "ok"); render();
       };
       if ($("#qDel")) $("#qDel").onclick = () => {
         const r = boqRollup(b);
-        if (r.bakp > 0 || r.klaim > 0) return toast("Baris ini sudah dipakai BAKP atau tagihan, jadi tidak dapat dihapus.", "err");
+        if (r.bakp > 0 || r.klaim > 0 || DB.progress.some(p => isBq(p) && p.scope_id === b.boq_id)) return toast("Baris ini sudah dipakai laporan harian, BAKP atau tagihan, jadi tidak dapat dihapus. Ubah statusnya menjadi Nonaktif.", "err");
         if (!confirmBox("Hapus baris BOQ " + b.boq_code + "?")) return;
         DB.boq = DB.boq.filter(x => x.boq_id !== b.boq_id);
         tandaiHapus("boq", b.boq_id);
+        perbaruiBoqLapangan();
         audit("DELETE", "04_BOQ_MASTER", b.boq_id, b.boq_code, "");
         save(); closeModal(); toast("Baris BOQ dihapus.", "ok"); render();
       };
     };
     if ($("#bqNew")) $("#bqNew").onclick = () => buka(null);
+    if ($("#bqWR")) $("#bqWR").onclick = () => isiBoqWR();
     $$("[data-bq]").forEach(b => b.onclick = () => buka(b.dataset.bq));
   }
 };
@@ -9723,7 +9839,7 @@ VIEWS.settings = {
   html() {
     const tab = S.tab || "proj";
     const c = DB.config;
-    const T = { proj: "Proyek", user: "Pengguna", sync: "Sinkronisasi", cal: "Kalender Libur", data: "Cadangan Data" };
+    const T = { proj: "Proyek", user: "Pengguna", akses: "Hak Akses", sync: "Sinkronisasi", cal: "Kalender Libur", data: "Cadangan Data" };
     let body = "";
     if (tab === "proj") body = `
       <div class="fg c2">
@@ -9868,6 +9984,8 @@ VIEWS.settings = {
       <div class="row mt16">${(c.holidays || []).length ? c.holidays.slice().sort().map(h =>
         `<span class="b blue">${esc(dateID(h))} <button class="btn link" data-hd="${h}" style="padding:0 2px">✕</button></span>`).join("")
         : `<span class="muted small">Belum ada hari libur terdaftar.</span>`}</div>`;
+
+    if (tab === "akses") body = htmlHakAkses();
 
     if (tab === "data") body = `
       <div class="grid g2">
@@ -10052,6 +10170,8 @@ VIEWS.settings = {
         else kabar(r.pesan, "stop");
       };
     }
+
+    if (tab === "akses") pasangHakAkses();
 
     if (tab === "cal") {
       $("#hAdd").onclick = () => {
@@ -10404,7 +10524,7 @@ function legendaTahapHtml(t, fr, b) {
 /* ---------- FOTO PER TANKI ---------- */
 function fotoTanki(tank_id) {
   const ok = new Set(DB.dailies.filter(d => d.status !== "REJECTED").map(d => d.daily_id));
-  return (DB.photos || []).filter(p => p.tank_id === tank_id && ok.has(p.daily_id) && p.file_url && p.photo_type !== "HSSE")
+  return (DB.photos || []).filter(p => p.tank_id === tank_id && ok.has(p.daily_id) && p.file_url && p.photo_type !== "HSSE" && !isVideo(p))
     .map(p => Object.assign({ _tgl: (byId(DB.dailies, "daily_id", p.daily_id) || {}).report_date || String(p.taken_at || "").slice(0, 10) }, p))
     .sort((a, b) => (a._tgl + (a.taken_at || "")).localeCompare(b._tgl + (b.taken_at || "")));
 }
@@ -11058,7 +11178,7 @@ VIEWS.hse = {
 const LAP_TIPE = "LAPORAN_PROYEK", LAP_SETELAN = "SETELAN_LAPORAN";
 const LAP_MODE = { H: ["Harian", "DAILY REPORT", "DR"], W: ["Mingguan", "WEEKLY REPORT", "WR"], M: ["Bulanan", "MONTHLY REPORT", "MR"] };
 const MP_TIDAK_LANGSUNG = ["Project Control", "Safety Man", "Safety Officer", "Driver", "Site Coordinator", "Admin"];
-const isDocLaporan = d => d && (d.document_type === LAP_TIPE || d.document_type === LAP_SETELAN);
+const isDocLaporan = d => d && (d.document_type === LAP_TIPE || d.document_type === LAP_SETELAN || d.document_type === "HAK_AKSES" || d.document_type === "DAFTAR_BOQ_LAPANGAN");
 
 /* ---------- SETELAN (sekali isi, ikut tersinkron) ---------- */
 function setelanLaporanDoc() { return DB.documents.find(d => d.document_type === LAP_SETELAN) || null; }
@@ -11072,8 +11192,8 @@ function setelanLaporan() {
     kontrak: sp.contract_no || DB.config.contract_no || "SP3MK-030/KPI48100/2026-S0",
     mulai, selesai: o.selesai || tambahHari(mulai, 730),
     kode: "HBM",
-    prep_nama: "", prep_pt: "PT. HUDAYA BAYANAKA MANDIRI",
-    chk_nama: "", chk_pt: "PT. HUDAYA BAYANAKA MANDIRI",
+    prep_nama: "Tito Denovan", prep_pt: "PT. HUDAYA BAYANAKA MANDIRI",
+    chk_nama: "Muhamad Arifin", chk_pt: "PT. HUDAYA BAYANAKA MANDIRI",
     app_nama: "", app_pt: ""
   }, o);
 }
@@ -11155,6 +11275,7 @@ function uraianHarian(d) {
   });
   const out = Object.keys(grup).map(k => k + " Tanki " + t + " " + Array.from(grup[k].bag).join(" + ") + " (" + fmt(grup[k].q, 2) + " m²)");
   prKeg(pr).forEach(p => out.push((p.activity || "Kegiatan pendukung") + " — Tanki " + t + (p.work_package ? " (" + p.work_package + ")" : "")));
+  prBq(pr).filter(p => nz(p.actual_qty) > 0).forEach(p => out.push((p.activity || p.work_package) + " — " + fqBq(p.actual_qty) + " " + (p.unit || "") + " (Tanki " + t + ")"));
   return out;
 }
 function jumlahPer(rows, kunciF, nilaiF) {
@@ -11224,7 +11345,7 @@ function dataLaporan(P) {
   };
 
   /* 7. foto, 8. kendala */
-  const foto = (DB.photos || []).filter(p => idIn.has(p.daily_id) && p.file_url && p.photo_type !== "HSSE")
+  const foto = (DB.photos || []).filter(p => idIn.has(p.daily_id) && p.file_url && p.photo_type !== "HSSE" && !isVideo(p))
     .map(p => Object.assign({ _tgl: (byId(DB.dailies, "daily_id", p.daily_id) || {}).report_date }, p))
     .sort((a, b) => String(a._tgl).localeCompare(String(b._tgl)));
   const kendala = DB.issues.filter(i => (idIn.has(i.daily_id) || (i.issue_date >= P.from && i.issue_date <= P.to)) || (i.status !== "CLOSED" && i.issue_date <= P.to));
@@ -11241,134 +11362,217 @@ function dataLaporan(P) {
     if (akt.size) rencana.push("Tanki " + tankNo(W.tank_id) + ": " + Array.from(akt).join(", "));
   });
 
-  return { P, dIn, perTgl, mpLangsung, mpTidak, EQ, MT, TK, HSE, foto, kendala, rencana };
+  /* V3.4 — Progress Status Record per baris BOQ (sama dengan tabel 5 Weekly Report). */
+  const dmapBq = {}; DB.dailies.forEach(d => { dmapBq[d.daily_id] = d; });
+  const BQ = boqLapangan().map(b => {
+    let prev = 0, ini = 0; const tk = new Set();
+    DB.progress.forEach(p => {
+      if (!isBq(p) || p.scope_id !== b.boq_id) return;
+      const d = dmapBq[p.daily_id]; if (!dailyResmi(d)) return;
+      if (d.report_date < P.from) prev += nz(p.actual_qty);
+      else if (d.report_date <= P.to) { ini += nz(p.actual_qty); if (nz(p.actual_qty) > 0) tk.add(tankNo(d.tank_id)); }
+    });
+    const acc = prev + ini, q = nz(b.contract_qty);
+    return { b, prev, ini, acc, sisa: Math.max(0, q - acc), pct: q ? acc / q * 100 : 0, remarks: Array.from(tk).map(t => "Tanki " + t).join(", ") };
+  });
+  const video = (DB.photos || []).filter(p => idIn.has(p.daily_id) && isVideo(p) && p.file_url)
+    .map(p => Object.assign({ _tgl: (byId(DB.dailies, "daily_id", p.daily_id) || {}).report_date }, p));
+  return { P, dIn, perTgl, mpLangsung, mpTidak, EQ, MT, TK, HSE, foto, kendala, rencana, BQ, video };
 }
 
-/* ---------- SUSUN DOKUMEN ---------- */
-function laporanProyekHtml(P) {
+/* ---------- SUSUN DOKUMEN (V3.4 — model Weekly Report WR-HBM) ----------
+   Urutan bagian sama dengan WR-HBM-001-IX-2026:
+     1 Work Description · 2 Manpower Status (MD) · 3 Equipment Status (ED)
+     4 Material & Consumable · 5 Progress Status Record (BOQ + per tanki)
+     6 Photograph · 7 Note / Concern Item · tanda tangan
+   Daily, Weekly dan Monthly Report memakai susunan yang sama; yang
+   berbeda hanya periodenya. */
+const MP_DIRECT_WR = ["Foreman", "RAT", "Blaster Painter", "QC Inspector", "Helper"];
+const MP_INDIRECT_WR = ["Site Coordinator", "Project Control", "Safety Officer", "Safety Man", "Driver"];
+const EQ_WR = ["Air Compressor", "Sand Pot", "Air Manifold", "Breathing Air Filter", "Airless Spray Machine"];
+const MT_WR = ["JOTAMASTIC 85 ALU", "JOTAMASTIC 85 GREY", "HARDTOP XP II PGA", "Thinner", "Silica Sand"];
+const BLN_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const BLN_EN_P = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const tglWR = iso => { const p = String(iso || "").split("-"); return p.length < 3 ? "" : (+p[2]) + "-" + BLN_EN[+p[1] - 1] + "-" + p[0].slice(2); };
+const tglWRP = iso => { const p = String(iso || "").split("-"); return p.length < 3 ? "" : (+p[2]) + "-" + BLN_EN_P[+p[1] - 1] + " " + p[0]; };
+function lengkapiBaris(rows, dasar) {
+  const pakai = new Set();
+  const out = dasar.map(k => {
+    const r = rows.find(x => !pakai.has(x) && String(x.k).toLowerCase().indexOf(k.toLowerCase()) === 0);
+    if (r) { pakai.add(r); return Object.assign({}, r, { k }); }
+    return { k, prev: 0, ini: 0, acc: 0 };
+  });
+  rows.forEach(r => { if (!pakai.has(r)) out.push(r); });
+  return out;
+}
+function laporanProyekHtml(P, opsi) {
+  opsi = opsi || {};
   const X = dataLaporan(P), I = isianLaporan(P), C = setelanLaporan(), M = LAP_MODE[P.mode];
   const no = I.no || nomorLaporanAuto(P);
-  const lbl = P.mode === "H" ? ["Previous", "Today", "Accum"] : P.mode === "W" ? ["Previous", "This Week", "Accum"] : ["Previous", "This Month", "Accum"];
+  const lblIni = P.mode === "H" ? "Today" : P.mode === "W" ? "This Week" : "This Month";
   const kini = P.tampilAkhir || P.to;
-  const sisaHari = Math.round((new Date(C.selesai + "T00:00:00") - new Date(kini + "T00:00:00")) / 86400000);
-  const n2 = v => fmt(v, 2), n0 = v => fmt0(v);
-  const tPT = (judul, rows, kol, satuan, f) => `<table class="t"><thead><tr><th style="width:26px">No</th><th>${judul}</th>
-      <th class="n">${lbl[0]}</th><th class="n">${lbl[1]}</th><th class="n">${lbl[2]}</th></tr></thead><tbody>
-      ${rows.length ? rows.map((r, i) => `<tr><td class="c">${i + 1}</td><td>${esc(r.k)}</td><td class="n">${f(r.prev)}</td><td class="n">${f(r.ini)}</td><td class="n">${f(r.acc)}</td></tr>`).join("")
-        : `<tr><td class="c">—</td><td colspan="4" class="mut">tidak ada data</td></tr>`}
-      <tr class="tot"><td colspan="2">TOTAL ${satuan}</td><td class="n">${f(rows.reduce((a, r) => a + r.prev, 0))}</td><td class="n">${f(rows.reduce((a, r) => a + r.ini, 0))}</td>
-      <td class="n">${f(rows.reduce((a, r) => a + r.acc, 0))}</td></tr></tbody></table>`;
+  const sisaHari = Math.max(0, Math.round((new Date(C.selesai + "T00:00:00") - new Date(kini + "T00:00:00")) / 86400000));
+  const periode = P.mode === "H" ? hariID(P.from) + ", " + tglWRP(P.from)
+    : P.mode === "W" ? tglWRP(P.from) + " ~ " + tglWRP(P.tampilAkhir || P.to)
+      : BLN_EN_P[+P.kunci.slice(5, 7) - 1] + " " + P.kunci.slice(0, 4);
+  const jumlah = (rows, k) => rows.reduce((a, r) => a + nz(r[k]), 0);
+  const tPT = (judul, rows) => `<table class="t"><thead><tr><th style="width:26px">No</th><th>${judul}</th>
+      <th style="width:58px">Previous</th><th style="width:64px">${lblIni}</th><th style="width:52px">Accum</th></tr></thead><tbody>
+      ${rows.map((r, i) => `<tr><td class="n">${i + 1}</td><td>${esc(r.k)}</td><td class="n">${fqBq(r.prev)}</td><td class="n">${fqBq(r.ini)}</td><td class="n">${fqBq(r.acc)}</td></tr>`).join("")}
+      <tr class="tot"><td colspan="2">TOTAL</td><td>${fqBq(jumlah(rows, "prev"))}</td><td>${fqBq(jumlah(rows, "ini"))}</td><td>${fqBq(jumlah(rows, "acc"))}</td></tr>
+      </tbody></table>`;
 
   /* 1. Work description */
-  const tglKerja = Object.keys(X.perTgl).sort();
-  const kegiatan = tglKerja.length ? tglKerja.map(d => `<tr><td class="tg">${P.mode === "H" ? "" : esc(tglPendek(d))}</td><td>${X.perTgl[d].map(x => "&bull; " + esc(x)).join("<br>")}</td></tr>`).join("")
-    : `<tr><td></td><td class="mut">Tidak ada laporan harian pada periode ini.</td></tr>`;
-  const tambahan = barisTeks(I.uraian_tambahan);
-  const rencana = barisTeks(I.rencana).length ? barisTeks(I.rencana) : X.rencana;
-  const judulRencana = P.mode === "H" ? "NEXT DAY PLANNING" : P.mode === "W" ? "NEXT WEEK PLANNING ACTIVITIES" : "NEXT MONTH PLANNING ACTIVITIES";
-  const judulIni = P.mode === "H" ? "TODAY ACTIVITIES" : P.mode === "W" ? "THIS WEEK ACTIVITIES" : "THIS MONTH ACTIVITIES";
+  const kiri = [];
+  Object.keys(X.perTgl).sort().forEach(d => X.perTgl[d].forEach((x, j) => kiri.push({ tg: j === 0 && P.mode !== "H" ? tglWR(d) : "", x })));
+  barisTeks(I.uraian_tambahan).forEach(x => kiri.push({ tg: "", x }));
+  let kanan = barisTeks(I.rencana);
+  if (!kanan.length && P.mode === "H") {
+    const rt = I.renc_tanki || {};
+    Object.keys(rt).forEach(tid => barisTeks(rt[tid]).forEach(x => kanan.push("Tanki " + tankNo(tid) + ": " + x)));
+  }
+  if (!kanan.length) kanan = X.rencana;
+  const nKerja = Math.max(kiri.length, kanan.length, 4);
+  const jdIni = P.mode === "H" ? "TODAY ACTIVITIES" : P.mode === "W" ? "THIS WEEK ACTIVITIES" : "THIS MONTH ACTIVITIES";
+  const jdLanjut = P.mode === "H" ? "NEXT DAY PLANNING ACTIVITIES" : P.mode === "W" ? "NEXT WEEK PLANNING ACTIVITIES" : "NEXT MONTH PLANNING ACTIVITIES";
+  let kerja = "";
+  for (let i = 0; i < nKerja; i++) {
+    const a = kiri[i], b = kanan[i];
+    kerja += `<tr><td class="tg">${a ? esc(a.tg) : ""}</td><td>${a ? esc(a.x) : ""}</td><td class="gap"></td><td>${b ? "-. " + esc(b) : ""}</td></tr>`;
+  }
 
-  /* 7. foto terpilih */
+  /* 2-4. Manpower, equipment, material */
+  const mpD = lengkapiBaris(X.mpLangsung, MP_DIRECT_WR), mpI = lengkapiBaris(X.mpTidak, MP_INDIRECT_WR);
+  const eq = lengkapiBaris(X.EQ, EQ_WR), mt = lengkapiBaris(X.MT, MT_WR);
+
+  /* 5. Progress status record */
+  const bar = pct => { const v = Math.max(0, Math.min(100, pct)); return `style="background:linear-gradient(90deg,#A9DCA0 ${v}%,transparent ${v}%)"`; };
+  const bq = grupBoq(X.BQ.map(r => Object.assign({}, r.b, { _r: r })));
+  const bqHtml = X.BQ.length ? bq.map(G => `<tr class="grp"><td class="n">${esc(G.no)}</td><td colspan="9">${esc(G.nama)}</td></tr>` +
+    G.rows.map(b => { const r = b._r; return `<tr><td class="n">${esc(b.boq_code)}</td><td>${esc(b.description)}</td>
+      <td class="n">${fqBq(b.contract_qty)}</td><td class="n">${esc(b.unit)}</td><td class="n">${fqBq(r.prev)}</td>
+      <td class="n ini">${fqBq(r.ini)}</td><td class="n">${fqBq(r.acc)}</td><td class="n">${fqBq(r.sisa)}</td>
+      <td class="n pb" ${bar(r.pct)}>${fmt(r.pct, 2)}%</td><td class="n">${esc(r.remarks)}</td></tr>`; }).join("")).join("")
+    : `<tr><td colspan="10" class="mut" style="padding:8px">Daftar BOQ belum diisi. Project Control: menu BOQ &amp; Plafon › Isi BOQ sesuai Weekly Report.</td></tr>`;
+  const tkHtml = X.TK.map(x => `<tr class="grp2"><td colspan="8"><b>TANKI ${esc(x.t.tank_no || "")}</b> — ${esc(x.t.tank_type || "")}
+      Ø${fmt(x.t.shell_diameter_m, 2)} × ${fmt(x.t.tank_height_m, 2)} m · BAMK ${esc(x.b.bamk_no || "")} · volume ${fmt(x.vol, 2)} m²
+      · progres terbobot <b>${fmt(x.pctAcc, 2)}%</b> (sebelumnya ${fmt(x.pctPrev, 2)}%)</td></tr>` +
+    x.rows.map(r => `<tr><td>${esc(r.s.stage_name)} <span class="mut">bobot ${fmt(r.s.weight_pct, 0)}%</span></td><td class="n">${fmt(r.vol, 2)}</td>
+      <td class="n">${fmt(r.prev, 2)}</td><td class="n ini">${fmt(r.ini, 2)}</td><td class="n">${fmt(r.acc, 2)}</td><td class="n">${fmt(r.sisa, 2)}</td>
+      <td class="n pb" ${bar(r.pct)}>${fmt(r.pct, 2)}%</td><td class="mut">${esc(r.rinci)}</td></tr>`).join("")).join("");
+
+  /* 6. Photograph */
   const pilih = Array.isArray(I.foto) ? I.foto : null;
   let fotoPakai = pilih ? X.foto.filter(p => pilih.indexOf(p.photo_id) >= 0) : (() => {
     const ba = X.foto.filter(p => p.photo_type === "BEFORE" || p.photo_type === "AFTER");
-    const lain = X.foto.filter(p => ba.indexOf(p) < 0);
-    return ba.concat(lain).slice(0, 6);
+    return ba.concat(X.foto.filter(p => ba.indexOf(p) < 0)).slice(0, 4);
   })();
-  fotoPakai = fotoPakai.slice(0, 9);
+  fotoPakai = fotoPakai.slice(0, 8);
+  const fotoHtml = opsi.excel
+    ? (fotoPakai.length ? `<table class="t">${fotoPakai.map((p, i) => `<tr><td class="n" style="width:26px">${i + 1}</td><td>${esc(fotoCap(p) || fotoLabel(p))} · Tanki ${esc(tankNo(p.tank_id))} · ${esc(tglWR(p._tgl))}</td><td>${/^https?:/i.test(p.file_url) ? `<a href="${esc(p.file_url)}">buka foto</a>` : "foto di aplikasi"}</td></tr>`).join("")}</table>` : "")
+    : (fotoPakai.length ? `<div class="foto">${fotoPakai.map(p => `<figure><img src="${p.file_url}"><figcaption>${esc(fotoCap(p) || fotoLabel(p))}${P.mode !== "H" ? " · " + esc(tglWR(p._tgl)) : ""}</figcaption></figure>`).join("")}</div>` : "");
+  const videoHtml = (X.video || []).length ? `<div class="vidl"><b>Video:</b> ${X.video.map(p => `<a href="${esc(p.file_url)}">${esc(fotoCap(p) || "video")} (${esc(tankNo(p.tank_id))}, ${esc(tglWR(p._tgl))})</a>`).join(" · ")}</div>` : "";
+
+  /* 7. Note */
   const catatan = barisTeks(I.catatan).length ? barisTeks(I.catatan)
-    : X.kendala.map(i => (i.issue_date ? tglPendek(i.issue_date) + " — " : "") + i.description + (i.action ? " (tindakan: " + i.action + ")" : "") + (i.status === "CLOSED" ? " [selesai]" : ""));
+    : X.kendala.map(i => (i.issue_date ? tglWR(i.issue_date) + " — " : "") + i.description + (i.action ? " (tindakan: " + i.action + ")" : "") + (i.status === "CLOSED" ? " [selesai]" : ""));
+  const hseBaris = "HSE: " + X.HSE.tanpa.n + " hari kerja tanpa kecelakaan · Tool Box Meeting " + (X.HSE.tbm || X.HSE.tbmHarian) +
+    (X.HSE.peserta ? " (" + X.HSE.peserta + " peserta)" : "") + " · E-Permit " + X.HSE.permit + " · temuan " + X.HSE.temuan +
+    (X.HSE.temuanBuka ? " (" + X.HSE.temuanBuka + " terbuka)" : "") + " · kecelakaan " + X.HSE.kecelakaan;
+  const ttd = (judul, pt, nama, tgl) => `<td><b>${judul}</b><br><b>${esc(pt || "")}</b>
+      <table class="tl"><tr><td style="width:46px"><b>Name</b></td><td>: ${esc(nama || "")}</td><td style="width:70px"><b>Signature :</b></td></tr>
+      <tr><td><b>Date</b></td><td colspan="2">: ${esc(tgl || "")}</td></tr></table></td>`;
+  const tglTtd = tglWR(I.tgl_ttd || kini);
 
   return `<div class="wr">
-  <div class="wrkop"><img src="${logoAktif()}" alt=""><div class="wrjd">${M[1]}</div><div class="wrno">${esc(no)}</div></div>
-  <table class="hd"><tr><td class="l">Project Name</td><td>: ${esc(C.proyek)}</td><td class="l">Start Date</td><td>: ${esc(dateID(C.mulai))}</td></tr>
-    <tr><td class="l">Project Location</td><td>: ${esc(C.lokasi)}</td><td class="l">Finish Date</td><td>: ${esc(dateID(C.selesai))}</td></tr>
-    <tr><td class="l">Contract No.</td><td>: ${esc(C.kontrak)}</td><td class="l">Current Date</td><td>: ${esc(dateID(kini))}</td></tr>
-    <tr><td class="l">Report No.</td><td>: ${esc(no)}</td><td class="l">Remaining Day</td><td>: ${sisaHari} hari</td></tr>
-    <tr><td class="l">Reporting Period</td><td colspan="3">: <b>${esc(P.label)}</b></td></tr></table>
+  <table class="kop"><tr><td class="kl"><div class="ptm">PERTAMINA<small>PATRA NIAGA</small></div></td>
+    <td class="kt">${M[1]}</td><td class="kr"><img src="${logoAktif()}" alt=""></td></tr></table>
+  <table class="hd"><tr><td style="width:42%"><table class="in">
+      <tr><td class="l">Project Name</td><td>: ${esc(C.proyek)}</td></tr>
+      <tr><td class="l">Project Location</td><td>: ${esc(C.lokasi)}</td></tr>
+      <tr><td class="l">Contract No.</td><td>: ${esc(C.kontrak)}</td></tr>
+      <tr><td class="l">Report No.</td><td>: ${esc(no)}</td></tr></table></td>
+    <td style="width:28%"><table class="in">
+      <tr><td class="l">Start Date</td><td>: ${esc(tglWR(C.mulai))}</td></tr>
+      <tr><td class="l">Finish Date</td><td>: ${esc(tglWR(C.selesai))}</td></tr>
+      <tr><td class="l">Current Date</td><td>: ${esc(tglWR(kini))}</td></tr>
+      <tr><td class="l">Remaining Day</td><td>: ${sisaHari}</td></tr></table></td>
+    <td class="per"><div class="perj">Reporting Period</div><div class="perv">${esc(periode)}</div></td></tr></table>
 
   <div class="sec">1. WORK DESCRIPTION</div>
-  <table class="dua"><tr><td style="width:58%"><div class="sub">${judulIni}</div><table class="t keg">${kegiatan}
-      ${tambahan.length ? `<tr><td></td><td>${tambahan.map(x => "&bull; " + esc(x)).join("<br>")}</td></tr>` : ""}</table></td>
-    <td><div class="sub">${judulRencana}</div>${rencana.length ? rencana.map(x => `<div>&bull; ${esc(x)}</div>`).join("") : `<div class="mut">-.</div>`}</td></tr></table>
+  <table class="wd"><tr><td colspan="2" class="bh">${jdIni}</td><td class="gap"></td><td class="bh">${jdLanjut}</td></tr>${kerja}</table>
 
-  <div class="sec">2. TANK DATA &amp; VOLUME</div>
-  <table class="t"><thead><tr><th>Tank No.</th><th>Area</th><th>Type</th><th class="n">Ø (m)</th><th class="n">H (m)</th>
-    <th class="n">Shell (m²)</th><th class="n">Roof (m²)</th><th class="n">Acc. (m²)</th><th class="n">Volume BAMK (m²)</th><th class="n">Progress</th></tr></thead>
-    <tbody>${X.TK.length ? X.TK.map(x => `<tr><td><b>${esc(x.t.tank_no || "")}</b></td><td>${esc(areaName(x.t.area_id))}</td>
-      <td>${esc(x.t.tank_type || "")} <span class="mut">${esc(LABEL_TIPE[x.t.tank_type] || "")}</span></td>
-      <td class="n">${n2(x.t.shell_diameter_m)}</td><td class="n">${n2(x.t.tank_height_m)}</td>
-      <td class="n">${n2(x.b.vol_shell)}</td><td class="n">${n2(x.b.vol_roof)}</td><td class="n">${n2(x.b.vol_acc)}</td>
-      <td class="n"><b>${n2(x.vol)}</b></td><td class="n"><b>${fmt(x.pctAcc, 2)}%</b></td></tr>`).join("")
-      + `<tr class="tot"><td colspan="8">TOTAL</td><td class="n">${n2(X.TK.reduce((a, x) => a + x.vol, 0))}</td>
-        <td class="n">${fmt(pct(X.TK.reduce((a, x) => a + x.eAcc, 0), X.TK.reduce((a, x) => a + x.vol, 0)), 2)}%</td></tr>`
-      : `<tr><td colspan="10" class="mut">Belum ada tanki dengan BAMK aktif.</td></tr>`}</tbody></table>
-  <div class="mut">Shell = π·D·H · Roof = ¼·π·D²·faktor atap (CRT 1,05 · FRT 1,00 · DRT 1,12) · Volume BAMK menjadi dasar progres; volume final mengikuti BAKP.</div>
+  <div class="sec">2. MANPOWER STATUS (MD)</div>
+  <table class="duo"><tr><td><div class="bh">DIRECT MANPOWER</div>${tPT("Job Description", mpD)}</td>
+    <td><div class="bh">INDIRECT MANPOWER</div>${tPT("Job Description", mpI)}</td></tr></table>
 
-  <div class="sec">3. MANPOWER STATUS (MD)</div>
-  <table class="dua"><tr><td><div class="sub">DIRECT MANPOWER</div>${tPT("Job Description", X.mpLangsung, null, "", n0)}</td>
-    <td><div class="sub">INDIRECT MANPOWER</div>${tPT("Job Description", X.mpTidak, null, "", n0)}</td></tr></table>
-
-  <div class="sec">4. EQUIPMENT STATUS (ED) &amp; MATERIAL / CONSUMABLE</div>
-  <table class="dua"><tr><td><div class="sub">EQUIPMENT LIST</div>${tPT("Equipment Description", X.EQ, null, "", n0)}</td>
-    <td><div class="sub">MATERIAL &amp; CONSUMABLE LIST</div>${tPT("Item Description", X.MT, null, "", n2)}</td></tr></table>
+  <table class="duo"><tr><td><div class="sec">3. EQUIPMENT STATUS (ED)</div><div class="bh">EQUIPMENT LIST</div>${tPT("Equipment Description", eq)}</td>
+    <td><div class="sec">4. MATERIAL &amp; CONSUMABLE</div><div class="bh">Material &amp; Consumable List</div>${tPT("Item Description", mt)}</td></tr></table>
 
   <div class="sec">5. PROGRESS STATUS RECORD</div>
-  <table class="t"><thead><tr><th style="width:34px">No</th><th>Description</th><th class="n">Q'ty</th><th>UOM</th>
-    <th class="n">${lbl[0]}</th><th class="n">${lbl[1]}</th><th class="n">${lbl[2]}</th><th class="n">Remain</th><th class="n">Progress (%)</th><th>Remarks</th></tr></thead>
-    <tbody>${X.TK.length ? X.TK.map((x, i) => `<tr class="grp"><td class="c">${i + 1}</td><td colspan="9"><b>TANKI ${esc(x.t.tank_no || "")}</b>
-        — ${esc(x.t.tank_type || "")} Ø${n2(x.t.shell_diameter_m)} × ${n2(x.t.tank_height_m)} m · BAMK ${esc(x.b.bamk_no || "")}</td></tr>
-      ${x.rows.map((r, j) => `<tr><td class="c">${i + 1}.${j + 1}</td><td>${esc(r.s.stage_name)} <span class="mut">(bobot ${fmt(r.s.weight_pct, 0)}%)</span></td>
-        <td class="n">${n2(r.vol)}</td><td>m²</td><td class="n">${n2(r.prev)}</td><td class="n">${n2(r.ini)}</td><td class="n">${n2(r.acc)}</td>
-        <td class="n">${n2(r.sisa)}</td><td class="n">${fmt(r.pct, 2)}%</td><td class="mut">${esc(r.rinci)}</td></tr>`).join("")}
-      <tr class="tot"><td></td><td>Progres terbobot tanki ${esc(x.t.tank_no || "")}</td><td class="n">${n2(x.vol)}</td><td>m²</td>
-        <td class="n">${n2(x.ePrev)}</td><td class="n">${n2(x.eIni)}</td><td class="n">${n2(x.eAcc)}</td><td class="n">${n2(Math.max(0, x.vol - x.eAcc))}</td>
-        <td class="n">${fmt(x.pctAcc, 2)}%</td><td class="mut">sebelumnya ${fmt(x.pctPrev, 2)}%</td></tr>`).join("")
-      : `<tr><td colspan="10" class="mut">Belum ada progres.</td></tr>`}</tbody></table>
+  <table class="t ps"><thead><tr><th rowspan="2" style="width:30px">No</th><th rowspan="2">Description</th><th rowspan="2" style="width:56px">Q'ty</th>
+    <th rowspan="2" style="width:40px">UOM</th><th colspan="4">Progress Status</th><th rowspan="2" style="width:66px">Progress (%)</th><th rowspan="2" style="width:70px">Remarks</th></tr>
+    <tr><th style="width:48px">Prev</th><th style="width:56px">${lblIni}</th><th style="width:50px">Accum</th><th style="width:52px">Remain</th></tr></thead>
+    <tbody>${bqHtml}</tbody></table>
+  ${X.TK.length ? `<div class="bh" style="margin-top:4px">PROGRESS PER TANKI — TAHAP COATING (m², volume BAMK)</div>
+  <table class="t ps"><thead><tr><th>Tahap</th><th style="width:60px">Volume</th><th style="width:56px">Prev</th><th style="width:60px">${lblIni}</th>
+    <th style="width:56px">Accum</th><th style="width:56px">Remain</th><th style="width:66px">Progress (%)</th><th>Remarks</th></tr></thead><tbody>${tkHtml}</tbody></table>` : ""}
 
-  <div class="sec">6. HSE SUMMARY</div>
-  <table class="t hse"><tr><td>Hari kerja tanpa kecelakaan<b>${X.HSE.tanpa.n}</b></td><td>Tool Box Meeting<b>${X.HSE.tbm || X.HSE.tbmHarian}</b><span class="mut">${X.HSE.peserta ? X.HSE.peserta + " peserta" : ""}</span></td>
-    <td>E-Permit<b>${X.HSE.permit}</b><span class="mut">${X.HSE.permitOk} disetujui</span></td><td>Inspeksi alat<b>${X.HSE.alat}</b></td>
-    <td>Temuan<b>${X.HSE.temuan}</b><span class="mut">${X.HSE.temuanBuka} masih terbuka</span></td><td>Kecelakaan<b>${X.HSE.kecelakaan}</b></td></tr></table>
+  <div class="sec">6. PHOTOGRAPH</div>
+  ${fotoHtml || `<div class="cat mut">Tidak ada foto pada periode ini.</div>`}${videoHtml}
 
-  <div class="sec">7. PHOTOGRAPH</div>
-  ${fotoPakai.length ? `<div class="foto">${fotoPakai.map(p => `<figure><img src="${p.file_url}"><figcaption><b>${esc(fotoLabel(p))}</b>
-      · ${esc(tankNo(p.tank_id))} · ${esc(tglPendek(p._tgl))}<br>${esc(fotoCap(p))}</figcaption></figure>`).join("")}</div>`
-    : `<div class="mut" style="padding:6px">Tidak ada foto pada periode ini.</div>`}
+  <div class="sec">7. NOTE / CONCERN ITEM</div>
+  <div class="cat">${catatan.length ? catatan.map(x => `<div>- ${esc(x)}</div>`).join("") : "<div>-</div>"}<div class="mut">${esc(hseBaris)}</div></div>
 
-  <div class="sec">8. NOTE / CONCERN ITEM</div>
-  <div class="cat">${catatan.length ? catatan.map(x => `<div>&bull; ${esc(x)}</div>`).join("") : "-"}</div>
-
-  <table class="ttd"><tr><td>Prepared by,</td><td>Checked by,</td><td>Approved by,</td></tr>
-    <tr class="pt"><td>${esc(C.prep_pt)}</td><td>${esc(C.chk_pt)}</td><td>${esc(C.app_pt)}</td></tr>
-    <tr class="ruang"><td></td><td></td><td></td></tr>
-    <tr><td>Name : <b>${esc(I.prep_nama || C.prep_nama)}</b></td><td>Name : <b>${esc(I.chk_nama || C.chk_nama)}</b></td><td>Name : <b>${esc(I.app_nama || C.app_nama)}</b></td></tr>
-    <tr><td>Date : ${esc(I.tgl_ttd ? dateID(I.tgl_ttd) : dateID(kini))}</td><td>Date :</td><td>Date :</td></tr></table>
+  <table class="ttd"><tr>${ttd("Prepared by,", C.prep_pt, I.prep_nama || C.prep_nama, tglTtd)}${ttd("Checked by,", C.chk_pt, I.chk_nama || C.chk_nama, tglTtd)}${ttd("Approved by,", C.app_pt, I.app_nama || C.app_nama, "")}</tr></table>
   </div>`;
 }
 const WR_CSS = `
-  .wr{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:10.5px;line-height:1.35;background:#fff}
-  .wr .wrkop{display:flex;align-items:center;gap:12px;border-bottom:2.5px solid #0E2233;padding-bottom:6px;margin-bottom:6px}
-  .wr .wrkop img{height:40px}.wr .wrjd{flex:1;text-align:center;font-size:17px;font-weight:700;letter-spacing:1px}
-  .wr .wrno{font-family:Consolas,monospace;font-size:10px;color:#444}
+  .wr{font-family:Calibri,Arial,Helvetica,sans-serif;color:#111;font-size:10.5px;line-height:1.3;background:#fff;border:1.5px solid #111}
   .wr table{border-collapse:collapse;width:100%}
-  .wr table.hd td{border:none;padding:1.5px 4px}.wr table.hd td.l{width:110px;color:#333;white-space:nowrap}
-  .wr .sec{background:#0E2233;color:#fff;font-weight:700;padding:3px 7px;margin:10px 0 4px;letter-spacing:.3px}
-  .wr .sub{background:#E4EAF0;font-weight:700;text-align:center;padding:2px;border:1px solid #9AA7B2;border-bottom:none}
-  .wr table.dua>tbody>tr>td{border:none;padding:0 4px 0 0;vertical-align:top;width:50%}
-  .wr table.t th,.wr table.t td{border:1px solid #9AA7B2;padding:2.5px 5px;vertical-align:top}
-  .wr table.t th{background:#F0F3F6;font-weight:700}
-  .wr .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.wr .c{text-align:center}
-  .wr tr.tot td{background:#F0F3F6;font-weight:700}.wr tr.grp td{background:#FBF1DF}
-  .wr .mut{color:#5C6B78;font-size:9.5px}.wr table.keg td.tg{width:62px;white-space:nowrap;color:#333}
-  .wr table.hse td{text-align:center;width:16.6%}.wr table.hse td b{display:block;font-size:15px;margin:2px 0}
-  .wr .foto{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-  .wr .foto figure{margin:0;border:1px solid #9AA7B2;padding:3px;page-break-inside:avoid}
-  .wr .foto img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}.wr .foto figcaption{font-size:9px;margin-top:2px}
-  .wr .cat{border:1px solid #9AA7B2;padding:5px 7px;min-height:30px}
-  .wr table.ttd{margin-top:14px;page-break-inside:avoid}.wr table.ttd td{border:none;width:33.3%;padding:2px 6px}
-  .wr table.ttd tr.pt td{font-weight:700;font-size:10px}.wr table.ttd tr.ruang td{height:52px}
+  .wr td,.wr th{vertical-align:middle}
+  .wr table.kop td{border-bottom:1.5px solid #111;padding:6px 10px}
+  .wr .ptm{font-weight:800;font-size:19px;line-height:1;color:#0B4EA2;letter-spacing:.5px}
+  .wr .ptm small{display:block;font-size:10px;color:#E30613;letter-spacing:2px;margin-top:2px}
+  .wr td.kt{text-align:center;font-size:19px;font-weight:700}
+  .wr td.kr{text-align:right}.wr td.kr img{height:42px}
+  .wr table.hd>tbody>tr>td{vertical-align:top;padding:3px 6px}
+  .wr table.in td{padding:1.5px 3px;font-size:10px;font-weight:700}
+  .wr table.in td.l{width:96px;white-space:nowrap}
+  .wr td.per{width:30%;padding:0!important;border-left:1.5px solid #111;text-align:center;vertical-align:middle!important}
+  .wr .perj{background:#E30613;color:#fff;font-weight:700;padding:9px 4px;border-bottom:1.5px solid #111}
+  .wr .perv{font-weight:700;padding:10px 4px}
+  .wr .sec{background:#E30613;color:#fff;font-weight:700;padding:3px 7px;border-top:1.5px solid #111;border-bottom:1px solid #111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wr .bh{background:#111;color:#fff;font-weight:700;text-align:center;padding:2.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wr table.wd td{border-bottom:1px solid #999;padding:4px 6px}
+  .wr table.wd td.tg{width:62px;white-space:nowrap;text-align:center}
+  .wr table.wd td.gap,.wr table.duo td.gap{width:6px;border:none;background:#fff}
+  .wr table.duo>tbody>tr>td{vertical-align:top;padding:0;width:50%}
+  .wr table.duo>tbody>tr>td+td{border-left:4px solid #fff}
+  .wr table.t th{background:#111;color:#fff;font-weight:700;padding:3px 5px;border:1px solid #666;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wr table.t td{border:1px solid #9AA0A6;padding:3px 6px}
+  .wr .n{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .wr td.ini{border-left:1.5px solid #1F5C99;border-right:1.5px solid #1F5C99}
+  .wr td.pb{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wr tr.tot td{background:#FFFF00;font-weight:700;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wr tr.grp td{background:#FFFF00;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wr tr.grp2 td{background:#FFF5C2;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wr .foto{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px}
+  .wr .foto figure{margin:0;border:1px solid #111;page-break-inside:avoid}
+  .wr .foto img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+  .wr .foto figcaption{background:#111;color:#fff;text-align:center;font-size:9px;padding:2px 3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wr .vidl{padding:3px 8px;font-size:9.5px}
+  .wr .cat{padding:4px 8px;min-height:20px}
+  .wr .mut{color:#5C6B78;font-size:9px}
+  .wr table.ttd{page-break-inside:avoid;border-top:1.5px solid #111}
+  .wr table.ttd>tbody>tr>td{border-right:1.5px solid #111;vertical-align:top;padding:5px 8px;width:33.3%;height:74px}
+  .wr table.ttd>tbody>tr>td:last-child{border-right:none}
+  .wr table.tl td{padding:6px 2px 0;font-size:10px}
+  .wr th{text-transform:none!important;letter-spacing:0!important;font-size:10px!important;white-space:normal}
+  .wr td.n{font-family:inherit!important;text-align:center!important}
+  .wr table.t tbody tr:hover{background:transparent}
   .wr tr{page-break-inside:avoid}`;
+
 function cetakLaporanProyek(P) {
   const html = laporanProyekHtml(P), M = LAP_MODE[P.mode];
   const win = window.open("", "_blank");
@@ -11401,6 +11605,7 @@ VIEWS["lap-proyek"] = {
         <span class="grow small"><b>${esc(P.label)}</b> · ${esc(I.no || nomorLaporanAuto(P))}
           ${I.kunci ? `<span class="b teal">isian tersimpan</span>` : ubah ? `<span class="b gray">belum ada isian manual</span>` : ""}</span>
         ${ubah ? `<button class="btn a sm" id="lpIsi">Isian laporan</button><button class="btn sm" id="lpSet">Setelan</button>` : ""}
+        <button class="btn sm" id="lpXls">Unduh Excel</button>
         <button class="btn p sm" id="lpCetak">Cetak / simpan PDF</button>
       </div>
       <div class="tiny muted mt8">Angka dihitung dari laporan harian yang diajukan/disetujui (draft dan yang dikembalikan tidak dihitung).
@@ -11420,6 +11625,7 @@ VIEWS["lap-proyek"] = {
     };
     $("#lpPrev").onclick = () => geser(-1); $("#lpNext").onclick = () => geser(1);
     $("#lpCetak").onclick = () => cetakLaporanProyek(P);
+    $("#lpXls").onclick = () => unduhExcelLaporan(P);
     if ($("#lpIsi")) $("#lpIsi").onclick = () => isianLaporanModal(P);
     if ($("#lpSet")) $("#lpSet").onclick = () => setelanLaporanModal();
   }
@@ -11427,7 +11633,7 @@ VIEWS["lap-proyek"] = {
 function isianLaporanModal(P) {
   const I = isianLaporan(P), X = dataLaporan(P), C = setelanLaporan();
   const pilih = Array.isArray(I.foto) ? I.foto : null;
-  const auto = (() => { const ba = X.foto.filter(p => p.photo_type === "BEFORE" || p.photo_type === "AFTER"); return ba.concat(X.foto.filter(p => ba.indexOf(p) < 0)).slice(0, 6).map(p => p.photo_id); })();
+  const auto = (() => { const ba = X.foto.filter(p => p.photo_type === "BEFORE" || p.photo_type === "AFTER"); return ba.concat(X.foto.filter(p => ba.indexOf(p) < 0)).slice(0, 4).map(p => p.photo_id); })();
   const ter = pilih || auto;
   openModal("Isian " + LAP_MODE[P.mode][1] + " — " + P.label, `
     <div class="fg c3">
@@ -11446,14 +11652,14 @@ function isianLaporanModal(P) {
       <label class="f"><span>Checked by (nama)</span><input type="text" id="liC" value="${esc(I.chk_nama || "")}" placeholder="${esc(C.chk_nama)}"></label>
       <label class="f"><span>Approved by (nama)</span><input type="text" id="liA" value="${esc(I.app_nama || "")}" placeholder="${esc(C.app_nama)}"></label>
     </div>
-    <h4 class="mt12">Foto yang dimuat <span class="tiny muted">${X.foto.length} foto pada periode ini · maksimal 9</span></h4>
+    <h4 class="mt12">Foto yang dimuat <span class="tiny muted">${X.foto.length} foto pada periode ini · maksimal 8</span></h4>
     ${X.foto.length ? `<div class="photos">${X.foto.map(p => `<label class="ph pilihfoto"><input type="checkbox" data-lf="${esc(p.photo_id)}" ${ter.indexOf(p.photo_id) >= 0 ? "checked" : ""}>
       <span class="tag">${esc(fotoLabel(p))}</span><img src="${p.file_url}" loading="lazy"><div class="cap">${esc(tankNo(p.tank_id))} · ${esc(tglPendek(p._tgl))} · ${esc(fotoCap(p) || "—")}</div></label>`).join("")}</div>`
       : `<div class="empty">Belum ada foto dari laporan harian pada periode ini.</div>`}`,
     `<span class="grow"></span><button class="btn p" id="liSave">Simpan isian</button>`, true);
   $("#liSave").onclick = () => {
     const foto = $$("[data-lf]").filter(c => c.checked).map(c => c.dataset.lf);
-    if (foto.length > 9) return toast("Maksimal 9 foto supaya muat satu halaman.", "err");
+    if (foto.length > 8) return toast("Maksimal 8 foto (dua baris) supaya muat satu halaman.", "err");
     simpanIsianLaporan(P, Object.assign({}, I, {
       no: $("#liNo").value.trim(), tgl_ttd: $("#liTgl").value, rencana: $("#liRen").value, uraian_tambahan: $("#liUr").value,
       catatan: $("#liCat").value, prep_nama: $("#liP").value.trim(), chk_nama: $("#liC").value.trim(), app_nama: $("#liA").value.trim(), foto
@@ -11539,6 +11745,575 @@ TITLES["lap-proyek"] = ["Laporan Proyek", "Daily · Weekly · Monthly Report —
 
 document.head.insertAdjacentHTML("beforeend", "<style>" + WR_CSS + "</style>");
 
+/* ============================================================
+   V3.4 — LAPORAN HARIAN MODEL WEEKLY REPORT (WR-HBM),
+          PROGRESS STATUS RECORD PER BOQ, FOTO & VIDEO,
+          HAK AKSES YANG BISA DIATUR + PENJAGA HALAMAN
+   ------------------------------------------------------------
+   Tetap tanpa kolom baru di server (Code.gs v2.3):
+     · progres BOQ harian  → tabel progress, part = "BQ",
+                             scope_id = boq_id, actual_qty = volume hari itu
+     · daftar BOQ lapangan → tabel documents "DAFTAR_BOQ_LAPANGAN"
+                             (salinan tanpa harga, supaya HP lapangan
+                             tetap punya daftar walau harga disaring server)
+     · rencana kerja besok → isian Daily Report di tabel documents
+     · video               → tabel photos, photo_type = "VIDEO",
+                             file_url = tautan Drive / YouTube
+     · hak akses           → tabel documents "HAK_AKSES"
+   ============================================================ */
+
+/* ---------- BOQ SESUAI WEEKLY REPORT WR-HBM-001-IX-2026 ---------- */
+const BOQ_WR = [
+  ["1.1", "Menyiapkan alat kerja, material, manpower, dan izin kerja", 12, "Lot", "PEKERJAAN PERSIAPAN"],
+  ["1.2", "Pekerjaan menyiapkan material safety, kendaraan/angkutan + MCU Pekerja", 2, "Lot", "PEKERJAAN PERSIAPAN"],
+  ["1.3", "Pekerjaan menyiapkan alat safety penunjang pekerjaan", 1, "Lot", "PEKERJAAN PERSIAPAN"],
+  ["1.4", "Pekerjaan menyiapkan safety man selama pekerjaan berlangsung", 450, "Days", "PEKERJAAN PERSIAPAN"],
+  ["1.5", "Akomodasi dan Transportasi Penyebrangan ke Area Lawe-Lawe", 2, "Lot", "PEKERJAAN PERSIAPAN"],
+  ["2.1", "Pekerjaan Wet Abrasive Blasting (WAB) SA-2 1/2", 19200, "m2", "PEKERJAAN PERSIAPAN PERMUKAAN"],
+  ["2.2", "Pekerjaan Power Tool Cleaning (SP-3)", 800, "m2", "PEKERJAAN PERSIAPAN PERMUKAAN"],
+  ["2.3", "Pekerjaan WC/Hand Tool Cleaning dengan Stacker/Amplas/Sikat Kawat", 200, "m2", "PEKERJAAN PERSIAPAN PERMUKAAN"],
+  ["2.4", "Pekerjaan membersihkan kotoran & membilas dgn Air bersih + Rust Inhibitor Water base pada External Shell & Roof Tank yang sebelumnya telah dilakukan WAB", 5000, "m2", "PEKERJAAN PERSIAPAN PERMUKAAN"],
+  ["3.1", "Melaksanakan Pekerjaan Pengecatan Perlayer untuk Primer Coat, Intermediate Coat, dan Finish Coat pada Shell & Roof Tank", 60000, "m2", "PEKERJAAN PENGECATAN"],
+  ["3.2", "Melaksanakan Pengecatan Support, Tangga, Bordes, dan yang lainnya yang berada di Area Tanki dengan menggunakan Kuas/ Roll", 200, "m2", "PEKERJAAN PENGECATAN"],
+  ["4.1", "Pekerjaan Wet Abrasive Blasting (WAB) SA-2 1/2", 12, "Lot", "PEKERJAAN PEMBERSIHAN AREA KERJA DAN VERIFIKASI TKDN"],
+  ["4.2", "Pekerjaan Power Tool Cleaning (SP-3)", 2, "Lot", "PEKERJAAN PEMBERSIHAN AREA KERJA DAN VERIFIKASI TKDN"]
+];
+const BOQ_DOC = "DAFTAR_BOQ_LAPANGAN";
+function bandingKode(a, b) {
+  const pa = String(a || "").split(/[.\-\s]/), pb = String(b || "").split(/[.\-\s]/);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] == null ? "" : pa[i], y = pb[i] == null ? "" : pb[i];
+    const nx = +x, ny = +y;
+    if (x !== "" && y !== "" && !isNaN(nx) && !isNaN(ny)) { if (nx !== ny) return nx - ny; }
+    else if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+function boqLapangan() {
+  const src = (DB.boq || []).filter(b => b.active !== false && b.boq_code);
+  let L;
+  if (src.length) L = src.map(b => ({ boq_id: b.boq_id, boq_code: b.boq_code, description: b.description || "",
+    unit: b.unit || "", contract_qty: nz(b.contract_qty), category: b.category || "" }));
+  else {
+    const d = (DB.documents || []).find(x => x.document_type === BOQ_DOC);
+    L = ((d && bukaJson("LAP", d.remarks).o) || {}).items || [];
+  }
+  return L.slice().sort((a, b) => bandingKode(a.boq_code, b.boq_code));
+}
+/* Salinan daftar BOQ tanpa harga untuk perangkat lapangan. */
+function perbaruiBoqLapangan() {
+  if (!(DB.boq || []).length) return false;
+  const items = boqLapangan(), json = JSON.stringify(items);
+  let d = (DB.documents || []).find(x => x.document_type === BOQ_DOC);
+  const lama = d ? JSON.stringify(((bukaJson("LAP", d.remarks).o) || {}).items || []) : "";
+  if (lama === json) return false;
+  if (!d) {
+    d = { document_id: uid("DC"), bamk_id: "", document_type: BOQ_DOC, document_no: "DAFTAR BOQ LAPANGAN",
+      document_date: today(), file_url: "", required_for_billing: false, status: "AVAILABLE", remarks: "" };
+    DB.documents.push(d);
+  }
+  d.remarks = bungkusJson("LAP", { items });
+  return true;
+}
+function isiBoqWR() {
+  if (!can("boq") && !can("master")) return toast("Hanya Project Control yang mengisi BOQ.", "err");
+  const ada = new Set((DB.boq || []).map(b => String(b.boq_code).trim()));
+  const baru = BOQ_WR.filter(r => !ada.has(r[0]));
+  if (!baru.length) return toast("Semua baris Weekly Report (1.1 – 4.2) sudah ada di BOQ.", "ok");
+  const lama = (DB.boq || []).filter(b => !/^\d/.test(String(b.boq_code)) && nz(b.contract_qty) <= 0 && b.active !== false &&
+    !DB.progress.some(p => isBq(p) && p.scope_id === b.boq_id) && boqRollup(b).bakp <= 0 && boqRollup(b).klaim <= 0);
+  if (!confirmBox("Tambahkan " + baru.length + " baris BOQ sesuai Weekly Report (1.1 – 4.2)?" +
+    (lama.length ? "\n\n" + lama.length + " baris lama yang qty kontraknya 0 (" + lama.map(b => b.boq_code).join(", ") +
+      ") akan dinonaktifkan — tidak dihapus." : ""))) return;
+  baru.forEach(r => DB.boq.push({ boq_id: uid("BQ"), boq_code: r[0], description: r[1], unit: r[3], contract_qty: r[2],
+    unit_price: 0, palda_price: 0, category: r[4], active: true, revision: "R0", notes: "Sesuai Weekly Report WR-HBM-001-IX-2026" }));
+  lama.forEach(b => { b.active = false; });
+  perbaruiBoqLapangan();
+  audit("CREATE", "04_BOQ_MASTER", "-", "", baru.length + " baris BOQ sesuai Weekly Report");
+  save(); render(); toast(baru.length + " baris BOQ ditambahkan. Harga satuan isi sendiri bila perlu.", "ok");
+}
+
+/* ---------- AKUMULASI PROGRES BOQ ---------- */
+function petaDailyMap() { const m = {}; DB.dailies.forEach(d => { m[d.daily_id] = d; }); return m; }
+function angkaBq(v) { const c = String(v == null ? "" : v).replace(",", ".").match(/\d+(?:\.\d+)?/); return c ? parseFloat(c[0]) : 0; }
+const fqBq = v => { v = nz(v); return fmt(v, Math.abs(v - Math.round(v)) < 1e-9 ? 0 : 2); };
+/* Volume sebelum laporan ini (semua laporan lain yang tidak dikembalikan, s/d tanggal laporan). */
+function bqSebelum(d, dm) {
+  const out = {};
+  DB.progress.forEach(p => {
+    if (!isBq(p) || p.daily_id === d.daily_id) return;
+    const x = dm[p.daily_id];
+    if (!x || x.status === "REJECTED" || x.report_date > d.report_date) return;
+    out[p.scope_id] = (out[p.scope_id] || 0) + nz(p.actual_qty);
+  });
+  return out;
+}
+function bqAkumulasi(boq_id, sampai) {
+  const dm = petaDailyMap();
+  return DB.progress.reduce((a, p) => {
+    if (!isBq(p) || p.scope_id !== boq_id) return a;
+    const x = dm[p.daily_id];
+    return (!x || x.status === "REJECTED" || (sampai && x.report_date > sampai)) ? a : a + nz(p.actual_qty);
+  }, 0);
+}
+function adaBoqHarian(d) { return Object.keys((d && d.boq) || {}).some(k => angkaBq(d.boq[k]) > 0); }
+function grupBoq(L) {
+  const g = [];
+  L.forEach(b => {
+    const nama = b.category || "LAIN-LAIN", no = String(b.boq_code).split(/[.\-]/)[0];
+    let G = g.find(x => x.nama === nama);
+    if (!G) { G = { nama, no, rows: [] }; g.push(G); }
+    G.rows.push(b);
+  });
+  return g;
+}
+
+/* ---------- KARTU INPUT DI LAPORAN HARIAN ---------- */
+function htmlBoqHarian(d) {
+  const L = boqLapangan();
+  const kepala = `<h3>Progress Status Record <span class="tiny muted">tabel no. 5 Weekly Report — isi volume yang dikerjakan HARI INI</span>
+    ${L.length ? `<button class="btn sm" id="bqAuto">Isi otomatis dari pekerjaan coating</button>` : ""}</h3>`;
+  if (!L.length) return `<div class="card" data-lk="2">${kepala}<div class="body"><div class="note warn">Daftar BOQ belum ada di perangkat ini.
+    ${isPC() ? `Buka menu <b>BOQ &amp; Plafon</b> lalu tekan <b>Isi BOQ sesuai Weekly Report</b>.` : `Minta Project Control mengisi BOQ, lalu tekan Sinkronkan.`}</div></div></div>`;
+  d.boq = d.boq || {};
+  const prev = bqSebelum(d, petaDailyMap());
+  return `<div class="card" data-lk="2">${kepala}<div class="body">
+    <div class="note">Kolom <b>Hari ini</b> diisi volume yang dikerjakan pada tanggal laporan ini saja. <b>Sebelumnya</b>, <b>Accum</b>,
+      <b>Remain</b> dan <b>%</b> dihitung sendiri dan langsung tersambung ke Weekly &amp; Monthly Report.
+      Item Lot / Days (mis. 1.4 safety man) cukup diisi di <b>satu</b> laporan per hari supaya tidak terhitung dobel.</div>
+    <div class="tw mt8"><table class="bqtab"><thead><tr><th>No</th><th>Description</th><th class="n">Q'ty</th><th>UOM</th>
+      <th class="n">Sebelumnya</th><th class="n">Hari ini</th><th class="n">Accum</th><th class="n">Remain</th><th class="n">%</th></tr></thead>
+    <tbody>${grupBoq(L).map(G => `<tr class="g"><td>${esc(G.no)}</td><td colspan="8">${esc(G.nama)}</td></tr>` + G.rows.map(b => `<tr>
+      <td class="tiny">${esc(b.boq_code)}</td><td class="tiny">${esc(b.description)}</td>
+      <td class="n tiny">${fqBq(b.contract_qty)}</td><td class="tiny">${esc(b.unit)}</td>
+      <td class="n tiny">${fqBq(prev[b.boq_id] || 0)}</td>
+      <td class="n"><input type="text" inputmode="decimal" autocomplete="off" data-bq="${esc(b.boq_id)}"
+        value="${esc(String(d.boq[b.boq_id] == null ? "" : d.boq[b.boq_id]).replace(".", ","))}" placeholder="0" style="width:80px;text-align:right"></td>
+      <td class="n tiny" data-bqacc="${esc(b.boq_id)}"></td><td class="n tiny" data-bqsisa="${esc(b.boq_id)}"></td>
+      <td class="n tiny" data-bqpct="${esc(b.boq_id)}"></td></tr>`).join("")).join("")}</tbody></table></div>
+  </div></div>`;
+}
+function pasangBoqHarian(d) {
+  const L = boqLapangan(); if (!L.length) return;
+  d.boq = d.boq || {};
+  const prev = bqSebelum(d, petaDailyMap());
+  const sel = (a, id) => document.querySelector(`[${a}="${CSS.escape(id)}"]`);
+  const segar = id => {
+    const b = L.find(x => x.boq_id === id); if (!b) return;
+    const acc = nz(prev[id]) + angkaBq(d.boq[id]), q = nz(b.contract_qty), lebih = q > 0 && acc > q + 1e-9;
+    const a = sel("data-bqacc", id), s = sel("data-bqsisa", id), p = sel("data-bqpct", id);
+    if (a) { a.textContent = fqBq(acc); a.style.color = lebih ? "var(--red)" : ""; a.style.fontWeight = lebih ? "700" : ""; }
+    if (s) s.textContent = fqBq(Math.max(0, q - acc));
+    if (p) p.textContent = q > 0 ? fmt(acc / q * 100, 2) + "%" : "—";
+  };
+  $$("[data-bq]").forEach(el => {
+    el.oninput = () => { d.boq[el.dataset.bq] = el.value; segar(el.dataset.bq); };
+    el.onblur = () => {
+      const v = angkaBq(el.value);
+      if (v > 0) { d.boq[el.dataset.bq] = v; el.value = String(v).replace(".", ","); }
+      else { delete d.boq[el.dataset.bq]; el.value = ""; }
+      segar(el.dataset.bq);
+      const b = L.find(x => x.boq_id === el.dataset.bq);
+      if (b && nz(b.contract_qty) > 0 && nz(prev[b.boq_id]) + v > nz(b.contract_qty) + 1e-9)
+        toast("BOQ " + b.boq_code + ": akumulasi melebihi Q'ty kontrak. Periksa lagi angkanya.", "err");
+    };
+  });
+  L.forEach(b => segar(b.boq_id));
+  if ($("#bqAuto")) $("#bqAuto").onclick = () => {
+    const n = isiBoqOtomatis(d, L);
+    $$("[data-bq]").forEach(el => { const v = d.boq[el.dataset.bq]; el.value = v ? String(v).replace(".", ",") : ""; segar(el.dataset.bq); });
+    toast(n ? n + " baris BOQ terisi dari pekerjaan coating & manpower. Periksa sebelum menyimpan."
+      : "Belum ada pekerjaan coating / safety man hari ini yang bisa dipindahkan ke BOQ.", n ? "ok" : "err");
+  };
+}
+/* Isi BOQ m² dari plat/luas coating hari ini, dan item Days safety man dari manpower. */
+function isiBoqOtomatis(d, L) {
+  const TH = tahapAktif(), t0 = TH[0] ? TH[0].stage_id : "";
+  const vol = prVol(d.progress || []);
+  const blast = vol.filter(p => p.stage_id === t0).reduce((a, p) => a + nz(p.actual_qty), 0);
+  const cat = vol.filter(p => p.stage_id !== t0).reduce((a, p) => a + nz(p.actual_qty), 0);
+  const adaSm = (d.manpower || []).some(m => /safety\s*man/i.test(m.category || "") && (String(m.notes || "").trim() || nz(m.worker_count) > 1));
+  const dm = petaDailyMap();
+  const lainHariIni = id => DB.progress.some(p => isBq(p) && p.scope_id === id && p.daily_id !== d.daily_id &&
+    dm[p.daily_id] && dm[p.daily_id].report_date === d.report_date && dm[p.daily_id].status !== "REJECTED");
+  let n = 0;
+  L.forEach(b => {
+    const m2 = /^m\s*2$|m²/i.test(String(b.unit).trim()), grp = String(b.category || "");
+    let v = null;
+    if (m2 && /abrasive\s*blast|blasting/i.test(b.description) && !/verifikasi|tkdn/i.test(grp)) v = blast;
+    else if (m2 && /perlayer|primer|finish/i.test(b.description) && !/tangga|support|bordes/i.test(b.description)) v = cat;
+    else if (/day/i.test(b.unit) && /safety\s*man/i.test(b.description)) v = adaSm && !lainHariIni(b.boq_id) ? 1 : 0;
+    if (v !== null && v > 0) { d.boq[b.boq_id] = Math.round(v * 100) / 100; n++; }
+  });
+  return n;
+}
+/* Tabel BOQ di layar detail & review laporan. */
+function htmlBoqLaporan(id) {
+  const B = prBq(DB.progress.filter(p => p.daily_id === id));
+  if (!B.length) return "";
+  return `<h4 class="mt16">Progress Status Record (BOQ) hari ini</h4><div class="tw"><table><thead><tr><th>No</th><th>Description</th>
+    <th class="n">Volume</th><th>UOM</th></tr></thead><tbody>${B.slice().sort((a, b) => bandingKode(a.work_package, b.work_package)).map(p =>
+    `<tr><td>${esc(p.work_package || "")}</td><td class="tiny">${esc(p.activity || "")}</td><td class="n">${fqBq(p.actual_qty)}</td><td>${esc(p.unit || "")}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+/* ---------- RENCANA KERJA BESOK (NEXT DAY PLANNING) ---------- */
+function rencanaBesokTersimpan(tgl, tank_id) {
+  if (!tgl || !tank_id) return "";
+  const I = isianLaporan(periodeLaporan("H", tgl));
+  return ((I.renc_tanki || {})[tank_id]) || "";
+}
+function simpanRencanaBesok(tgl, tank_id, teks) {
+  if (!tgl || !tank_id) return;
+  teks = String(teks || "").trim();
+  const P = periodeLaporan("H", tgl), I = isianLaporan(P);
+  I.renc_tanki = I.renc_tanki || {};
+  if ((I.renc_tanki[tank_id] || "") === teks) return;
+  if (teks) I.renc_tanki[tank_id] = teks; else delete I.renc_tanki[tank_id];
+  simpanIsianLaporan(P, I);
+}
+
+/* ---------- FOTO & VIDEO ---------- */
+const VIDEO_MAKS_MB = 20;
+function htmlMedia(p, o) {
+  o = o || {};
+  const vid = isVideo(p);
+  const isi = vid ? `<a class="vid" href="${esc(p.file_url)}" target="_blank" rel="noopener"><span>▶</span>Putar video</a>`
+    : `<img src="${p.file_url}" alt="" loading="lazy">`;
+  return `<div class="ph"><span class="tag">${esc(vid ? "Video" + (fotoTahap(p) && tahapOf(fotoTahap(p)) ? " · " + tahapOf(fotoTahap(p)).stage_name : "") : fotoLabel(p))}</span>
+    ${o.hapus ? `<button class="x" ${o.hapus} title="Hapus">✕</button>` : ""}
+    ${o.ubah ? `<button class="ed" ${o.ubah} title="Ubah jenis / tahap / keterangan">✎</button>` : ""}
+    ${isi}
+    ${!vid && o.unduh ? `<a class="dl" download="${esc(o.unduh)}" href="${p.file_url}">Unduh</a>` : ""}
+    <div class="cap">${esc(fotoCap(p) || "—")}</div></div>`;
+}
+function editMedia(p, onDone, onBatal) {
+  const vid = isVideo(p);
+  openModal(vid ? "Ubah video" : "Ubah foto", `
+    ${vid ? `<label class="f"><span>Tautan video</span><input type="text" id="emUrl" value="${esc(p.file_url)}"></label>`
+      : `<img src="${p.file_url}" style="max-width:100%;max-height:260px;border-radius:6px;display:block;margin:0 auto 12px">`}
+    <div class="fg c2">
+      ${vid ? "" : `<label class="f"><span>Jenis foto</span><select id="emType">${PHOTO_TYPES.map(x =>
+        `<option value="${x[0]}" ${p.photo_type === x[0] ? "selected" : ""}>${x[1]}</option>`).join("")}</select></label>`}
+      <label class="f"><span>Tahap pekerjaan</span><select id="emTahap"><option value="">— umum —</option>${tahapAktif().map(t =>
+        `<option value="${t.stage_id}" ${fotoTahap(p) === t.stage_id ? "selected" : ""}>${esc(t.stage_name)}</option>`).join("")}</select></label>
+    </div>
+    <label class="f"><span>Keterangan</span><input type="text" id="emCap" value="${esc(fotoCap(p))}"></label>
+    <div class="tiny muted">Untuk mengganti gambarnya: hapus foto ini lalu tambahkan foto yang benar.</div>`,
+    `<button class="btn" id="emBatal">Batal</button><button class="btn p" id="emSimpan">Simpan</button>`);
+  $("#emBatal").onclick = () => { closeModal(); if (onBatal) onBatal(); };
+  $("#emSimpan").onclick = () => {
+    const v = { photo_type: vid ? "VIDEO" : $("#emType").value, caption: tulisFotoCap($("#emTahap").value, $("#emCap").value.trim()), file_url: p.file_url };
+    if (vid) {
+      const u = $("#emUrl").value.trim();
+      if (!/^https?:\/\//i.test(u)) return toast("Tautan video harus diawali http:// atau https://", "err");
+      v.file_url = u;
+    }
+    closeModal(); onDone(v);
+  };
+}
+/* Video diunggah langsung ke Drive (tidak disimpan di HP karena terlalu besar). */
+function unggahVideo(file, selesai) {
+  if (!file) return;
+  if (!/^video\//.test(file.type || "")) return toast("Berkas yang dipilih bukan video.", "err");
+  const mb = file.size / 1048576;
+  if (mb > VIDEO_MAKS_MB) return toast("Video " + fmt(mb, 1) + " MB melebihi batas " + VIDEO_MAKS_MB +
+    " MB. Rekam lebih pendek, atau unggah sendiri ke Drive lalu pakai Tempel tautan video.", "err");
+  if (!syncSiap()) return toast("Video langsung diunggah ke Drive, jadi perangkat harus tersambung ke server. Atau pakai Tempel tautan video.", "err");
+  const r = new FileReader();
+  r.onerror = () => toast("Video gagal dibaca.", "err");
+  r.onload = async () => {
+    toast("Mengunggah video " + fmt(mb, 1) + " MB… jangan tutup aplikasi.");
+    try {
+      const h = await serverCall({ action: "dokumen", nama: file.name || "video.mp4", data: r.result }, 300000);
+      if (!h || !h.ok || !h.file_url) throw new Error((h && h.pesan) || "ditolak server");
+      selesai(h.file_url);
+      toast("Video tersimpan di Drive.", "ok");
+    } catch (e) {
+      toast("Unggah video gagal: " + e.message + ". Unggah sendiri ke Drive lalu pakai Tempel tautan video.", "err");
+    }
+  };
+  r.readAsDataURL(file);
+}
+function mintaTautanVideo() {
+  const u = window.prompt("Tempel tautan video (Google Drive / YouTube):", "");
+  if (!u) return "";
+  if (!/^https?:\/\//i.test(u.trim())) { toast("Tautan harus diawali http:// atau https://", "err"); return ""; }
+  return u.trim();
+}
+function bolehKelolaMedia(d) {
+  if (!d || !S.user) return false;
+  if (isPC() || can("daily_edit_all")) return true;
+  return can("daily_input") && d.status !== "APPROVED" && (d.admin_user_id === S.user.user_id || d.status === "REJECTED");
+}
+function tambahMediaLaporan(d, tipe, url, st, cap) {
+  const w = bamkOf(d.bamk_id);
+  DB.photos.push({ photo_id: uid("PH"), daily_id: d.daily_id, bamk_id: d.bamk_id, tank_id: d.tank_id || (w ? w.tank_id : ""),
+    photo_type: tipe, file_url: url, caption: tulisFotoCap(st, cap), taken_at: new Date().toISOString(), uploaded_by: S.user.user_id });
+}
+function kelolaMediaLaporan(id) {
+  const d = byId(DB.dailies, "daily_id", id); if (!d) return;
+  if (!bolehKelolaMedia(d)) return toast("Foto laporan yang sudah disetujui hanya bisa diubah Project Control.", "err");
+  const L = DB.photos.filter(p => p.daily_id === id);
+  openModal("Foto & video — " + tankNo(d.tank_id) + " · " + dateID(d.report_date), `
+    <div class="note">Ketuk <b>✎</b> untuk mengubah jenis, tahap atau keterangan; <b>✕</b> untuk menghapus.
+      Setiap perubahan tercatat di Log Audit dan ikut tersinkron ke perangkat lain.</div>
+    <div class="row mt12">
+      <label class="f" style="min-width:140px;margin-bottom:0"><span>Jenis foto baru</span><select id="kmType">${PHOTO_TYPES.map(p => `<option value="${p[0]}">${p[1]}</option>`).join("")}</select></label>
+      <label class="f" style="min-width:160px;margin-bottom:0"><span>Tahap</span><select id="kmTahap"><option value="">— umum —</option>${tahapAktif().map(t => `<option value="${t.stage_id}">${esc(t.stage_name)}</option>`).join("")}</select></label>
+      <label class="f grow" style="margin-bottom:0"><span>Keterangan</span><input type="text" id="kmCap"></label>
+    </div>
+    <div class="row mt8">
+      <label class="btn a">+ Foto<input type="file" id="kmFoto" accept="image/*" capture="environment" multiple hidden></label>
+      <label class="btn">+ Video<input type="file" id="kmVid" accept="video/*" capture="environment" hidden></label>
+      <button class="btn" id="kmLink">+ Tempel tautan video</button>
+    </div>
+    <div class="photos mt12">${L.map(p => htmlMedia(p, { hapus: `data-kmx="${p.photo_id}"`, ubah: `data-kme="${p.photo_id}"` })).join("")
+      || `<div class="empty" style="grid-column:1/-1">Belum ada foto atau video.</div>`}</div>`,
+    `<button class="btn" id="kmBack">Kembali ke laporan</button>`, true);
+  $("#kmBack").onclick = () => showDaily(id);
+  $$("[data-kmx]").forEach(b => b.onclick = () => {
+    if (!confirmBox("Hapus foto/video ini dari laporan? Tindakan ini tercatat di Log Audit.")) return;
+    const pid = b.dataset.kmx;
+    DB.photos = DB.photos.filter(p => p.photo_id !== pid);
+    tandaiHapus("photos", pid);
+    audit("DELETE", "12_PHOTO", pid, "", "dihapus dari laporan " + id);
+    save(); kelolaMediaLaporan(id); toast("Dihapus.", "ok");
+  });
+  $$("[data-kme]").forEach(b => b.onclick = () => {
+    const pid = b.dataset.kme, p = byId(DB.photos, "photo_id", pid); if (!p) return;
+    editMedia(p, v => {
+      const q = byId(DB.photos, "photo_id", pid);
+      if (!q) { toast("Foto ini sudah tidak ada — mungkin dihapus dari perangkat lain.", "err"); return kelolaMediaLaporan(id); }
+      const lama = q.photo_type + " · " + fotoCap(q);
+      Object.assign(q, v);
+      audit("UPDATE", "12_PHOTO", pid, lama, q.photo_type + " · " + fotoCap(q));
+      save(); kelolaMediaLaporan(id); toast("Perubahan tersimpan.", "ok");
+    }, () => kelolaMediaLaporan(id));
+  });
+  $("#kmFoto").onchange = e => {
+    const fs = Array.from(e.target.files || []); e.target.value = "";
+    const tipe = $("#kmType").value, st = $("#kmTahap").value, cap = $("#kmCap").value;
+    let n = 0;
+    fs.forEach(f => shrink(f, url => {
+      tambahMediaLaporan(d, tipe, url, st, cap); n++;
+      if (n === fs.length) { audit("CREATE", "12_PHOTO", id, "", n + " foto ditambahkan"); save(); kelolaMediaLaporan(id); toast(n + " foto ditambahkan.", "ok"); }
+    }));
+  };
+  $("#kmVid").onchange = e => {
+    const f = e.target.files[0]; e.target.value = "";
+    const st = $("#kmTahap").value, cap = $("#kmCap").value;
+    unggahVideo(f, url => { tambahMediaLaporan(d, "VIDEO", url, st, cap); audit("CREATE", "12_PHOTO", id, "", "video ditambahkan"); save(); kelolaMediaLaporan(id); });
+  };
+  $("#kmLink").onclick = () => {
+    const u = mintaTautanVideo(); if (!u) return;
+    tambahMediaLaporan(d, "VIDEO", u, $("#kmTahap").value, $("#kmCap").value);
+    audit("CREATE", "12_PHOTO", id, "", "tautan video ditambahkan"); save(); kelolaMediaLaporan(id);
+  };
+}
+
+/* ---------- HAK AKSES: LAYAR PENGATURAN ---------- */
+function bolehHalamanSet(v, set) { return (IZIN_HALAMAN[v] || []).some(p => set.has(p)); }
+function halamanDariSet(set) {
+  const out = [];
+  NAV.forEach(n => {
+    if (!n.v || !set.has(n.p) || (n.hideIf && set.has(n.hideIf)) || !bolehHalamanSet(n.v, set)) return;
+    if (out.indexOf(n.t) < 0) out.push(n.t);
+  });
+  return out;
+}
+function setDraftHak(dr, u) {
+  const s = new Set(dr.roles[u.role] || []), ov = dr.users[u.user_id] || {};
+  (ov.izinkan || []).forEach(x => s.add(x)); (ov.tolak || []).forEach(x => s.delete(x));
+  if (u.role === "PROJECT_CONTROL") IZIN_KUNCI_PC.forEach(x => s.add(x));
+  return s;
+}
+function htmlHakAkses() {
+  if (!can("users")) return `<div class="empty"><b>Tidak berwenang</b>Hak akses hanya diatur oleh Project Control HBM.</div>`;
+  const H = hakAkses(), roles = Object.keys(ROLE_LABEL);
+  if (!S.f.hk) S.f.hk = { roles: {}, users: JSON.parse(JSON.stringify(H.users || {})) };
+  const dr = S.f.hk;
+  roles.forEach(r => { if (!dr.roles[r]) dr.roles[r] = izinPeran(r).slice(); });
+  const kunci = (r, p) => r === "PROJECT_CONTROL" && IZIN_KUNCI_PC.indexOf(p) >= 0;
+  const users = DB.users.slice().sort((a, b) => String(a.user_name).localeCompare(String(b.user_name)));
+  const uid0 = S.f.hkUser && byId(DB.users, "user_id", S.f.hkUser) ? S.f.hkUser : (users[0] || {}).user_id;
+  const u = byId(DB.users, "user_id", uid0);
+  const ov = (u && dr.users[u.user_id]) || { izinkan: [], tolak: [] };
+  const dariPeran = u ? new Set(dr.roles[u.role] || []) : new Set();
+  const efektif = u ? setDraftHak(dr, u) : new Set();
+  return `<div class="note">Centang izin untuk tiap peran. Menu dan halaman mengikuti izin ini, dan <b>penjaga halaman</b> menolak
+      setiap jalan pintas (tombol drill-down, tautan peringatan, tombol di kartu) bila izinnya tidak ada.
+      Izin <b>Pengaturan</b>, <b>Pengguna &amp; hak akses</b> dan <b>Master data</b> untuk Project Control dikunci supaya Anda tidak terkunci keluar.
+      Perubahan ikut tersinkron ke semua perangkat.</div>
+    ${H.oleh ? `<div class="tiny muted mt8">Terakhir diubah ${esc(H.oleh)} · ${esc(waktuLokal(H.diubah))}</div>` : `<div class="tiny muted mt8">Masih memakai izin bawaan aplikasi.</div>`}
+    <h4 class="mt16">Izin per peran</h4>
+    <div class="tw mt8"><table class="hkm"><thead><tr><th style="text-align:left">Izin</th>${roles.map(r => `<th>${esc(ROLE_LABEL[r])}</th>`).join("")}</tr></thead>
+    <tbody>${IZIN_DAFTAR.map(g => `<tr class="grp"><td colspan="${roles.length + 1}"><b>${esc(g[0])}</b></td></tr>` + g[1].map(([p, l]) => `<tr>
+      <td>${esc(l)} <span class="tiny muted">${esc(p)}</span></td>
+      ${roles.map(r => `<td class="c"><input type="checkbox" data-hr="${r}" data-hp="${p}" ${dr.roles[r].indexOf(p) >= 0 || kunci(r, p) ? "checked" : ""} ${kunci(r, p) ? "disabled" : ""}></td>`).join("")}
+    </tr>`).join("")).join("")}</tbody></table></div>
+
+    <h4 class="mt16">Pengecualian per pengguna</h4>
+    <div class="row mt8"><label class="f" style="min-width:260px;margin:0"><span>Pengguna</span><select id="hkUser">${users.map(x =>
+      `<option value="${x.user_id}" ${x.user_id === uid0 ? "selected" : ""}>${esc(x.user_name)} — ${esc(ROLE_LABEL[x.role] || x.role)}</option>`).join("")}</select></label></div>
+    ${u ? `<div class="tw mt8"><table class="hkm"><thead><tr><th style="text-align:left">Izin</th><th>Dari peran</th><th>Untuk ${esc(u.user_name)}</th></tr></thead>
+    <tbody>${IZIN_DAFTAR.map(g => `<tr class="grp"><td colspan="3"><b>${esc(g[0])}</b></td></tr>` + g[1].map(([p, l]) => {
+      const mode = (ov.izinkan || []).indexOf(p) >= 0 ? "izinkan" : (ov.tolak || []).indexOf(p) >= 0 ? "tolak" : "";
+      const k = kunci(u.role, p);
+      return `<tr><td>${esc(l)}</td><td class="c">${dariPeran.has(p) || k ? "✓" : "—"}</td>
+        <td class="c"><select data-hu="${p}" ${k ? "disabled" : ""}>
+          <option value="" ${mode === "" ? "selected" : ""}>Ikut peran</option>
+          <option value="izinkan" ${mode === "izinkan" ? "selected" : ""}>Izinkan</option>
+          <option value="tolak" ${mode === "tolak" ? "selected" : ""}>Tolak</option></select></td></tr>`;
+    }).join("")).join("")}</tbody></table></div>
+    <div class="note mt12"><b>Halaman yang bisa dibuka ${esc(u.user_name)}:</b> ${esc(halamanDariSet(efektif).join(" · ") || "tidak ada")}</div>` : ""}
+    <div class="row mt16">
+      <button class="btn p" id="hkSave">Simpan hak akses</button>
+      <button class="btn" id="hkBatal">Batalkan perubahan</button>
+      <button class="btn danger" id="hkReset">Kembalikan izin bawaan</button>
+    </div>
+    <div class="tiny muted mt12">Catatan: aplikasi ini berjalan di peramban, jadi penjaga di sini menutup semua jalan dari layar aplikasi.
+      Data komersial tetap disaring server (Code.gs) berdasarkan PIN, sehingga tidak terkirim ke HP yang tidak berhak.</div>`;
+}
+function pasangHakAkses() {
+  if (!can("users") || !S.f.hk) return;
+  const dr = S.f.hk;
+  $$("[data-hr]").forEach(c => c.onchange = () => {
+    const L = dr.roles[c.dataset.hr], p = c.dataset.hp, i = L.indexOf(p);
+    if (c.checked && i < 0) L.push(p); if (!c.checked && i >= 0) L.splice(i, 1);
+  });
+  if ($("#hkUser")) $("#hkUser").onchange = e => { S.f.hkUser = e.target.value; render(); };
+  $$("[data-hu]").forEach(s => s.onchange = () => {
+    const uid = $("#hkUser").value, p = s.dataset.hu;
+    const o = dr.users[uid] = dr.users[uid] || { izinkan: [], tolak: [] };
+    o.izinkan = (o.izinkan || []).filter(x => x !== p); o.tolak = (o.tolak || []).filter(x => x !== p);
+    if (s.value === "izinkan") o.izinkan.push(p); if (s.value === "tolak") o.tolak.push(p);
+    render();
+  });
+  $("#hkBatal").onclick = () => { S.f.hk = null; render(); toast("Perubahan dibatalkan.", "ok"); };
+  $("#hkReset").onclick = () => {
+    if (!confirmBox("Kembalikan seluruh hak akses ke bawaan aplikasi? Pengecualian per pengguna ikut dihapus.")) return;
+    simpanHakAkses({}); S.f.hk = null; render(); toast("Hak akses kembali ke bawaan.", "ok");
+  };
+  $("#hkSave").onclick = () => {
+    const users = {};
+    Object.keys(dr.users).forEach(k => {
+      const o = dr.users[k] || {};
+      if (byId(DB.users, "user_id", k) && ((o.izinkan || []).length || (o.tolak || []).length))
+        users[k] = { izinkan: (o.izinkan || []).slice(), tolak: (o.tolak || []).slice() };
+    });
+    const roles = {};
+    Object.keys(dr.roles).forEach(r => { roles[r] = dr.roles[r].slice(); });
+    IZIN_KUNCI_PC.forEach(p => { if (roles.PROJECT_CONTROL.indexOf(p) < 0) roles.PROJECT_CONTROL.push(p); });
+    simpanHakAkses({ roles, users });
+    S.f.hk = null; render(); toast("Hak akses tersimpan. Perangkat lain mengikuti setelah sinkron.", "ok");
+  };
+}
+function simpanHakAkses(o) {
+  let d = (DB.documents || []).find(x => x.document_type === HAK_DOC);
+  if (!d) {
+    d = { document_id: uid("DC"), bamk_id: "", document_type: HAK_DOC, document_no: "HAK AKSES PENGGUNA",
+      document_date: today(), file_url: "", required_for_billing: false, status: "AVAILABLE", remarks: "" };
+    DB.documents.push(d);
+  }
+  o.diubah = new Date().toISOString(); o.oleh = S.user.user_name; o.oleh_id = S.user.user_id;
+  d.remarks = bungkusJson("HAK", o); d.document_date = today();
+  audit("UPDATE", "23_HAK_AKSES", d.document_id, "", Object.keys(o.roles || {}).length ? "hak akses diubah" : "kembali ke bawaan");
+  save();
+}
+
+/* ---------- PENJAGA HALAMAN ---------- */
+const IZIN_HALAMAN = {
+  dashboard: ["dash", "dash_view"], "tanks-status": ["dash", "dash_view", "tanks_view"],
+  kendali: ["kendali"], scurve: ["scurve", "scurve_view"], notif: ["notif"],
+  "admin-home": ["admin_home"], "daily-new": ["daily_input"], "daily-list": ["daily_input", "daily_all"],
+  "admin-peta": ["admin_peta"], "admin-ukur": ["admin_ukur"], "admin-panduan": ["admin_panduan"],
+  jadwal: ["jadwal_view"], hse: ["hse_view"], "lap-proyek": ["lap_view"],
+  review: ["review"], acceptance: ["accept"], billable: ["billable"],
+  boq: ["boq", "boq_view"], billing: ["billing", "billing_view"], finance: ["finance", "finance_view"],
+  documents: ["documents"], issues: ["issues", "issues_view"], meeting: ["meeting"], reports: ["reports"],
+  master: ["master"], settings: ["settings"], audit: ["audit"], pesan: ["pesan"], sync: ["sync_panel"]
+};
+/* Halaman yang tidak terdaftar di peta ini ditolak — bawaannya TOLAK, bukan izinkan. */
+function bolehHalaman(v) { return !!S.user && (IZIN_HALAMAN[v] || []).some(can); }
+function halamanPertama() {
+  if (!S.user) return "";
+  if (can("dash") && bolehHalaman("dashboard")) return "dashboard";
+  if (bolehHalaman("admin-home")) return "admin-home";
+  const n = NAV.find(x => x.v && can(x.p) && !(x.hideIf && can(x.hideIf)) && bolehHalaman(x.v));
+  if (n) return n.v;
+  return Object.keys(IZIN_HALAMAN).find(bolehHalaman) || "";
+}
+/* Fungsi yang membuka jendela atau mengubah data juga dijaga, supaya tidak
+   bisa dipanggil dari tombol di halaman lain yang kebetulan masih terbuka. */
+const JAGA_FUNGSI = {
+  masterModal: ["master"], hapusMaster: ["master"], reviewModal: ["review"], hapusLaporan: ["master"],
+  billModal: ["billing"], tahapTagihanModal: ["billing"], docModal: ["documents"], issueModal: ["issues"],
+  jadwalModal: ["jadwal_view"], petaModal: ["master", "admin_ukur"],
+  petaLihatModal: ["master", "admin_peta", "dash", "dash_view"],
+  hseModal: ["hse_view"], tbmModal: ["hse_view"], fotoHseModal: ["hse_input"],
+  isianLaporanModal: ["lap_edit"], setelanLaporanModal: ["lap_edit"],
+  cetakLaporanProyek: ["lap_view", "daily_input", "daily_all"], unduhExcelLaporan: ["lap_view"],
+  laporanKemajuanPengawas: ["reports"], galeriTanki: ["dash", "dash_view"],
+  cetakJadwal: ["jadwal_view", "master"], cetakPegangan: ["jadwal_view", "master"],
+  cetakPetaPanel: ["master", "admin_peta", "admin_ukur", "admin_home"],
+  loadDraft: ["daily_input", "daily_edit_all"], commitDaily: ["daily_input", "daily_edit_all"],
+  showDaily: ["daily_input", "daily_all", "review"], kelolaMediaLaporan: ["daily_input", "daily_edit_all", "review"],
+  isiBoqWR: ["boq", "master"], userModal: ["users"]
+};
+const JAGA_BARIS = {
+  loadDraft: id => {
+    const d = byId(DB.dailies, "daily_id", id); if (!d) return "";
+    if (d.status === "APPROVED" && !can("review") && !can("daily_edit_all")) return "Laporan yang sudah disetujui hanya bisa diubah Project Control.";
+    if (!can("daily_all") && !can("daily_edit_all") && d.admin_user_id && d.admin_user_id !== S.user.user_id && d.status !== "REJECTED")
+      return "Laporan ini milik pengguna lain.";
+    return "";
+  },
+  showDaily: id => {
+    const d = byId(DB.dailies, "daily_id", id); if (!d) return "";
+    if (!can("daily_all") && !can("review") && d.admin_user_id && d.admin_user_id !== S.user.user_id && d.status !== "REJECTED")
+      return "Laporan ini milik pengguna lain.";
+    return "";
+  }
+};
+Object.keys(JAGA_FUNGSI).forEach(nm => {
+  const asli = window[nm];
+  if (typeof asli !== "function") return;
+  const perlu = JAGA_FUNGSI[nm];
+  window[nm] = function () {
+    if (!S.user || !perlu.some(can)) { toast("Akses ditolak: peran Anda tidak diizinkan membuka ini.", "err"); return; }
+    const cek = JAGA_BARIS[nm] ? JAGA_BARIS[nm].apply(this, arguments) : "";
+    if (cek) { toast(cek, "err"); return; }
+    return asli.apply(this, arguments);
+  };
+});
+
+/* ---------- UNDUH EXCEL ---------- */
+function unduhExcelLaporan(P) {
+  const M = LAP_MODE[P.mode], no = isianLaporan(P).no || nomorLaporanAuto(P);
+  const html = laporanProyekHtml(P, { excel: true });
+  const isi = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${esc(M[2])}</x:Name>
+    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+    <style>${WR_CSS} .wr td,.wr th{mso-number-format:"\\@";}</style></head><body>${html}</body></html>`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + isi], { type: "application/vnd.ms-excel" }));
+  a.download = no.replace(/[\\/:*?"<>|]/g, "-") + ".xls";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("Berkas Excel diunduh: " + a.download, "ok");
+}
+
+document.head.insertAdjacentHTML("beforeend", `<style>
+  .ph .ed{position:absolute;top:4px;right:30px;background:rgba(14,34,51,.9);color:#fff;border:none;border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:12px;line-height:1}
+  .ph .vid{display:flex;flex-direction:column;align-items:center;justify-content:center;height:88px;background:#0E2233;color:#fff;text-decoration:none;font-size:11px;gap:2px}
+  .ph .vid span{font-size:24px;line-height:1}
+  table.bqtab tr.g td{background:#FFF7C2;font-weight:700}
+  table.bqtab td{vertical-align:middle}
+  table.hkm td.c,table.hkm th{text-align:center}
+  table.hkm tr.grp td{background:#F3F6F8}
+  table.hkm input[type=checkbox]{width:17px;height:17px}
+</style>`);
+
 const GUARD = {
   dashboard: ["dash", "dash_view"], "tanks-status": ["dash", "dash_view"],
   "daily-new": ["daily_input"], "daily-list": ["daily_input", "daily_all"],
@@ -11566,6 +12341,84 @@ Object.keys(GUARD).forEach(k => {
 /* ============================================================
    START
    ============================================================ */
+/* ============================================================
+   V3.5 — PEMBARUAN OTOMATIS
+   Setelah index.html baru diunggah ke GitHub, setiap perangkat yang
+   aplikasinya sedang terbuka memeriksa sendiri versi di server:
+     · saat aplikasi dibuka, tiap 5 menit, dan saat kembali ke layar.
+   Bila versi di server berbeda, muncul pita "Versi baru tersedia".
+   Aplikasi memuat ulang sendiri dalam 15 detik — kecuali sedang mengisi
+   laporan / ada jendela terbuka, maka hanya diberi tombol Muat ulang.
+   Data tidak hilang: semuanya tersimpan di perangkat dan antrean
+   kiriman ikut terbawa setelah dimuat ulang.
+   ============================================================ */
+const UPD = { cek: null, hitung: null, versi: "" };
+function sedangMengisi() {
+  if (modalTerbuka()) return true;
+  if (S.view === "daily-new" && S.draft && (prVol(S.draft.progress || []).length || (S.draft.photos || []).length ||
+    (S.draft.kegiatan || []).length || adaBoqHarian(S.draft) || (S.draft.manpower || []).length)) return true;
+  return false;
+}
+function muatUlangVersi(v) {
+  try { sessionStorage.setItem("hbm_upd_ke", v); } catch (e) { }
+  try { kirimSaatTutup(); } catch (e) { }
+  /* Alamat dengan ?v= baru memaksa peramban & GitHub mengambil berkas terbaru, bukan salinan lama. */
+  location.replace(location.pathname + "?v=" + encodeURIComponent(v) + location.hash);
+}
+function pitaVersi(v) {
+  let p = document.getElementById("pitaVersi");
+  if (!p) {
+    p = document.createElement("div"); p.id = "pitaVersi";
+    p.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:10px;z-index:300;background:#0E2233;color:#fff;" +
+      "padding:10px 14px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;gap:10px;align-items:center;" +
+      "font-size:13px;max-width:94vw;flex-wrap:wrap;border-left:4px solid #D9902B";
+    document.body.appendChild(p);
+  }
+  const otomatis = !sedangMengisi();
+  p.innerHTML = `<span><b>Versi baru tersedia</b> (v${esc(v)}, sekarang v${esc(APP_VERSI)}).
+    <span id="pvTeks">${otomatis ? "Memuat ulang dalam <b id=\"pvDetik\">15</b> detik…" : "Simpan draft laporan Anda, lalu muat ulang."}</span></span>
+    <button class="btn a sm" id="pvGo">Muat ulang sekarang</button>${otomatis ? `<button class="btn sm" id="pvNanti">Nanti</button>` : ""}`;
+  $("#pvGo").onclick = () => muatUlangVersi(v);
+  if (UPD.hitung) { clearInterval(UPD.hitung); UPD.hitung = null; }
+  if (otomatis) {
+    let n = 15;
+    UPD.hitung = setInterval(() => {
+      n--; const e = document.getElementById("pvDetik"); if (e) e.textContent = n;
+      if (sedangMengisi()) { clearInterval(UPD.hitung); UPD.hitung = null; pitaVersi(v); return; }
+      if (n <= 0) { clearInterval(UPD.hitung); muatUlangVersi(v); }
+    }, 1000);
+    $("#pvNanti").onclick = () => { clearInterval(UPD.hitung); UPD.hitung = null; p.remove(); UPD.ditunda = Date.now(); };
+  }
+}
+async function cekVersiBaru() {
+  if (!/^https?:$/.test(location.protocol)) return;            /* dibuka dari berkas lokal: lewati */
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  if (UPD.ditunda && Date.now() - UPD.ditunda < 30 * 60 * 1000) return;
+  try {
+    const r = await fetch(location.pathname + "?cek=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const m = (await r.text()).match(/const APP_VERSI = "([^"]+)"/);
+    if (!m || m[1] === APP_VERSI) return;
+    /* Sudah dicoba dimuat ulang ke versi itu tapi yang datang masih versi lama
+       (salinan GitHub belum segar) — jangan berputar, coba lagi nanti. */
+    let ke = ""; try { ke = sessionStorage.getItem("hbm_upd_ke") || ""; } catch (e) { }
+    if (ke === m[1]) return;
+    UPD.versi = m[1];
+    pitaVersi(m[1]);
+  } catch (e) { /* jaringan putus: abaikan, dicoba lagi nanti */ }
+}
+(function pasangPembaruan() {
+  /* Bersihkan ?v= dari alamat setelah berhasil diperbarui. */
+  try {
+    if (sessionStorage.getItem("hbm_upd_ke") === APP_VERSI) sessionStorage.removeItem("hbm_upd_ke");
+    if (/[?&](v|cek)=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
+  } catch (e) { }
+  setTimeout(cekVersiBaru, 3000);
+  UPD.cek = setInterval(cekVersiBaru, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") cekVersiBaru(); });
+  window.addEventListener("online", cekVersiBaru);
+})();
+
 bangunSidik();
 initLogin();
 window.addEventListener("beforeunload", e => {
