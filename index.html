@@ -378,6 +378,45 @@ table.wk td:first-child,table.wk th:first-child{min-width:190px}
 .pplg .lg.hari{background:var(--c);border-color:var(--c)}
 .pplg .lg.selesai{background:var(--steel);border-color:var(--ink-3)}
 .pplg .lg.kunci{background:#E6EBEF}
+/* ---------- V3.3 — visual tanki, HSE & K3, laporan proyek ---------- */
+.tkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.tkv{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--paper);cursor:pointer;transition:box-shadow .15s}
+.tkv:hover{box-shadow:var(--sh)}
+.tkh{display:flex;align-items:center;gap:6px}.tkh b{font-size:15px}
+.tkisi{margin:6px 0}
+.modal svg[role=img]{max-width:440px;margin:0 auto}
+.tkisi svg,.tkmini svg,.modal svg[role=img]{width:100%;height:auto;display:block;border-radius:6px;background:linear-gradient(#E6EFF6,#F8FAFC)}
+.tkf{display:flex;justify-content:space-between;align-items:center;gap:6px;margin:4px 0}
+.tkleg{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px}
+.tkleg th{font-weight:600;color:var(--ink-3);text-align:right;padding:0 4px;font-size:10px;background:none;border:0}
+.tkleg td{padding:1px 4px;border:0;text-align:right;font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+.tkleg td:first-child{text-align:left;font-family:var(--sans);font-size:11px;color:var(--ink-2);white-space:nowrap}
+.tkleg td.pn{color:var(--teal);font-weight:700}.tkleg td.jl{color:var(--ink);font-weight:600}
+.tkleg tr.bf td{color:var(--ink-3)}
+.tkleg i{display:inline-block;width:11px;height:11px;border-radius:3px;border:1px solid rgba(0,0,0,.25);margin-right:6px;vertical-align:-1px}
+.tkleg tbody tr:hover{background:none}
+.tkmode{margin-left:auto;display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tkmode button{border:0;background:var(--paper);padding:4px 9px;font-size:11.5px;cursor:pointer;color:var(--ink-2)}
+.tkmode button.on{background:var(--navy);color:#fff}
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ba figure{margin:0;position:relative}
+.ba img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:5px;display:block}
+.ba figcaption{position:absolute;left:5px;top:5px;background:rgba(14,34,51,.82);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px}
+.ba .tg{font-size:10px;color:var(--ink-3);margin-top:2px}
+.ba .kosong{aspect-ratio:4/3;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:5px;font-size:10.5px;color:var(--ink-3);text-align:center;padding:8px}
+.ba .kosong b{color:var(--ink-2)}
+.tkinfo{display:flex;gap:14px;align-items:flex-start}.tkmini{width:190px;flex:none}
+@media(max-width:620px){.tkinfo{flex-direction:column}.tkmini{width:100%;max-width:260px}}
+i.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(0,0,0,.25)}
+.chkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:2px 10px;margin:4px 0 10px}
+.chkgrid .chk{font-size:12.5px}
+.hsetabs{flex-wrap:nowrap;overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:var(--r)}
+.hsetabs button{white-space:nowrap}
+.hsekpi .kpi .v{font-size:24px}
+.wrlayar{overflow-x:auto}.wrlayar .wr{min-width:720px;max-width:920px;margin:0 auto;padding:4px}
+label.pilihfoto{cursor:pointer;display:block}
+label.pilihfoto input{position:absolute;right:6px;top:6px;width:18px;height:18px;z-index:2}
+@media(max-width:860px){.grid.hsekpi{grid-template-columns:1fr 1fr;gap:8px}.grid.hsekpi .kpi{padding:10px 12px}.grid.hsekpi .kpi .v{font-size:20px}}
 </style>
 </head>
 <body>
@@ -463,7 +502,7 @@ table.wk td:first-child,table.wk th:first-child{min-width:190px}
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "3.2";
+const APP_VERSI = "3.3";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
 const CODEGS_VERSI = "2.3";
@@ -1329,20 +1368,26 @@ const S = { user: null, view: "dashboard", tab: null, draft: null, f: {} };
 /* ---------- ROLES ---------- */
 const ROLE_LABEL = {
   ADMIN_SITE: "Admin Laporan Harian", PROJECT_CONTROL: "Project Control HBM",
-  MANAGEMENT: "Management HBM", FINANCE: "Finance HBM"
+  MANAGEMENT: "Management HBM", FINANCE: "Finance HBM",
+  /* V3.3 */ HSE_OFFICER: "Safety Officer (HSE)"
 };
 const PERM = {
   /* V2.9 — wajah Admin dibatasi pada menu input lapangan saja. */
-  ADMIN_SITE: ["admin_home", "daily_input", "daily_own", "admin_peta", "admin_ukur", "admin_panduan", "jadwal_view"],
+  ADMIN_SITE: ["admin_home", "daily_input", "daily_own", "admin_peta", "admin_ukur", "admin_panduan", "jadwal_view",
+    /* V3.3 — dashboard lapangan + HSE mode review */ "dash_view", "hse_view"],
   PROJECT_CONTROL: ["dash", "daily_input", "daily_all", "daily_edit_all", "review", "verify", "accept",
     "billable", "billing", "documents", "issues", "reports", "master", "money", "audit",
     "settings", "users", "meeting", "pesan",
     /* V2.6 */ "kendali", "scurve", "boq", "finance", "notif",
-    /* V2.9 */ "admin_peta", "admin_panduan", "jadwal_view"],
+    /* V2.9 */ "admin_peta", "admin_panduan", "jadwal_view",
+    /* V3.3 */ "hse_view", "hse_input", "hse_hapus", "lap_view", "lap_edit"],
   MANAGEMENT: ["jadwal_view", "dash", "reports", "money", "billing_view", "issues_view", "meeting", "sync_panel", "pesan",
-    /* V2.6 */ "kendali", "scurve", "boq_view", "finance_view", "notif"],
+    /* V2.6 */ "kendali", "scurve", "boq_view", "finance_view", "notif",
+    /* V3.3 */ "hse_view", "lap_view"],
   FINANCE: ["jadwal_view", "dash", "billable", "billing", "reports", "money", "documents", "audit", "sync_panel", "pesan",
-    /* V2.6 */ "boq_view", "finance", "notif"]
+    /* V2.6 */ "boq_view", "finance", "notif"],
+  /* V3.3 — Safety Officer: dashboard lapangan + input HSE & K3 */
+  HSE_OFFICER: ["dash_view", "hse_view", "hse_input"]
 };
 function can(p) { return S.user ? (PERM[S.user.role] || []).indexOf(p) >= 0 : false; }
 function isSite() { return S.user && S.user.role === "ADMIN_SITE"; }
@@ -1786,7 +1831,7 @@ function normalPeta(p) {
   o.survei = o.survei || { tgl: "", oleh: "" };
   return o;
 }
-const catatanTanki = t => bacaPeta(t ? t.notes : "").sisa;
+const catatanTanki = t => bacaPeta(t ? t.notes : "").sisa.replace(/\[CAT:[A-Z]+\]\s*/, "");
 function petaTanki(tank_id) { const t = tankOf(tank_id); return t ? bacaPeta(t.notes).peta : null; }
 function petaTerkunci(tank_id) { const p = petaTanki(tank_id); return p && p.kunci ? p : null; }
 function simpanPetaTanki(tank_id, peta) {
@@ -3175,7 +3220,7 @@ function doLogin() {
   S.user = u; audit("LOGIN", "23_USER_MASTER", u.user_id, "", u.user_name); save();
   $("#login").style.display = "none";
   $("#shell").classList.add("on");
-  S.view = can("dash") ? "dashboard" : can("admin_home") ? "admin-home" : "daily-new";
+  S.view = can("dash") ? "dashboard" : can("admin_home") ? "admin-home" : can("dash_view") ? "dashboard" : can("hse_view") ? "hse" : "daily-new";
   boot();
 }
 function logout() {
@@ -3191,7 +3236,7 @@ const NAV = [
   { v: "dashboard", t: "Dashboard", i: "▤", p: "dash" },
   { v: "dashboard", t: "Dashboard", i: "▤", p: "dash_view", hideIf: "dash" },
   { v: "tanks-status", t: "Status Tanki", i: "⬢", p: "dash" },
-  { v: "tanks-status", t: "Status Tanki", i: "⬢", p: "dash_view", hideIf: "dash" },
+  { v: "tanks-status", t: "Status Tanki", i: "⬢", p: "tanks_view", hideIf: "dash" },
   { v: "kendali", t: "Active Tank Control", i: "◎", p: "kendali" },
   { v: "scurve", t: "Kurva S & Baseline", i: "∿", p: "scurve" },
   { v: "scurve", t: "Kurva S & Baseline", i: "∿", p: "scurve_view", hideIf: "scurve" },
@@ -3203,8 +3248,11 @@ const NAV = [
   { v: "admin-peta", t: "Progress Tanki", i: "▦", p: "admin_peta" },
   { v: "admin-ukur", t: "Ukur Tanki (Peta)", i: "⊡", p: "admin_ukur" },
   { v: "admin-panduan", t: "Cara Input", i: "?", p: "admin_panduan" },
+  { g: "HSE & K3" },
+  { v: "hse", t: "HSE & K3", i: "⛑", p: "hse_view" },
   { g: "Laporan" },
   { v: "jadwal", t: "Jadwal & Progress", i: "▥", p: "jadwal_view" },
+  { v: "lap-proyek", t: "Daily / Weekly / Monthly", i: "▤", p: "lap_view" },
   { g: "Verifikasi" },
   { v: "review", t: "Review & Verifikasi", i: "✓", p: "review", badge: "review" },
   { v: "acceptance", t: "BAKP", i: "⊕", p: "accept" },
@@ -3266,10 +3314,11 @@ function boot() {
   $("#whoName").textContent = S.user.user_name;
   $("#whoRole").textContent = ROLE_LABEL[S.user.role];
   $("#sideProj").textContent = DB.config.project_code;
-  const site = isSite();
-  document.documentElement.style.setProperty("--rail", site ? "var(--olive)" : "var(--amber)");
+  const site = isSite(), hse = S.user.role === "HSE_OFFICER";
+  document.documentElement.style.setProperty("--rail", site ? "var(--olive)" : hse ? "var(--teal)" : "var(--amber)");
   $("#faceChip").innerHTML = site
     ? `<span>Wajah</span><b>Input Laporan Harian</b>`
+    : hse ? `<span>Wajah</span><b>HSE &amp; K3 — Safety Officer</b>`
     : `<span>Wajah</span><b>HBM — Pusat Kendali</b>`;
   try { aturAutoSync(); } catch (e) { }
   try { pasangPemicuSinkron(); } catch (e) { }
@@ -3925,6 +3974,7 @@ VIEWS["daily-new"] = {
       })() : ""}
     </div></div>
 
+    ${w ? infoTankiHarianHtml(w) : ""}
     ${kotakRencana}
     ${modePanel ? `<div class="card" data-lk="2"><h3>Plat yang selesai hari ini <span class="tiny muted">ketuk sesuai Kode Plat di lembar</span></h3><div class="body">
       ${tahapAktif().length ? "" : `<div class="note warn">Tahapan pengecatan belum diatur. Minta Project Control mengisi Master Data › Tahapan.</div>`}
@@ -3997,6 +4047,8 @@ VIEWS["daily-new"] = {
       <div class="row mt12">
         <label class="f" style="min-width:150px;margin-bottom:0"><span>Jenis foto</span>
           <select id="phType">${PHOTO_TYPES.map(p => `<option value="${p[0]}">${p[1]}</option>`).join("")}</select></label>
+        <label class="f" style="min-width:170px;margin-bottom:0"><span>Tahap pekerjaan</span>
+          <select id="phTahap"><option value="">— umum —</option>${tahapAktif().map(t => `<option value="${t.stage_id}">${esc(t.stage_name)}</option>`).join("")}</select></label>
         <label class="f grow" style="margin-bottom:0"><span>Keterangan</span><input type="text" id="phCap" placeholder="mis. blasting shell sisi utara"></label>
         <label class="btn a" style="margin-top:14px">Ambil / pilih foto
           <input type="file" id="phFile" accept="image/*" capture="environment" multiple hidden></label>
@@ -4313,11 +4365,11 @@ VIEWS["daily-new"] = {
     /* --- foto --- */
     const drawPh = () => {
       $("#phList").innerHTML = d.photos.map((p, i) => `
-        <div class="ph"><span class="tag">${esc(p.photo_type)}</span>
+        <div class="ph"><span class="tag">${esc(fotoLabel(p))}</span>
           <button class="x" data-dph="${i}">✕</button>
           <img src="${p.file_url}" alt="">
           <a class="dl" download="${esc(photoName(d, p, i))}" href="${p.file_url}">Unduh</a>
-          <div class="cap">${esc(p.caption || "—")}</div></div>`).join("")
+          <div class="cap">${esc(fotoCap(p) || "—")}</div></div>`).join("")
         || `<div class="empty" style="grid-column:1/-1">Belum ada foto. Cukup foto lembar bertanda tangan di atas, atau tambah foto kegiatan.</div>`;
       $$("#phList [data-dph]").forEach(b => b.onclick = () => { d.photos.splice(+b.dataset.dph, 1); drawPh(); });
     };
@@ -4335,7 +4387,7 @@ VIEWS["daily-new"] = {
     $("#phFile").onchange = e => {
       const files = Array.from(e.target.files || []);
       files.forEach(f => shrink(f, url => {
-        d.photos.push({ photo_type: $("#phType").value, file_url: url, caption: $("#phCap").value, taken_at: new Date().toISOString() });
+        d.photos.push({ photo_type: $("#phType").value, file_url: url, caption: tulisFotoCap($("#phTahap").value, $("#phCap").value), taken_at: new Date().toISOString() });
         drawPh();
       }));
       e.target.value = "";
@@ -4374,7 +4426,7 @@ function photoName(d, p, i) {
   const w = bamkOf(d.bamk_id);
   const tk = tankNo(d.tank_id || (w ? w.tank_id : ""));
   return [(w ? w.bamk_no : "WO").replace(/[\/\\ ]/g, "-"), String(tk).replace(/[\/\\ ]/g, "-"),
-  d.report_date, p.photo_type, String(i + 1).padStart(2, "0")].join("_") + ".jpg";
+  d.report_date || tanggalLokal(p.taken_at) || "HSE", p.photo_type, String(i + 1).padStart(2, "0")].join("_") + ".jpg";
 }
 function threadHtml(list) {
   if (!list.length) return `<div class="empty">Belum ada catatan koordinasi.</div>`;
@@ -5542,7 +5594,7 @@ function showDaily(id) {
     ${ph.length ? `<h4 class="mt16">Foto bukti <button class="btn sm" id="dlAll">Unduh semua foto</button></h4>
       <div class="photos">${ph.map((p, i) => `<div class="ph"><span class="tag">${esc(p.photo_type)}</span><img src="${p.file_url}">
       <a class="dl" download="${esc(photoName(d, p, i))}" href="${p.file_url}">Unduh</a>
-      <div class="cap">${esc(p.caption || "")}</div></div>`).join("")}</div>` : ""}
+      <div class="cap">${esc(fotoCap(p))}</div></div>`).join("")}</div>` : ""}
     <h4 class="mt16">Riwayat koordinasi</h4>${threadHtml(th)}`;
   openModal("Laporan Harian " + d.report_date, body,
     `<button class="btn" id="dlDA">Cetak Daily Activity</button><button class="btn" id="dlCetak">Cetak laporan lengkap</button>`, true);
@@ -5958,7 +6010,7 @@ function cetakLaporanHarian(id) {
   if (ph.length) isi += `<h2>Dokumentasi foto</h2>
     <table><tbody>${ph.map((p, i) => (i % 2 === 0 ? "<tr>" : "") +
       `<td style="width:50%"><img class="bukti" src="${p.file_url}">
-        <div class="mut"><b>${esc(p.photo_type)}</b> &middot; ${esc(p.caption || "")}</div></td>` +
+        <div class="mut"><b>${esc(fotoLabel(p))}</b> &middot; ${esc(fotoCap(p))}</div></td>` +
       (i % 2 === 1 || i === ph.length - 1 ? (i % 2 === 0 ? "<td></td></tr>" : "</tr>") : "")).join("")}</tbody></table>`;
 
   const rw = reviewsOf(id);
@@ -6080,8 +6132,8 @@ function periksaLaporan(id) {
     "Tidak ada ringkasan kegiatan. Laporan tanpa catatan sulit dibaca ulang berbulan-bulan kemudian.");
   if (!d.supervisor_side) add("warn", "Pihak pengawas tidak disebut",
     "Perlu jelas pengawas dari HBM, Palda, atau Pertamina yang menyaksikan.");
-  if (ph.some(p => !p.caption)) add("warn", "Ada foto tanpa keterangan",
-    ph.filter(p => !p.caption).length + " foto tidak diberi keterangan. Saat menyusun lampiran tagihan, foto tanpa keterangan tidak bisa dipakai.");
+  if (ph.some(p => !fotoCap(p))) add("warn", "Ada foto tanpa keterangan",
+    ph.filter(p => !fotoCap(p)).length + " foto tidak diberi keterangan. Saat menyusun lampiran tagihan, foto tanpa keterangan tidak bisa dipakai.");
   if (ph.some(p => !p.photo_type)) add("warn", "Ada foto tanpa jenis",
     "Setiap foto harus ditandai Before, Kegiatan, After, QC, atau HSSE.");
   if (luas > 0 && ph.length < 2) add("warn", "Foto terlalu sedikit",
@@ -6194,7 +6246,7 @@ function reviewModal(id) {
     ${kg.length ? `<div class="lines mt12"><div class="lh">Kegiatan pendukung (tidak diverifikasi sebagai luas)</div>
       ${kg.map(k => `<div class="small" style="padding:4px 0">${esc(k.activity)} — target ${fmt(k.target_qty, 0)}%, actual ${fmt(k.pct_complete, 0)}%
         ${k.work_package ? `<span class="tiny muted"> · ${esc(k.work_package)}</span>` : ""}</div>`).join("")}</div>` : ""}
-    ${ph.length ? `<div class="photos mt12">${ph.map(p => `<div class="ph"><span class="tag">${esc(p.photo_type)}</span><img src="${p.file_url}"><div class="cap">${esc(p.caption || "")}</div></div>`).join("")}</div>`
+    ${ph.length ? `<div class="photos mt12">${ph.map(p => `<div class="ph"><span class="tag">${esc(fotoLabel(p))}</span><img src="${p.file_url}"><div class="cap">${esc(fotoCap(p))}</div></div>`).join("")}</div>`
       : `<div class="note stop mt12">Laporan ini tidak memiliki foto bukti.</div>`}
     <label class="f mt12"><span>Catatan review</span><textarea id="rvNote" placeholder="tulis apa yang perlu diperbaiki, atau catatan persetujuan"></textarea></label>
     <div class="row"><button type="button" class="btn sm" id="rvSalin">Susun catatan dari temuan</button>
@@ -7007,7 +7059,7 @@ VIEWS.documents = {
     <div class="card"><h3>Dokumen dasar tagihan ${rw ? `<button class="btn a sm" id="dcNew">+ Dokumen</button>` : ""}</h3>
       <div class="body flush"><div class="tw"><table>
       <thead><tr><th>BAMK</th><th>Jenis</th><th>Nomor</th><th>Tanggal</th><th>Wajib tagihan</th><th>Status</th><th></th></tr></thead>
-      <tbody>${DB.documents.length ? DB.documents.map(d => `<tr>
+      <tbody>${DB.documents.filter(d => !isDocLaporan(d)).length ? DB.documents.filter(d => !isDocLaporan(d)).map(d => `<tr>
         <td>${esc(bamkNo(d.bamk_id))}</td><td>${esc(d.document_type)}</td><td>${esc(d.document_no || "—")}</td>
         <td class="num tiny">${esc(d.document_date || "—")}</td>
         <td>${d.required_for_billing ? `<span class="b blue">Wajib</span>` : `<span class="b gray">Pendukung</span>`}</td>
@@ -9311,7 +9363,9 @@ function masterModal(tab, id) {
         <option value="CONFIRMED" ${t.scope_status === "CONFIRMED" ? "selected" : ""}>Confirmed</option>
         <option value="REFERENCE" ${t.scope_status === "REFERENCE" ? "selected" : ""}>Reference</option></select></label>
       <label class="f"><span>Revisi</span><input type="text" id="xRev" value="${esc(t.revision)}"></label></div>
-      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(catatanTanki(t))}"></label>
+      <div class="fg c2"><label class="f"><span>Warna finish coat <span class="tiny muted">(untuk gambar di Dashboard)</span></span><select id="xCat">${WARNA_FINISH.map(w =>
+        `<option value="${w[0]}" ${warnaFinishTanki(t) === w[0] ? "selected" : ""}>${esc(w[1])}</option>`).join("")}</select></label>
+      <label class="f"><span>Catatan</span><input type="text" id="xNote" value="${esc(catatanTanki(t))}"></label></div>
       ${bacaPeta(t.notes).peta ? `<div class="tiny muted">Tanki ini punya peta panel (Master Data › Peta Panel). Peta tetap tersimpan saat tanki ini disimpan.</div>` : ""}
       <div id="xLuas" class="mt12"></div>`;
     onSave = () => {
@@ -9321,7 +9375,7 @@ function masterModal(tab, id) {
         shell_diameter_m: nz($("#xD").value), tank_height_m: nz($("#xH").value),
         baseline_qty: nz($("#xQ").value), baseline_unit: $("#xU").value,
         scope_status: $("#xSs").value, revision: $("#xRev").value,
-        notes: tulisPeta(bacaPeta(rec.notes).peta, $("#xNote").value)
+        notes: tulisPeta(bacaPeta(rec.notes).peta, tulisCatTanki($("#xCat").value, $("#xNote").value))
       });
       if (!rec.tank_no) return toast("Nomor tanki wajib diisi.", "err");
       if (!id) DB.tanks.push(rec); audit(id ? "UPDATE" : "CREATE", "03_TANK_MASTER", rec.tank_id, "", rec.tank_no); return true;
@@ -10187,6 +10241,1304 @@ VIEWS.sync = {
   }
 };
 
+/* ============================================================
+   V3.3 — LAPORAN PROYEK (HARIAN · MINGGUAN · BULANAN), HSE & K3,
+          DASHBOARD VISUAL TANKI, PERAN SAFETY OFFICER
+   ------------------------------------------------------------
+   Tidak ada tabel maupun kolom baru di server — Code.gs v2.3 tetap.
+   Semua isian baru menumpang di tabel yang sudah ada, dengan pola yang
+   sama seperti peta panel dan jadwal kerja:
+     · catatan HSE          → tabel hsse, baris TANPA daily_id,
+                              permit_status = "HSE:<jenis>",
+                              remarks = [HSE#sidik]{json}[/HSE]
+     · isian laporan proyek → tabel documents,
+                              document_type = "LAPORAN_PROYEK" / "SETELAN_LAPORAN",
+                              remarks = [LAP#sidik]{json}[/LAP]
+     · tahap pada foto      → awalan [TAHAP:ST-xx] di kolom caption
+     · warna finish tanki   → penanda [CAT:PUTIH] di catatan tanki
+   Baris-baris itu tidak pernah cocok dengan daily_id mana pun, jadi
+   tidak ikut terbaca di laporan harian, verifikasi, maupun tagihan.
+   ============================================================ */
+
+/* ---------- JSON di dalam kolom teks ---------- */
+function bungkusJson(tag, obj, sisa) {
+  const j = JSON.stringify(obj);
+  sisa = String(sisa || "").trim();
+  return "[" + tag + "#" + sidik8(j) + "]" + j + "[/" + tag + "]" + (sisa ? " " + sisa : "");
+}
+function bukaJson(tag, s) {
+  s = String(s == null ? "" : s);
+  const buka = "[" + tag + "#", tutup = "[/" + tag + "]", i = s.indexOf(buka);
+  if (i < 0) return { o: null, sisa: s };
+  const z = s.indexOf(tutup, i), k = s.indexOf("]", i);
+  if (z < 0 || k < 0 || k > z) return { o: null, sisa: s };
+  let o = null; try { o = JSON.parse(s.slice(k + 1, z)); } catch (e) { o = null; }
+  return { o, sisa: (s.slice(0, i) + s.slice(z + tutup.length)).trim() };
+}
+const ROMAWI = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const BLN3 = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+function tambahHari(iso, n) { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return isoLokal(d); }
+function hariID(iso) { return HARI[new Date(iso + "T00:00:00").getDay()]; }
+function tglPendek(iso) { if (!iso) return "—"; const p = iso.split("-"); return p[2] + "/" + BLN3[+p[1] - 1] + "/" + p[0]; }
+function rentangTanggal(a, z) { const out = []; let c = a; while (c <= z) { out.push(c); c = tambahHari(c, 1); } return out; }
+function akhirBulan(ym) { const p = ym.split("-"); return isoLokal(new Date(+p[0], +p[1], 0)); }
+const pad3 = n => String(Math.max(0, n)).padStart(3, "0");
+
+/* ---------- FOTO: TAHAP PEKERJAAN ---------- */
+const TAHAP_FOTO_RE = /^\[TAHAP:([^\]]*)\]\s*/;
+const fotoTahap = p => { const m = String((p && p.caption) || "").match(TAHAP_FOTO_RE); return m ? m[1] : ""; };
+const fotoCap = p => String((p && p.caption) || "").replace(TAHAP_FOTO_RE, "");
+const tulisFotoCap = (st, cap) => (st ? "[TAHAP:" + st + "] " : "") + String(cap || "").replace(TAHAP_FOTO_RE, "");
+function fotoLabel(p) {
+  const jenis = (PHOTO_TYPES.find(x => x[0] === p.photo_type) || [p.photo_type, p.photo_type])[1];
+  const st = tahapOf(fotoTahap(p));
+  return jenis + (st ? " · " + st.stage_name : "");
+}
+
+/* ---------- WARNA FINISH COAT PER TANKI ---------- */
+const WARNA_FINISH = [["ABU", "Abu-abu / silver", "#C4CACF"], ["PUTIH", "Putih", "#F4F5F2"],
+  ["HITAM", "Hitam", "#2B2F34"], ["MERAH", "Merah", "#A23328"], ["HIJAU", "Hijau", "#3F6B47"]];
+const CAT_RE = /\[CAT:([A-Z]+)\]\s*/;
+const warnaFinishTanki = t => { const m = String((t && t.notes) || "").match(CAT_RE); return m ? m[1] : "ABU"; };
+const tulisCatTanki = (k, sisa) => (k ? "[CAT:" + k + "] " : "") + String(sisa || "").replace(CAT_RE, "").trim();
+const hexFinish = t => (WARNA_FINISH.find(w => w[0] === warnaFinishTanki(t)) || WARNA_FINISH[0])[2];
+const LABEL_TIPE = { CRT: "Cone Roof Tank", FRT: "Floating Roof Tank", DRT: "Dome Roof Tank" };
+
+/* ============================================================
+   V3.3 — VISUAL TANKI PER TAHAP
+   Gambar tanki dibentuk dari angka progres, bukan gambar tetap:
+   tiap tahap mewarnai dinding (Shell) dan atap (Roof) selebar
+   persentase luas yang sudah selesai pada tahap itu.
+     karat (before) → baja bersih sesudah blasting → primer merah →
+     finish coat (warna diatur per tanki di Master Data › Tanki).
+   ============================================================ */
+const WARNA_BEFORE = "#8A5A3C";
+function warnaTahap(i, n, fin) {
+  if (i === n - 1) return fin;
+  if (i === 0) return "#99A1A7";
+  if (i === 1) return "#B4432F";
+  return "#7B8893";
+}
+function fraksiTanki(b) {
+  const st = tahapAktif(), out = {};
+  BAGIAN.forEach(([k]) => {
+    const v = volBagian(b, k);
+    out[k] = st.map(s => v > 0 ? Math.min(1, kumulatif(b.bamk_id, k, s.stage_id, null) / v) : 0);
+  });
+  return out;
+}
+function statusTahapTanki(b, fr) {
+  const st = tahapAktif(), vol = volBamk(b);
+  const per = st.map((s, i) => vol > 0 ? BAGIAN.reduce((a, [k]) => a + (fr[k][i] || 0) * volBagian(b, k), 0) / vol : 0);
+  let idx = -1; per.forEach((p, i) => { if (p > 0.0005) idx = i; });
+  const selesai = per.length > 0 && per[per.length - 1] >= 0.999;
+  return {
+    per, idx, selesai,
+    label: selesai ? "Selesai — finish coat 100%" : idx < 0 ? "Belum mulai (kondisi before)"
+      : "Tahap " + (idx + 1) + " · " + st[idx].stage_name
+  };
+}
+let SVG_NO = 0;
+function svgTankiTahap(t, fr, opsi) {
+  opsi = opsi || {};
+  const tipe = (t && t.tank_type) || "CRT";
+  const n = tahapAktif().length || 3, fin = hexFinish(t);
+  const id = "tk" + (++SVG_NO);
+  const X0 = 30, X1 = 190, W = X1 - X0, Y0 = 82, Y1 = 186, H = Y1 - Y0;
+  const lapis = (arr, y, h) => (arr || []).map((f, i) => f > 0.0005
+    ? `<rect x="${X0}" y="${y}" width="${(W * Math.min(1, f)).toFixed(1)}" height="${h}" fill="${warnaTahap(i, n, fin)}"/>` : "").join("");
+  const atap = tipe === "DRT" ? `M${X0} ${Y0} Q110 30 ${X1} ${Y0} Z`
+    : tipe === "FRT" ? `M${X0 - 2} ${Y0} L${X0 - 2} ${Y0 - 9} L${X1 + 2} ${Y0 - 9} L${X1 + 2} ${Y0} Z`
+      : `M${X0 - 3} ${Y0} L110 52 L${X1 + 3} ${Y0} Z`;
+  const atasAtap = tipe === "DRT" ? 40 : tipe === "FRT" ? Y0 - 10 : 52;
+  /* Tangga melingkar: naik dari kanan bawah ke kiri atas, seperti gambar elevasi. */
+  const tg = [];
+  const sx0 = X1 - 6, sy0 = Y1 - 2, sx1 = X0 + 46, sy1 = Y0 + 4, langkah = 13;
+  for (let i = 0; i <= langkah; i++) {
+    const x = sx0 + (sx1 - sx0) * i / langkah, y = sy0 + (sy1 - sy0) * i / langkah;
+    tg.push(`<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + 5).toFixed(1)}" y2="${(y + 5).toFixed(1)}"/>`);
+  }
+  const garisCourse = [1, 2, 3, 4].map(k => `<line x1="${X0}" y1="${Y0 + H * k / 5}" x2="${X1}" y2="${Y0 + H * k / 5}"/>`).join("");
+  const tiangHr = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(k => { const x = X0 + W * k / 8; return `<line x1="${x}" y1="${Y0}" x2="${x}" y2="${Y0 - 7}"/>`; }).join("");
+  return `<svg viewBox="0 0 220 ${opsi.kecil ? 200 : 206}" role="img" aria-label="Ilustrasi tanki ${esc(t ? t.tank_no : "")}">
+    <defs>
+      <pattern id="${id}r" width="9" height="9" patternUnits="userSpaceOnUse">
+        <rect width="9" height="9" fill="${WARNA_BEFORE}"/><circle cx="2" cy="3" r="1.3" fill="#6B3F25"/>
+        <circle cx="6.5" cy="7" r="1" fill="#A36E47"/><circle cx="7" cy="1.5" r=".8" fill="#5E3620"/></pattern>
+      <linearGradient id="${id}g" x1="0" x2="1">
+        <stop offset="0" stop-color="#000" stop-opacity=".28"/><stop offset=".38" stop-color="#fff" stop-opacity=".22"/>
+        <stop offset=".62" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#000" stop-opacity=".34"/></linearGradient>
+      <clipPath id="${id}a"><path d="${atap}"/></clipPath>
+      <clipPath id="${id}s"><rect x="${X0}" y="${Y0}" width="${W}" height="${H}"/></clipPath>
+    </defs>
+    <ellipse cx="110" cy="${Y1 + 3}" rx="98" ry="7" fill="#0E2233" opacity=".12"/>
+    <line x1="6" y1="${Y1}" x2="214" y2="${Y1}" stroke="#8796A3" stroke-width="1.2"/>
+    <g clip-path="url(#${id}a)"><rect x="0" y="20" width="220" height="${Y0}" fill="url(#${id}r)"/>${lapis(fr.ROOF, 20, Y0)}
+      <rect x="0" y="20" width="220" height="${Y0}" fill="url(#${id}g)"/></g>
+    <path d="${atap}" fill="none" stroke="#1C2B36" stroke-width="1.2"/>
+    ${tipe !== "FRT" ? `<rect x="105" y="${atasAtap - 7}" width="10" height="7" fill="#5E6A73" stroke="#1C2B36" stroke-width=".8"/>` : ""}
+    <g clip-path="url(#${id}s)"><rect x="${X0}" y="${Y0}" width="${W}" height="${H}" fill="url(#${id}r)"/>${lapis(fr.SHELL, Y0, H)}
+      <g stroke="#1C2B36" stroke-opacity=".22" stroke-width=".8">${garisCourse}</g>
+      <rect x="${X0}" y="${Y0}" width="${W}" height="${H}" fill="url(#${id}g)"/></g>
+    <rect x="${X0}" y="${Y0}" width="${W}" height="${H}" fill="none" stroke="#1C2B36" stroke-width="1.2"/>
+    <g stroke="#E0A82E" stroke-width="1.6">${tiangHr}<line x1="${X0}" y1="${Y0 - 7}" x2="${X1}" y2="${Y0 - 7}"/></g>
+    <g stroke="#E0A82E" stroke-width="1.5">${tg.join("")}
+      <line x1="${sx0}" y1="${sy0 - 9}" x2="${sx1}" y2="${sy1 - 9}"/></g>
+    <circle cx="${X0 + 22}" cy="${Y1 - 16}" r="7" fill="#EDEFF1" stroke="#1C2B36" stroke-width="1"/>
+    ${opsi.label ? `<text x="110" y="${Y0 + H / 2 + 5}" text-anchor="middle" font-size="15" font-weight="700"
+      fill="${warnaFinishTanki(t) === "HITAM" ? "#fff" : "#0E2233"}" opacity=".55" font-family="Segoe UI,Arial">${esc(t.tank_no)}</text>` : ""}
+  </svg>`;
+}
+function legendaTahapHtml(t, fr, b) {
+  const st = tahapAktif(), n = st.length, fin = hexFinish(t);
+  const bagianAda = BAGIAN.filter(([k]) => volBagian(b, k) > 0);
+  const singkat = { SHELL: "Shell", ACC: "Acc", ROOF: "Roof" };
+  return `<table class="tkleg"><thead><tr><th></th>${bagianAda.map(([k]) => `<th>${singkat[k]}</th>`).join("")}</tr></thead><tbody>
+    ${st.map((s, i) => `<tr><td><i style="background:${warnaTahap(i, n, fin)}"></i>${esc(s.stage_name)}</td>
+      ${bagianAda.map(([k]) => { const v = (fr[k][i] || 0) * 100; return `<td class="${v >= 99.95 ? "pn" : v > 0 ? "jl" : ""}">${fmt(v, 0)}%</td>`; }).join("")}</tr>`).join("")}
+    <tr class="bf"><td><i style="background:${WARNA_BEFORE}"></i>Before (karat)</td><td colspan="${bagianAda.length}"></td></tr>
+  </tbody></table>`;
+}
+
+/* ---------- FOTO PER TANKI ---------- */
+function fotoTanki(tank_id) {
+  const ok = new Set(DB.dailies.filter(d => d.status !== "REJECTED").map(d => d.daily_id));
+  return (DB.photos || []).filter(p => p.tank_id === tank_id && ok.has(p.daily_id) && p.file_url && p.photo_type !== "HSSE")
+    .map(p => Object.assign({ _tgl: (byId(DB.dailies, "daily_id", p.daily_id) || {}).report_date || String(p.taken_at || "").slice(0, 10) }, p))
+    .sort((a, b) => (a._tgl + (a.taken_at || "")).localeCompare(b._tgl + (b.taken_at || "")));
+}
+function pasanganFoto(tank_id) {
+  const L = fotoTanki(tank_id);
+  const before = L.find(p => p.photo_type === "BEFORE") || null;
+  const after = L.slice().reverse().find(p => p.photo_type === "AFTER") || null;
+  const terkini = after ? null : (L.slice().reverse().find(p => p !== before) || null);
+  return { before, after, terkini, semua: L };
+}
+function slotFoto(p, judul, kosong) {
+  return p ? `<figure data-foto="${esc(p.photo_id)}"><img src="${p.file_url}" alt="${esc(judul)}" loading="lazy">
+      <figcaption>${esc(judul)}</figcaption><div class="tg">${esc(tglPendek(p._tgl))}${fotoTahap(p) ? " · " + esc((tahapOf(fotoTahap(p)) || {}).stage_name || "") : ""}</div></figure>`
+    : `<figure><div class="kosong"><b>${esc(judul)}</b>${esc(kosong)}</div></figure>`;
+}
+
+/* ---------- DAFTAR TANKI UNTUK DASHBOARD ---------- */
+function tankiBerjalan() {
+  const list = [];
+  DB.tanks.forEach(t => {
+    const b = bamkTanki(t.tank_id);
+    if (!b || b.status === "DRAFT" || b.status === "BATAL") return;
+    const fr = fraksiTanki(b), st = statusTahapTanki(b, fr);
+    list.push({ t, b, fr, st, pct: persenBamk(b.bamk_id) });
+  });
+  return list.sort((x, y) => (x.b.status === "AKTIF" ? 0 : 1) - (y.b.status === "AKTIF" ? 0 : 1) || y.pct - x.pct);
+}
+function kartuVisualHtml() {
+  const L = tankiBerjalan(), mode = S.f.tkMode || "ilus";
+  return `<div class="card mt16"><h3>Visual tanki yang sedang dikerjakan
+      <span class="tiny muted">${L.length} tanki · gambar mengikuti progres laporan harian</span>
+      <span class="tkmode noprint"><button class="${mode === "ilus" ? "on" : ""}" data-tkm="ilus">Ilustrasi tahap</button><button class="${mode === "foto" ? "on" : ""}" data-tkm="foto">Foto before / after</button></span></h3>
+    <div class="body">${L.length ? `<div class="tkgrid">${L.map(x => kartuTankiHtml(x, mode)).join("")}</div>`
+      : `<div class="empty"><b>Belum ada tanki yang berjalan</b>Kartu tanki muncul setelah SPK terbit dan BAMK-nya aktif.</div>`}
+      <div class="tiny muted mt8">Ilustrasi: lebar warna pada dinding (Shell) dan atap (Roof) = persen luas yang sudah selesai pada tahap itu.
+        Foto asli diambil dari laporan harian — jenis foto <b>Before</b> dan <b>After</b>, beserta tahapnya. Ketuk kartu untuk melihat seluruh foto tanki.</div>
+    </div></div>`;
+}
+function kartuTankiHtml(x, mode) {
+  const { t, b, fr, st, pct } = x, L = luasTanki(t);
+  const ukuran = nz(t.shell_diameter_m) > 0 ? `Ø${fmt(t.shell_diameter_m, 2)} × ${fmt(t.tank_height_m, 2)} m` : "ukuran belum diisi";
+  let isi;
+  if (mode === "foto") {
+    const P = pasanganFoto(t.tank_id);
+    isi = `<div class="ba">${slotFoto(P.before, "Before", "Belum ada foto Before. Unggah di laporan harian bagian 6, jenis foto Before.")}
+      ${P.after ? slotFoto(P.after, "After", "") : slotFoto(P.terkini, "Terkini", "Belum ada foto After. Foto After diunggah saat finish coat selesai.")}</div>
+      <div class="tiny muted mt8">${P.semua.length} foto tersimpan untuk tanki ini.</div>`;
+  } else {
+    isi = svgTankiTahap(t, fr, { label: true }) + legendaTahapHtml(t, fr, b);
+  }
+  return `<div class="tkv" data-tkv="${esc(t.tank_id)}">
+    <div class="tkh"><b>${esc(t.tank_no)}</b><span class="b ${b.status === "AKTIF" ? "blue" : "gray"}">${esc(t.tank_type || "")}</span>
+      <span class="tiny muted grow">${esc(areaName(t.area_id))} · ${esc(ukuran)}</span></div>
+    <div class="tiny muted">${esc(LABEL_TIPE[t.tank_type] || "")} · BAMK ${fmt(volBamk(b), 2)} m²${L ? " · eksterior " + fmt(L.total, 1) + " m²" : ""}</div>
+    <div class="tkisi">${isi}</div>
+    <div class="tkf"><span class="b ${st.selesai ? "teal" : st.idx < 0 ? "gray" : "amber"}">${esc(st.label)}</span>
+      <b class="num">${fmt(pct, 1)}%</b></div>
+    ${barHtml(pct)}
+  </div>`;
+}
+function bindKartuVisual() {
+  $$("[data-tkm]").forEach(bt => bt.onclick = e => { e.stopPropagation(); S.f.tkMode = bt.dataset.tkm; render(); });
+  $$("[data-tkv]").forEach(k => k.onclick = () => galeriTanki(k.dataset.tkv));
+}
+function galeriTanki(tank_id) {
+  const t = tankOf(tank_id), b = bamkTanki(tank_id); if (!t) return;
+  const P = pasanganFoto(tank_id), st = tahapAktif();
+  const grup = [{ k: "BEFORE", n: "Before", f: p => p.photo_type === "BEFORE" }]
+    .concat(st.map(s => ({ k: s.stage_id, n: s.stage_name, f: p => fotoTahap(p) === s.stage_id && p.photo_type !== "BEFORE" && p.photo_type !== "AFTER" })))
+    .concat([{ k: "LAIN", n: "Kegiatan lain", f: p => !fotoTahap(p) && p.photo_type !== "BEFORE" && p.photo_type !== "AFTER" },
+      { k: "AFTER", n: "After", f: p => p.photo_type === "AFTER" }]);
+  const fr = b ? fraksiTanki(b) : null;
+  openModal("Tanki " + t.tank_no + " — foto & tahap pekerjaan", `
+    <div class="grid g2">
+      <div>${fr ? svgTankiTahap(t, fr, { label: true }) + legendaTahapHtml(t, fr, b) : ""}</div>
+      <div><div class="ba">${slotFoto(P.before, "Before", "Belum ada foto Before.")}${slotFoto(P.after || P.terkini, P.after ? "After" : "Terkini", "Belum ada foto After.")}</div>
+        ${infoTankiTabel(t, b)}</div>
+    </div>
+    ${grup.map(g => { const L = P.semua.filter(g.f); return L.length ? `<h4 class="mt16">${esc(g.n)} <span class="tiny muted">${L.length} foto</span></h4>
+      <div class="photos">${L.map(p => `<div class="ph"><span class="tag">${esc(fotoLabel(p))}</span><img src="${p.file_url}" loading="lazy">
+        <a class="dl" target="_blank" href="${p.file_url}">Buka</a><div class="cap">${esc(tglPendek(p._tgl))} · ${esc(fotoCap(p) || "—")}</div></div>`).join("")}</div>` : ""; }).join("")
+      || `<div class="empty mt16"><b>Belum ada foto</b>Foto diunggah dari laporan harian bagian 6. Pilih jenis foto dan tahapnya.</div>`}`, "", true);
+}
+function infoTankiTabel(t, b) {
+  const L = luasTanki(t);
+  const r = (l, v) => `<tr><td class="tiny muted">${l}</td><td class="n">${v}</td></tr>`;
+  return `<div class="tw mt8"><table><tbody>
+    ${r("Tipe", esc((t.tank_type || "—") + " — " + (LABEL_TIPE[t.tank_type] || "")))}
+    ${r("Diameter × tinggi", nz(t.shell_diameter_m) > 0 ? fmt(t.shell_diameter_m, 2) + " × " + fmt(t.tank_height_m, 2) + " m" : "—")}
+    ${L ? r("Luas eksterior (shell + roof + perlengkapan)", fmt(L.shell, 2) + " + " + fmt(L.atap, 2) + " + " + fmt(L.acc, 2) + " = <b>" + fmt(L.total, 2) + "</b> m²") : ""}
+    ${b ? r("Volume BAMK (Shell · Acc · Roof)", fmt(b.vol_shell, 2) + " · " + fmt(b.vol_acc, 2) + " · " + fmt(b.vol_roof, 2) + " = <b>" + fmt(volBamk(b), 2) + "</b> m²") : ""}
+    ${r("Warna finish coat", esc((WARNA_FINISH.find(w => w[0] === warnaFinishTanki(t)) || WARNA_FINISH[0])[1]))}
+  </tbody></table></div>`;
+}
+/* Kotak data tanki di formulir laporan harian: tipe, ukuran, volume, progres per tahap. */
+function infoTankiHarianHtml(w) {
+  const t = tankOf(w.tank_id); if (!t) return "";
+  const fr = fraksiTanki(w), st = tahapAktif(), n = st.length, fin = hexFinish(t);
+  return `<div class="card" data-lk="1"><h3>Data tanki ${esc(t.tank_no)} <span class="tiny muted">${esc(LABEL_TIPE[t.tank_type] || t.tank_type || "")}</span></h3>
+    <div class="body"><div class="tkinfo">
+      <div class="tkmini">${svgTankiTahap(t, fr, { kecil: true })}</div>
+      <div class="grow">${infoTankiTabel(t, w)}
+        <div class="tw mt8"><table><thead><tr><th>Tahap</th>${BAGIAN.map(g => `<th class="n">${esc(g[1].split(" ")[0])}</th>`).join("")}</tr></thead>
+        <tbody>${st.map((s, i) => `<tr><td><i class="sw" style="background:${warnaTahap(i, n, fin)}"></i>${esc(s.stage_name)}</td>
+          ${BAGIAN.map(([k]) => `<td class="n">${volBagian(w, k) > 0 ? fmt(kumulatif(w.bamk_id, k, s.stage_id, null), 2) + " <span class='tiny muted'>/ " + fmt(volBagian(w, k), 2) + "</span>" : "—"}</td>`).join("")}</tr>`).join("")}
+        </tbody></table></div>
+        <div class="tiny muted mt8">Angka kumulatif sampai laporan terakhir yang tidak dikembalikan (m²).</div>
+      </div></div></div></div>`;
+}
+
+/* ============================================================
+   V3.3 — HSE & K3
+   Diisi oleh Safety Officer (peran HSE_OFFICER). Admin Laporan Harian
+   dan Management hanya melihat. Hanya Project Control yang menghapus.
+   Tool Box Meeting mengikuti "Form Toolbox Meetings" Pertamina (2 hal.).
+   ============================================================ */
+const TBM_AREA = ["UTL", "D&W", "HSC", "HCC", "OM", "LAWE-LAWE"];
+const TBM_APD = ["Coverall", "Sepatu", "Helmet", "Sarung Tangan", "Kacamata", "Masker", "Full Body Harness", "Life Vest / Jacket"];
+const TBM_CLSR = ["Tools & Equipment", "Safe Zone Position", "Permit To Work (PTW)", "Isolation", "Confined Space",
+  "Lifting Operation", "Fit To Work (FTW)", "Working At Height", "Personal Floatation Device", "System Override",
+  "Asset Integrity", "Driving Safety"];
+const TBM_PERAN = ["Direksi Pekerjaan (MA-Pertamina)", "GSI (Produksi-Pertamina)", "HSSE RU V",
+  "Safetyman Kontraktor", "Mandor (Pws Kontraktor)"];
+const TBM_ANGGOTA_MAKS = 25;
+const APD_ITEM = ["Coverall", "Sepatu safety", "Helmet", "Sarung tangan", "Kacamata safety", "Masker / respirator",
+  "Full body harness", "Life vest", "Ear plug", "Blasting helmet / hood"];
+const JENIS_TEMUAN = ["Unsafe Act", "Unsafe Condition", "Near Miss", "First Aid", "Medical Treatment",
+  "Kecelakaan kerja (LTI)", "Kerusakan aset", "Lingkungan / tumpahan"];
+/* Jenis temuan yang menghentikan hitungan "hari kerja tanpa kecelakaan". */
+const TEMUAN_KECELAKAAN = ["Medical Treatment", "Kecelakaan kerja (LTI)"];
+
+const HSE_JENIS = {
+  PERMIT: { t: "E-Permit", tab: "permit", baru: "E-Permit", fields: [
+    { k: "tanggal", t: "Tanggal", ty: "date", req: 1 },
+    { k: "no", t: "No. permit", ty: "text", req: 1, ph: "mis. 1673/KPI48115/2026-S0" },
+    { k: "jenis", t: "Jenis pekerjaan", ty: "multi", o: ["Hot Work", "Cold Work", "Excavation / Galian", "Confined Space", "Working at Height", "Lifting", "Electrical / Isolasi"] },
+    { k: "tank_id", t: "Tanki", ty: "tank" },
+    { k: "berlaku", t: "Berlaku s/d", ty: "date" },
+    { k: "pemohon", t: "Pemohon / PIC kontraktor", ty: "text" },
+    { k: "pengesah", t: "Disahkan oleh (Pertamina)", ty: "text" },
+    { k: "status", t: "Status", ty: "sel", o: ["Diajukan", "Disetujui", "Ditolak", "Ditutup"], def: "Diajukan" },
+    { k: "scan", t: "Pindaian permit", ty: "scan" },
+    { k: "catatan", t: "Catatan", ty: "area" }],
+    kolom: ["tanggal", "no", "jenis", "tank_id", "berlaku", "status"] },
+  ALAT: { t: "Inspeksi Alat & Stiker", tab: "alat", baru: "Inspeksi alat & stiker", fields: [
+    { k: "tanggal", t: "Tanggal inspeksi", ty: "date", req: 1 },
+    { k: "alat", t: "Alat", ty: "text", req: 1, dl: ["Air Compressor", "Sand Pot / Blasting Pot", "Air Manifold", "Breathing Air Filter", "Airless Spray Machine", "Genset", "Scaffolding", "Peralatan rope access", "Full body harness", "Hose & coupling", "Kendaraan"] },
+    { k: "seri", t: "No. identitas / seri", ty: "text" },
+    { k: "pemilik", t: "Pemilik", ty: "sel", o: ["HBM", "Palda", "Sewa"] },
+    { k: "hasil", t: "Hasil", ty: "sel", o: ["Layak", "Layak bersyarat", "Tidak layak"], def: "Layak" },
+    { k: "stiker", t: "Warna stiker", ty: "sel", o: ["Hijau", "Kuning", "Biru", "Merah", "Putih", "Belum dipasang"] },
+    { k: "berlaku", t: "Berlaku s/d", ty: "date" },
+    { k: "inspektor", t: "Diinspeksi oleh", ty: "text" },
+    { k: "catatan", t: "Catatan", ty: "area" }],
+    kolom: ["tanggal", "alat", "seri", "hasil", "stiker", "berlaku"] },
+  IZIN: { t: "Izin Masuk Material & Alat", tab: "izin", baru: "Izin masuk material / alat", fields: [
+    { k: "tanggal", t: "Tanggal pengajuan", ty: "date", req: 1 },
+    { k: "jenis", t: "Jenis", ty: "sel", o: ["Material", "Alat", "Kendaraan"], def: "Material" },
+    { k: "uraian", t: "Uraian barang", ty: "text", req: 1 },
+    { k: "jumlah", t: "Jumlah & satuan", ty: "text", ph: "mis. 50 sak / 2 unit" },
+    { k: "no", t: "No. surat / gate pass", ty: "text" },
+    { k: "tank_id", t: "Untuk tanki", ty: "tank" },
+    { k: "status", t: "Status", ty: "sel", o: ["Diajukan", "Disetujui", "Ditolak", "Sudah masuk"], def: "Diajukan" },
+    { k: "berlaku", t: "Berlaku s/d", ty: "date" },
+    { k: "scan", t: "Pindaian surat", ty: "scan" }],
+    kolom: ["tanggal", "jenis", "uraian", "jumlah", "no", "status"] },
+  APD: { t: "Pengajuan APD", tab: "apd", baru: "Pengajuan APD", fields: [
+    { k: "tanggal", t: "Tanggal", ty: "date", req: 1 },
+    { k: "nama", t: "Nama pekerja", ty: "text", req: 1 },
+    { k: "item", t: "Item APD", ty: "multi", o: APD_ITEM },
+    { k: "jumlah", t: "Jumlah", ty: "text" },
+    { k: "alasan", t: "Alasan", ty: "sel", o: ["Pekerja baru", "Rusak", "Hilang", "Penggantian rutin"] },
+    { k: "status", t: "Status", ty: "sel", o: ["Diajukan", "Disetujui", "Diserahkan", "Ditolak"], def: "Diajukan" },
+    { k: "catatan", t: "Catatan", ty: "area" }],
+    kolom: ["tanggal", "nama", "item", "alasan", "status"] },
+  MCU: { t: "MCU & Tes Narkoba", tab: "mcu", baru: "MCU / tes narkoba", fields: [
+    { k: "tanggal", t: "Tanggal", ty: "date", req: 1 },
+    { k: "nama", t: "Nama pekerja", ty: "text", req: 1 },
+    { k: "jabatan", t: "Jabatan", ty: "text", dl: MANPOWER_CATS },
+    { k: "jenis", t: "Jenis", ty: "sel", o: ["MCU", "Tes narkoba", "MCU + tes narkoba"], def: "MCU" },
+    { k: "status", t: "Status", ty: "sel", o: ["Dijadwalkan", "Selesai"], def: "Dijadwalkan" },
+    { k: "hasil", t: "Hasil", ty: "sel", o: ["Menunggu hasil", "Fit / negatif", "Fit dengan catatan", "Tidak fit"], def: "Menunggu hasil" },
+    { k: "berlaku", t: "Berlaku s/d", ty: "date" },
+    { k: "scan", t: "Pindaian hasil", ty: "scan" }],
+    kolom: ["tanggal", "nama", "jabatan", "jenis", "status", "hasil", "berlaku"] },
+  TEMUAN: { t: "Temuan & Insiden", tab: "temuan", baru: "Temuan / insiden", fields: [
+    { k: "tanggal", t: "Tanggal", ty: "date", req: 1 },
+    { k: "jenis", t: "Jenis", ty: "sel", o: JENIS_TEMUAN, def: "Unsafe Condition" },
+    { k: "tank_id", t: "Tanki / lokasi", ty: "tank" },
+    { k: "uraian", t: "Uraian temuan", ty: "area", req: 1 },
+    { k: "tindakan", t: "Tindakan perbaikan", ty: "area" },
+    { k: "pic", t: "PIC", ty: "text" },
+    { k: "batas", t: "Batas penyelesaian", ty: "date" },
+    { k: "status", t: "Status", ty: "sel", o: ["Terbuka", "Ditutup"], def: "Terbuka" },
+    { k: "tutup", t: "Tanggal ditutup", ty: "date" }],
+    kolom: ["tanggal", "jenis", "tank_id", "uraian", "pic", "status"] },
+  DOK: { t: "Dokumen & Surat", tab: "dok", baru: "Dokumen", fields: [
+    { k: "jenis", t: "Jenis dokumen", ty: "sel", o: ["JSA", "HIRADC", "CSMS", "Sertifikat RAT", "SIO / SILO", "Surat izin / pemberitahuan", "Laporan HSE bulanan", "Lainnya"], def: "JSA" },
+    { k: "no", t: "Nomor", ty: "text" },
+    { k: "tanggal", t: "Tanggal", ty: "date", req: 1 },
+    { k: "berlaku", t: "Berlaku s/d", ty: "date" },
+    { k: "uraian", t: "Uraian", ty: "text" },
+    { k: "scan", t: "Berkas", ty: "scan" }],
+    kolom: ["tanggal", "jenis", "no", "uraian", "berlaku"] }
+};
+const HSE_TABS = [["ringkas", "Ringkasan"], ["permit", "E-Permit"], ["tbm", "Tool Box Meeting"], ["alat", "Inspeksi Alat & Stiker"],
+  ["izin", "Izin Masuk Material & Alat"], ["apd", "Pengajuan APD"], ["mcu", "MCU & Narkoba"], ["temuan", "Temuan & Insiden"],
+  ["foto", "Dokumentasi Foto"], ["dok", "Dokumen & Surat"]];
+const hseBisaInput = () => can("hse_input");
+const hseBisaHapus = () => can("hse_hapus");
+
+/* ---------- PENYIMPANAN ---------- */
+const isBarisHse = r => !!r && !r.daily_id && String(r.permit_status || "").indexOf("HSE:") === 0;
+function hseList(jenis) {
+  return (DB.hsse || []).filter(r => isBarisHse(r) && (!jenis || r.permit_status === "HSE:" + jenis))
+    .map(r => Object.assign({}, bukaJson("HSE", r.remarks).o || {}, { _id: r.hsse_id, _jenis: r.permit_status.slice(4) }))
+    .sort((a, b) => String(b.tanggal || "").localeCompare(String(a.tanggal || "")) || String(b.dibuat || "").localeCompare(String(a.dibuat || "")));
+}
+function hseSimpan(jenis, id, o) {
+  let r = null;
+  if (id) { r = sasaranSimpan(DB.hsse, "hsse_id", id, null); if (!r) return null; }
+  if (!r) {
+    r = { hsse_id: uid("HSE"), daily_id: "", bamk_id: "", permit_status: "HSE:" + jenis, toolbox_status: "",
+      fit_to_work: "", critical_finding: "", remarks: "" };
+    DB.hsse.push(r);
+  }
+  const data = Object.assign({}, o); delete data._id; delete data._jenis;
+  data.jenis_catatan = jenis;
+  if (!data.dibuat) { data.dibuat = new Date().toISOString(); data.oleh = S.user.user_name; }
+  else { data.diubah = new Date().toISOString(); data.diubah_oleh = S.user.user_name; }
+  const b = data.tank_id ? bamkTanki(data.tank_id) : null;
+  r.bamk_id = b ? b.bamk_id : "";
+  r.remarks = bungkusJson("HSE", data);
+  audit(id ? "UPDATE" : "CREATE", "HSE_" + jenis, r.hsse_id, "", (HSE_JENIS[jenis] || { t: "Tool Box Meeting" }).t + " " + (data.tanggal || ""));
+  save();
+  return r;
+}
+function hseHapus(id) {
+  const r = byId(DB.hsse, "hsse_id", id); if (!r) return;
+  DB.hsse = DB.hsse.filter(x => x.hsse_id !== id);
+  tandaiHapus("hsse", id);
+  audit("DELETE", "HSE_" + String(r.permit_status).slice(4), id, "", "");
+  save();
+}
+
+/* ---------- RINGKASAN ---------- */
+function mulaiProyekHse() {
+  const kand = [];
+  DB.spk.filter(x => x.start_date).forEach(x => kand.push(x.start_date));
+  DB.dailies.forEach(d => d.report_date && kand.push(d.report_date));
+  hseList().forEach(o => o.tanggal && kand.push(o.tanggal));
+  return kand.sort()[0] || today();
+}
+function hariTanpaKecelakaan(sampai) {
+  sampai = sampai || today();
+  const ins = hseList("TEMUAN").filter(o => TEMUAN_KECELAKAAN.indexOf(o.jenis) >= 0 && o.tanggal <= sampai)
+    .map(o => o.tanggal).sort().slice(-1)[0];
+  const dari = ins || mulaiProyekHse();
+  let n = 0; rentangTanggal(tambahHari(dari, ins ? 1 : 0), sampai).forEach(d => { if (hariKerjaEfektif(d)) n++; });
+  return { n, dari, insiden: !!ins };
+}
+function tbmPadaTanggal(iso) {
+  const L = hseList("TBM").filter(o => o.tanggal === iso);
+  const dariHarian = DB.dailies.filter(d => d.report_date === iso && d.status !== "REJECTED").some(d => {
+    const h = DB.hsse.find(x => x.daily_id === d.daily_id); return h && h.toolbox_status === "SUDAH";
+  });
+  return { L, peserta: L.reduce((a, o) => a + jumlahPesertaTbm(o), 0), dariHarian };
+}
+function jumlahPesertaTbm(o) {
+  const tetap = (o.peserta_tetap || []).filter(p => String(p.nama || "").trim()).length;
+  const ang = (o.anggota || []).filter(x => String(x || "").trim()).length;
+  return tetap + ang || nz(o.jml_peserta);
+}
+function permitPadaTanggal(iso) {
+  return hseList("PERMIT").filter(o => o.tanggal === iso || (o.status === "Disetujui" && o.tanggal <= iso && o.berlaku && o.berlaku >= iso));
+}
+function ringkasHseHtml() {
+  const hr = today(), tbm = tbmPadaTanggal(hr), tk = hariTanpaKecelakaan(hr), bln = monthOf(hr);
+  const pHari = permitPadaTanggal(hr);
+  const izinTunggu = hseList("IZIN").filter(o => o.status === "Diajukan").length;
+  const apdJalan = hseList("APD").filter(o => o.status === "Diajukan" || o.status === "Disetujui").length;
+  const mcuJalan = hseList("MCU").filter(o => o.status === "Dijadwalkan" || o.hasil === "Menunggu hasil").length;
+  const alatBln = hseList("ALAT").filter(o => monthOf(o.tanggal) === bln);
+  const temuanBuka = hseList("TEMUAN").filter(o => o.status !== "Ditutup").length;
+  const k = (judul, v, sub, warna) => `<div class="kpi ${warna || ""}"><div class="eyebrow">${judul}</div><div class="v">${v}</div><div class="sub">${sub || "&nbsp;"}</div></div>`;
+  const tombol = hseBisaInput() ? `<div class="card"><h3>Input cepat</h3><div class="body"><div class="row">
+      <button class="btn p" data-hnew="TBM">+ Tool Box Meeting</button>
+      ${Object.keys(HSE_JENIS).map(j => `<button class="btn" data-hnew="${j}">+ ${esc(HSE_JENIS[j].baru)}</button>`).join("")}
+      <button class="btn" data-hnew="FOTO">+ Foto kegiatan HSE</button></div></div></div>` : "";
+  return `<div class="grid g4 hsekpi">
+      ${k("Hari kerja tanpa kecelakaan", `<span style="color:var(--teal)">${tk.n}</span>`, "sejak " + tglPendek(tk.dari) + (tk.insiden ? " / insiden terakhir" : " / awal pekerjaan"))}
+      ${k("TBM hari ini", tbm.L.length ? `<span style="color:var(--teal)">Sudah</span>` : tbm.dariHarian ? `<span style="color:var(--teal)">Sudah</span>` : `<span style="color:var(--amber)">Belum</span>`,
+        tbm.L.length ? tbm.peserta + " peserta" : tbm.dariHarian ? "tercatat di laporan harian" : "belum dicatat")}
+      ${k("E-Permit hari ini", pHari.length, pHari.length ? pHari.map(o => o.status).join(", ") : "belum ada")}
+      ${k("Izin masuk menunggu", izinTunggu)}
+      ${k("Pengajuan APD berjalan", apdJalan)}
+      ${k("MCU / narkoba berjalan", mcuJalan)}
+      ${k("Alat diinspeksi bulan ini", alatBln.length, alatBln.length ? alatBln.filter(o => o.hasil === "Tidak layak").length + " tidak layak" : "")}
+      ${k("Temuan terbuka", temuanBuka, "", temuanBuka ? "red" : "")}
+    </div>
+    ${tombol}
+    <div class="card"><h3>7 hari terakhir</h3><div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Tanggal</th><th>TBM / safety talk</th><th class="n">Peserta</th><th>E-Permit</th><th class="n">Temuan</th></tr></thead>
+      <tbody>${rentangTanggal(tambahHari(hr, -6), hr).map(d => {
+        const t = tbmPadaTanggal(d), P = hseList("PERMIT").filter(o => o.tanggal === d), Tm = hseList("TEMUAN").filter(o => o.tanggal === d);
+        const libur = !hariKerjaEfektif(d);
+        return `<tr><td>${hariID(d)}, ${tglPendek(d)}${libur ? ` <span class="tiny muted">libur</span>` : ""}</td>
+          <td>${t.L.length ? t.L.map(o => esc(o.topik || "Tool Box Meeting")).join(", ") : t.dariHarian ? "Tercatat di laporan harian" : `<span class="b ${libur ? "gray" : "amber"}">belum</span>`}</td>
+          <td class="n">${t.peserta || ""}</td>
+          <td>${P.length ? P.map(o => `<span class="b ${o.status === "Disetujui" ? "teal" : o.status === "Ditolak" ? "red" : "amber"}">${esc(o.status)}</span> ${esc((o.jenis || []).join(", "))}`).join("<br>") : "—"}</td>
+          <td class="n">${Tm.length || ""}</td></tr>`;
+      }).join("")}</tbody></table></div></div></div>`;
+}
+
+/* ---------- TABEL UMUM PER JENIS ---------- */
+function nilaiTampil(f, v) {
+  if (f.ty === "tank") return esc(v ? tankNo(v) : "—");
+  if (f.ty === "date") return v ? `<span class="num tiny">${esc(tglPendek(v))}</span>` : "—";
+  if (f.ty === "multi") return esc((v || []).join(", ") || "—");
+  if (f.ty === "scan") return v ? `<a href="${esc(v)}" target="_blank">buka</a>` : "—";
+  if (f.k === "status" || f.k === "hasil") {
+    const c = /Disetujui|Selesai|Ditutup|Layak$|Fit \/ negatif|Diserahkan|Sudah masuk/.test(v || "") ? "teal"
+      : /Ditolak|Tidak|Terbuka/.test(v || "") ? "red" : "amber";
+    return v ? `<span class="b ${c}">${esc(v)}</span>` : "—";
+  }
+  return esc(v || "—");
+}
+function tabelHseHtml(jenis) {
+  const J = HSE_JENIS[jenis], L = hseList(jenis);
+  const F = J.kolom.map(k => J.fields.find(f => f.k === k));
+  return `<div class="card"><h3>${esc(J.t)} <span class="tiny muted">${L.length} catatan</span>
+      ${hseBisaInput() ? `<button class="btn a sm" data-hnew="${jenis}">+ ${esc(J.baru)}</button>` : ""}</h3>
+    <div class="body flush"><div class="tw"><table>
+      <thead><tr>${F.map(f => `<th>${esc(f.t)}</th>`).join("")}<th></th></tr></thead>
+      <tbody>${L.length ? L.map(o => `<tr>${F.map(f => `<td>${nilaiTampil(f, o[f.k])}</td>`).join("")}
+        <td class="right"><button class="btn sm" data-hbuka="${esc(o._id)}">${hseBisaInput() ? "Ubah" : "Lihat"}</button></td></tr>`).join("")
+        : `<tr><td colspan="${F.length + 1}"><div class="empty"><b>Belum ada catatan</b>${hseBisaInput() ? "Tekan tombol tambah di kanan atas." : "Catatan diisi oleh Safety Officer."}</div></td></tr>`}
+      </tbody></table></div></div></div>`;
+}
+function hseModal(jenis, id) {
+  const J = HSE_JENIS[jenis]; if (!J) return;
+  const o = id ? (hseList(jenis).find(x => x._id === id) || {}) : {};
+  const rw = hseBisaInput(), dis = rw ? "" : "disabled";
+  if (!id) J.fields.forEach(f => { if (f.def) o[f.k] = f.def; if (f.ty === "date" && f.k === "tanggal") o.tanggal = today(); });
+  const tanki = DB.tanks.slice().sort((a, b) => String(a.tank_no).localeCompare(String(b.tank_no)));
+  const input = f => {
+    const v = o[f.k], nm = `data-hf="${f.k}"`;
+    if (f.ty === "date") return `<input type="date" ${nm} value="${esc(v || "")}" ${dis}>`;
+    if (f.ty === "sel") return `<select ${nm} ${dis}>${listOpts(f.o, v || "", "—")}</select>`;
+    if (f.ty === "tank") return `<select ${nm} ${dis}><option value="">— umum / tidak spesifik —</option>${opts(tanki, v || "", t => t.tank_id, t => t.tank_no + " · " + areaName(t.area_id))}</select>`;
+    if (f.ty === "area") return `<textarea ${nm} ${dis} rows="2">${esc(v || "")}</textarea>`;
+    if (f.ty === "multi") return `<div class="chkgrid">${f.o.map(x => `<label class="chk"><input type="checkbox" data-hm="${f.k}" value="${esc(x)}" ${(v || []).indexOf(x) >= 0 ? "checked" : ""} ${dis}> ${esc(x)}</label>`).join("")}</div>`;
+    if (f.ty === "scan") return "";
+    return `<input type="text" ${nm} value="${esc(v || "")}" ${f.ph ? `placeholder="${esc(f.ph)}"` : ""} ${f.dl ? `list="dl_${f.k}"` : ""} ${dis}>
+      ${f.dl ? `<datalist id="dl_${f.k}">${f.dl.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}`;
+  };
+  const biasa = J.fields.filter(f => f.ty !== "scan" && f.ty !== "multi" && f.ty !== "area");
+  const lebar = J.fields.filter(f => f.ty === "multi" || f.ty === "area");
+  const scan = J.fields.find(f => f.ty === "scan");
+  openModal((id ? (rw ? "Ubah " : "") : "Tambah ") + J.t, `
+    <div class="fg c3">${biasa.map(f => `<label class="f"><span>${esc(f.t)}${f.req ? " <em>*</em>" : ""}</span>${input(f)}</label>`).join("")}</div>
+    ${lebar.map(f => `<label class="f"><span>${esc(f.t)}${f.req ? " <em>*</em>" : ""}</span>${input(f)}</label>`).join("")}
+    ${scan ? (rw ? kotakPindaian("hScan", o[scan.k] || "", scan.t) : (o[scan.k] ? `<div class="mt8"><a class="btn sm" target="_blank" href="${esc(o[scan.k])}">Buka ${esc(scan.t.toLowerCase())}</a></div>` : "")) : ""}
+    ${o.oleh ? `<div class="tiny muted mt8">Dicatat ${esc(o.oleh)} · ${esc(waktuLokal(o.dibuat))}${o.diubah ? " · diubah " + esc(o.diubah_oleh || "") + " " + esc(waktuLokal(o.diubah)) : ""}</div>` : ""}`,
+    `${id && hseBisaHapus() ? `<button class="btn danger" id="hDel">Hapus</button>` : ""}<span class="grow"></span>
+     ${rw ? `<button class="btn p" id="hSave">Simpan</button>` : ""}`);
+  if (scan && rw) pasangPindaian("hScan");
+  if ($("#hSave")) $("#hSave").onclick = () => {
+    const baru = Object.assign({}, o);
+    $$("[data-hf]").forEach(el => baru[el.dataset.hf] = el.value.trim());
+    J.fields.filter(f => f.ty === "multi").forEach(f => baru[f.k] = $$(`[data-hm="${f.k}"]`).filter(c => c.checked).map(c => c.value));
+    if (scan) baru[scan.k] = ($("#hScan") ? $("#hScan").value.trim() : baru[scan.k]) || "";
+    const kurang = J.fields.filter(f => f.req && !String(baru[f.k] || "").trim());
+    if (kurang.length) return toast("Wajib diisi: " + kurang.map(f => f.t).join(", "), "err");
+    if (jenis === "TEMUAN" && baru.status === "Ditutup" && !baru.tutup) baru.tutup = today();
+    if (hseSimpan(jenis, id, baru)) { closeModal(); toast(J.t + " tersimpan.", "ok"); render(); }
+  };
+  if ($("#hDel")) $("#hDel").onclick = () => {
+    if (!confirmBox("Hapus catatan " + J.t + " ini? Tindakan ini tercatat di Log Audit.")) return;
+    hseHapus(id); closeModal(); toast("Catatan dihapus.", "ok"); render();
+  };
+}
+
+/* ---------- TOOL BOX MEETING ---------- */
+function tbmTabelHtml() {
+  const L = hseList("TBM");
+  return `<div class="card"><h3>Tool Box Meeting <span class="tiny muted">format Form Toolbox Meetings Pertamina · ${L.length} catatan</span>
+      ${hseBisaInput() ? `<button class="btn a sm" data-hnew="TBM">+ Tool Box Meeting</button>` : ""}</h3>
+    <div class="body flush"><div class="tw"><table>
+      <thead><tr><th>Tanggal</th><th>Area / tanki</th><th>Topik / uraian pekerjaan</th><th class="n">Peserta</th><th>Mulai</th><th>APD lengkap</th><th>Form bertanda tangan</th><th></th></tr></thead>
+      <tbody>${L.length ? L.map(o => {
+        const apd = (o.apd || []).filter(Boolean).length;
+        return `<tr><td class="num tiny">${hariID(o.tanggal)}, ${esc(tglPendek(o.tanggal))}</td>
+          <td>${esc(o.area || "—")}${o.tank_id ? " · " + esc(tankNo(o.tank_id)) : o.tag ? " · " + esc(o.tag) : ""}</td>
+          <td>${esc(o.topik || o.uraian || "—")}</td><td class="n">${jumlahPesertaTbm(o)}</td><td class="num tiny">${esc(o.mulai || "—")}</td>
+          <td>${apd}/${TBM_APD.length}</td><td>${o.scan ? `<a href="${esc(o.scan)}" target="_blank">buka</a>` : `<span class="b amber">belum</span>`}</td>
+          <td class="right" style="white-space:nowrap"><button class="btn sm" data-tbmcetak="${esc(o._id)}">Cetak</button>
+            <button class="btn sm" data-hbuka="${esc(o._id)}">${hseBisaInput() ? "Ubah" : "Lihat"}</button></td></tr>`;
+      }).join("") : `<tr><td colspan="8"><div class="empty"><b>Belum ada Tool Box Meeting</b>${hseBisaInput() ? "Catat TBM pagi ini dengan tombol di kanan atas." : "Diisi oleh Safety Officer."}</div></td></tr>`}
+      </tbody></table></div></div></div>`;
+}
+const barisTeks = s => String(s || "").split("\n").map(x => x.trim()).filter(Boolean);
+function tbmSaranDariHarian(tgl) {
+  /* hari kerja sebelumnya yang punya laporan harian */
+  const lalu = DB.dailies.filter(d => d.report_date < tgl && d.status !== "REJECTED").map(d => d.report_date).sort().slice(-1)[0];
+  const prog = [], kendala = [];
+  if (lalu) DB.dailies.filter(d => d.report_date === lalu && d.status !== "REJECTED").forEach(d => {
+    uraianHarian(d).forEach(x => prog.push(x));
+    DB.issues.filter(i => i.daily_id === d.daily_id).forEach(i => kendala.push(i.description));
+  });
+  const target = [];
+  bamkAktif().forEach(W => {
+    const r = rencanaTanggal(W, tgl);
+    if (r && r.akt.length) target.push(tankNo(W.tank_id) + ": " + r.akt.map(labelAkt).join(", "));
+  });
+  return { lalu, prog, kendala, target };
+}
+function tbmModal(id) {
+  const rw = hseBisaInput(), dis = rw ? "" : "disabled";
+  let o = id ? (hseList("TBM").find(x => x._id === id) || null) : null;
+  if (!o) {
+    const akhir = hseList("TBM")[0];
+    o = { tanggal: today(), area: akhir ? akhir.area : "OM", tank_id: akhir ? akhir.tank_id : "", mulai: "07.30",
+      apd: TBM_APD.map((x, i) => i < 7), clsr: TBM_CLSR.map(() => false), peserta_tetap: TBM_PERAN.map(p => ({ peran: p, nama: "" })), anggota: [] };
+  }
+  o.peserta_tetap = TBM_PERAN.map((p, i) => ({ peran: p, nama: ((o.peserta_tetap || [])[i] || {}).nama || "" }));
+  const tanki = DB.tanks.slice().sort((a, b) => String(a.tank_no).localeCompare(String(b.tank_no)));
+  const ta = (k, ph) => `<textarea data-tb="${k}" rows="3" placeholder="${esc(ph || "satu butir per baris")}" ${dis}>${esc((o[k] || []).join("\n"))}</textarea>`;
+  const anggota = (o.anggota || []).concat(Array(Math.max(0, 7 - (o.anggota || []).length)).fill(""));
+  openModal(id ? (rw ? "Ubah Tool Box Meeting" : "Tool Box Meeting") : "Tool Box Meeting baru", `
+    <div class="fg c4">
+      <label class="f"><span>Tanggal <em>*</em></span><input type="date" data-tf="tanggal" value="${esc(o.tanggal)}" ${dis}></label>
+      <label class="f"><span>Area kerja</span><select data-tf="area" ${dis}>${listOpts(TBM_AREA, o.area || "")}</select></label>
+      <label class="f"><span>Tag no. equipment / tanki</span><select data-tf="tank_id" ${dis}><option value="">—</option>${opts(tanki, o.tank_id || "", t => t.tank_id, t => t.tank_no)}</select></label>
+      <label class="f"><span>Waktu mulai TBM (WITA)</span><input type="text" data-tf="mulai" value="${esc(o.mulai || "")}" placeholder="07.30" ${dis}></label>
+    </div>
+    <div class="fg c2">
+      <label class="f"><span>Topik safety talk</span><input type="text" data-tf="topik" value="${esc(o.topik || "")}" placeholder="mis. bahaya bekerja di ketinggian" ${dis}></label>
+      <label class="f"><span>Uraian pekerjaan hari ini</span><input type="text" data-tf="uraian" value="${esc(o.uraian || "")}" placeholder="mis. lanjutan blasting sisi barat" ${dis}></label>
+    </div>
+    ${rw ? `<div class="row"><button class="btn sm" id="tbSaran">Isi dari laporan harian &amp; jadwal</button>
+      <span class="tiny muted" id="tbSaranKet">Progres kemarin dan kendala diambil dari laporan harian terakhir; target dari jadwal kerja hari ini.</span></div>` : ""}
+    <div class="fg c2 mt8">
+      <label class="f"><span>Progres pekerjaan kemarin</span>${ta("progres")}</label>
+      <label class="f"><span>Target pekerjaan hari ini</span>${ta("target")}</label>
+      <label class="f"><span>Kendala pekerjaan kemarin</span>${ta("kendala")}</label>
+      <label class="f"><span>Pembahasan pelanggaran</span>${ta("pelanggaran")}</label>
+    </div>
+    <label class="f"><span>Penyampaian JSA (tahapan kerja hari ini)</span>${ta("jsa")}</label>
+    <div class="grid g2">
+      <div><div class="eyebrow">Pengecekan APD</div><div class="chkgrid">${TBM_APD.map((x, i) => `<label class="chk"><input type="checkbox" data-tapd="${i}" ${(o.apd || [])[i] ? "checked" : ""} ${dis}> ${i + 1}. ${esc(x)}</label>`).join("")}</div></div>
+      <div><div class="eyebrow">Pekerjaan kritis (aspek CLSR)</div><div class="chkgrid">${TBM_CLSR.map((x, i) => `<label class="chk"><input type="checkbox" data-tcl="${i}" ${(o.clsr || [])[i] ? "checked" : ""} ${dis}> ${i + 1}. ${esc(x)}</label>`).join("")}</div></div>
+    </div>
+    <label class="f mt8"><span>Catatan lainnya</span>${ta("catatan")}</label>
+    <h4 class="mt12">Peserta Tool Box Meeting</h4>
+    <div class="fg c2">${o.peserta_tetap.map((p, i) => `<label class="f"><span>${i + 1}. ${esc(p.peran)}</span><input type="text" data-tpt="${i}" value="${esc(p.nama)}" ${dis}></label>`).join("")}</div>
+    <div class="eyebrow mt8">Anggota (no. 6 dst., maksimal ${TBM_ANGGOTA_MAKS})
+      ${rw ? `<button class="btn sm" id="tbSalinPeserta">Salin peserta TBM terakhir</button>` : ""}</div>
+    <div class="fg c3" id="tbAng">${anggota.map((n, i) => `<label class="f"><span>${i + 6}.</span><input type="text" data-tan value="${esc(n)}" ${dis}></label>`).join("")}</div>
+    ${rw ? `<button class="btn sm" id="tbTambahAng">+ baris anggota</button>` : ""}
+    <div class="mt12">${rw ? kotakPindaian("tbScan", o.scan || "", "Foto / pindaian form TBM bertanda tangan") : (o.scan ? `<a class="btn sm" target="_blank" href="${esc(o.scan)}">Buka form bertanda tangan</a>` : "")}</div>
+    ${o.oleh ? `<div class="tiny muted mt8">Dicatat ${esc(o.oleh)} · ${esc(waktuLokal(o.dibuat))}</div>` : ""}`,
+    `${id ? `<button class="btn" id="tbCetak">Cetak form</button>` : ""}${id && hseBisaHapus() ? `<button class="btn danger" id="tbDel">Hapus</button>` : ""}
+     <span class="grow"></span>${rw ? `<button class="btn p" id="tbSave">Simpan</button>` : ""}`, true);
+  if (rw) pasangPindaian("tbScan");
+  const kumpul = () => {
+    const n = Object.assign({}, o);
+    $$("[data-tf]").forEach(el => n[el.dataset.tf] = el.value.trim());
+    $$("[data-tb]").forEach(el => n[el.dataset.tb] = barisTeks(el.value));
+    n.apd = TBM_APD.map((x, i) => !!($(`[data-tapd="${i}"]`) || {}).checked);
+    n.clsr = TBM_CLSR.map((x, i) => !!($(`[data-tcl="${i}"]`) || {}).checked);
+    n.peserta_tetap = TBM_PERAN.map((p, i) => ({ peran: p, nama: ($(`[data-tpt="${i}"]`) || {}).value ? $(`[data-tpt="${i}"]`).value.trim() : "" }));
+    n.anggota = $$("[data-tan]").map(el => el.value.trim()).filter(Boolean).slice(0, TBM_ANGGOTA_MAKS);
+    if ($("#tbScan")) n.scan = $("#tbScan").value.trim();
+    n.jml_peserta = jumlahPesertaTbm(n);
+    return n;
+  };
+  if ($("#tbSaran")) $("#tbSaran").onclick = () => {
+    const tg = ($("[data-tf=tanggal]") || {}).value || today(), s = tbmSaranDariHarian(tg);
+    const isi = (k, arr) => { const el = $(`[data-tb="${k}"]`); if (el && arr.length && !el.value.trim()) el.value = arr.join("\n"); };
+    isi("progres", s.prog); isi("kendala", s.kendala); isi("target", s.target);
+    $("#tbSaranKet").textContent = s.lalu ? "Diambil dari laporan harian " + dateID(s.lalu) + ". Kotak yang sudah terisi tidak ditimpa."
+      : "Belum ada laporan harian sebelum tanggal ini.";
+  };
+  if ($("#tbSalinPeserta")) $("#tbSalinPeserta").onclick = () => {
+    const lalu = hseList("TBM").find(x => x._id !== id); if (!lalu) return toast("Belum ada TBM sebelumnya.", "err");
+    lalu.peserta_tetap && lalu.peserta_tetap.forEach((p, i) => { const el = $(`[data-tpt="${i}"]`); if (el && !el.value.trim()) el.value = p.nama || ""; });
+    const L = lalu.anggota || [];
+    $("#tbAng").innerHTML = L.concat(Array(Math.max(0, 7 - L.length)).fill("")).map((n, i) => `<label class="f"><span>${i + 6}.</span><input type="text" data-tan value="${esc(n)}"></label>`).join("");
+    toast(L.length + " anggota disalin. Hapus nama yang hari ini tidak hadir.", "ok");
+  };
+  if ($("#tbTambahAng")) $("#tbTambahAng").onclick = () => {
+    const n = $$("[data-tan]").length; if (n >= TBM_ANGGOTA_MAKS) return toast("Form Pertamina memuat maksimal 30 peserta.", "err");
+    $("#tbAng").insertAdjacentHTML("beforeend", `<label class="f"><span>${n + 6}.</span><input type="text" data-tan value=""></label>`);
+  };
+  if ($("#tbSave")) $("#tbSave").onclick = () => {
+    const n = kumpul();
+    if (!n.tanggal) return toast("Tanggal wajib diisi.", "err");
+    if (!n.jml_peserta) return toast("Isi minimal satu nama peserta.", "err");
+    if (hseSimpan("TBM", id, n)) { closeModal(); toast("Tool Box Meeting tersimpan.", "ok"); render(); }
+  };
+  if ($("#tbCetak")) $("#tbCetak").onclick = () => cetakTbm(id ? Object.assign(kumpul(), { _id: id }) : kumpul());
+  if ($("#tbDel")) $("#tbDel").onclick = () => {
+    if (!confirmBox("Hapus Tool Box Meeting ini? Tindakan ini tercatat di Log Audit.")) return;
+    hseHapus(id); closeModal(); toast("TBM dihapus.", "ok"); render();
+  };
+}
+function cetakTbm(o) {
+  const cek = v => v ? "&#9745;" : "&#9744;";
+  const titik = (arr, n) => { const L = (arr || []).slice(0, n); while (L.length < n) L.push(""); return L.map(x => `<div class="ln">&bull; ${esc(x) || "&nbsp;"}</div>`).join(""); };
+  const areaHtml = TBM_AREA.map(a => a === o.area ? `<b class="lingkar">${esc(a)}</b>` : esc(a)).join(" / ");
+  const tagTank = o.tank_id ? tankNo(o.tank_id) : (o.tag || "");
+  const tgl = o.tanggal ? o.tanggal.split("-").reverse().join(" / ") : "";
+  const kop = `<div class="judul">Form Toolbox Meetings</div>
+    <table class="hd"><tr><td class="lb">Area Kerja- Tag. No Equipment</td><td>( ${areaHtml} ) - ${esc(tagTank) || "..........."}</td>
+      <td class="lb" style="width:60px">Date :</td><td style="width:150px">${esc(tgl)}</td></tr></table>`;
+  const ang = (o.anggota || []).slice();
+  const hal1 = `<div class="hal">${kop}
+    <table class="g"><tr>
+      <td style="width:36%"><div class="sh">Progres Pekerjaan Kemarin</div>${titik(o.progres, 4)}</td>
+      <td style="width:36%"><div class="sh">Target Pekerjaan Hari Ini</div>${titik(o.target, 4)}</td>
+      <td rowspan="3" style="width:28%"><div class="sh">Informasi Umum Pekerjaan</div>
+        <div class="ln">&bull; Uraian Pekerjaan : <u>${esc(o.uraian || o.topik || "")}</u></div>
+        <div class="ln">&bull; Jumlah Peserta TBM : <b>${jumlahPesertaTbm(o)}</b> Org</div>
+        <div class="ln">&bull; Waktu Mulai TBM : <b>${esc(o.mulai || "")}</b> WITA</div>
+        <div class="ln">&bull; Pengecekan APD :</div>
+        ${TBM_APD.map((x, i) => `<div class="ck"><span>${i + 1}. ${esc(x)}</span><span class="bx">${cek((o.apd || [])[i])}</span></div>`).join("")}
+        <div class="sh" style="margin-top:6px">CATATAN LAINNYA :</div>${titik(o.catatan, 4)}</td></tr>
+      <tr><td><div class="sh">Kendala Pekerjaan Kemarin</div>${titik(o.kendala, 4)}</td>
+        <td><div class="sh">Pembahasan Pelanggaran</div>${titik(o.pelanggaran, 4)}</td></tr>
+      <tr><td colspan="2"><div class="sh">Penyampaian JSA (Tahapan Kerja Hari Ini)</div>${titik(o.jsa, 4)}</td></tr>
+      <tr><td colspan="2"><div class="sh">Pekerjaan Kritikal (Aspek CLSR)</div>
+        <div class="cl">${TBM_CLSR.map((x, i) => `<div class="ck"><span>${i + 1}. ${esc(x)}</span><span class="bx">${cek((o.clsr || [])[i])}</span></div>`).join("")}</div></td>
+        <td class="mut">${o.topik ? "Topik safety talk: <b>" + esc(o.topik) + "</b>" : ""}</td></tr>
+    </table><div class="kaki">PERTAMINA</div></div>`;
+  const hal2 = `<div class="hal">${kop.replace("Form Toolbox Meetings", "Form Toolbox Meetings <span class='h2'>Hal 2</span>")}
+    <table class="ps"><thead><tr><th style="width:34%">Peserta Toolbox Meeting</th><th style="width:16%">Tanda tangan</th><th style="width:34%">Peserta Toolbox Meeting</th><th style="width:16%">Tanda tangan</th></tr></thead>
+    <tbody>${Array.from({ length: 12 }, (_, i) => {
+      const kiri = i < 5 ? `${i + 1}. ${esc(o.peserta_tetap[i].peran)}<div class="nm">${esc(o.peserta_tetap[i].nama || "")}</div>`
+        : `${i === 5 ? '<div class="mut">Anggota :</div>' : ""}${i + 1}. <span class="nm">${esc(ang[i - 5] || "")}</span>`;
+      const kn = i < 9 ? [13 + 2 * i, 14 + 2 * i] : [];
+      return `<tr><td>${kiri}</td><td class="ttd">${i + 1}.</td>
+        <td>${kn.map(n => `<div>${n}. <span class="nm">${esc(ang[n - 6] || "")}</span></div>`).join("")}</td>
+        <td class="ttd">${kn.map(n => n + ".").join("<br>")}</td></tr>`;
+    }).join("")}</tbody></table><div class="kaki">PERTAMINA</div></div>`;
+  const css = `@page{size:A4 landscape;margin:9mm}body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;font-size:11px}
+    .hal{page-break-after:always;position:relative;min-height:180mm}.hal:last-child{page-break-after:auto}
+    .judul{color:#E0533D;font-weight:700;font-size:20px;margin-bottom:4px}.judul .h2{float:right;font-size:11px;color:#E0533D}
+    table{border-collapse:collapse;width:100%}td,th{border:1px solid #333;padding:4px 6px;vertical-align:top}
+    table.hd td{background:#fff}table.hd td.lb{background:#3FA5DC;color:#fff;font-weight:700;white-space:nowrap}
+    .lingkar{border:1.5px solid #111;border-radius:50%;padding:0 4px}
+    table.g{margin-top:6px}.sh{background:#3FA5DC;color:#fff;font-weight:700;padding:3px 6px;margin:-4px -6px 4px}
+    .ln{border-bottom:1px dotted #777;min-height:15px;margin:2px 0}.ck{display:flex;justify-content:space-between;margin:2px 0}
+    .bx{font-size:14px;line-height:12px}.cl{columns:2;column-gap:18px}.mut{color:#555;font-size:10px}
+    table.ps{margin-top:8px}table.ps th{background:#3FA5DC;color:#fff}table.ps td{height:30px}.ttd{color:#555}
+    .nm{font-family:"Segoe Script","Comic Sans MS",cursive;color:#1a3a8a}
+    .kaki{position:absolute;right:0;bottom:-2mm;font-weight:700;color:#0E5FA8;letter-spacing:.5px}`;
+  const win = window.open("", "_blank");
+  if (!win) return toast("Jendela cetak diblokir peramban. Izinkan pop-up lalu ulangi.", "err");
+  win.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>TBM ${esc(o.tanggal || "")}</title><style>${css}</style></head><body>${hal1}${hal2}</body></html>`);
+  win.document.close();
+  setTimeout(() => { try { win.print(); } catch (e) { } }, 500);
+}
+
+/* ---------- FOTO HSE ---------- */
+function fotoHseList() {
+  return (DB.photos || []).filter(p => p.photo_type === "HSSE" && p.file_url)
+    .map(p => Object.assign({ _tgl: (byId(DB.dailies, "daily_id", p.daily_id) || {}).report_date || tanggalLokal(p.taken_at) }, p))
+    .sort((a, b) => String(b._tgl).localeCompare(String(a._tgl)));
+}
+function fotoHseHtml() {
+  const L = fotoHseList();
+  return `<div class="card"><h3>Dokumentasi foto HSE <span class="tiny muted">${L.length} foto · termasuk foto HSSE dari laporan harian</span>
+      ${hseBisaInput() ? `<button class="btn a sm" data-hnew="FOTO">+ Foto kegiatan HSE</button>` : ""}</h3>
+    <div class="body">${L.length ? `<div class="photos">${L.map(p => `<div class="ph"><span class="tag">${esc(tglPendek(p._tgl))}</span>
+      ${hseBisaHapus() && !p.daily_id ? `<button class="x" data-hfdel="${esc(p.photo_id)}">✕</button>` : ""}
+      <img src="${p.file_url}" loading="lazy"><a class="dl" target="_blank" href="${p.file_url}">Buka</a>
+      <div class="cap">${esc(p.tank_id ? tankNo(p.tank_id) + " · " : "")}${esc(fotoCap(p) || "—")}</div></div>`).join("")}</div>`
+      : `<div class="empty"><b>Belum ada foto HSE</b>Foto TBM, inspeksi alat, dan temuan ditampilkan di sini.</div>`}</div></div>`;
+}
+function fotoHseModal() {
+  const tanki = DB.tanks.slice().sort((a, b) => String(a.tank_no).localeCompare(String(b.tank_no)));
+  openModal("Foto kegiatan HSE", `
+    <div class="fg c3">
+      <label class="f"><span>Tanggal</span><input type="date" id="hfTgl" value="${today()}"></label>
+      <label class="f"><span>Tanki / lokasi</span><select id="hfTk"><option value="">— umum —</option>${opts(tanki, "", t => t.tank_id, t => t.tank_no)}</select></label>
+      <label class="f"><span>Kegiatan</span><select id="hfKeg">${listOpts(["Tool Box Meeting", "Inspeksi alat", "Temuan / insiden", "Safety patrol", "Induction", "Lainnya"], "Tool Box Meeting")}</select></label>
+    </div>
+    <label class="f"><span>Keterangan</span><input type="text" id="hfCap" placeholder="mis. TBM pagi sebelum blasting shell"></label>
+    <label class="btn a">Ambil / pilih foto<input type="file" id="hfFile" accept="image/*" capture="environment" multiple hidden></label>
+    <div class="photos mt12" id="hfList"></div>`, `<span class="grow"></span><button class="btn p" id="hfSave">Simpan foto</button>`);
+  const antre = [];
+  const gambar = () => { $("#hfList").innerHTML = antre.map((u, i) => `<div class="ph"><button class="x" data-hfx="${i}">✕</button><img src="${u}"></div>`).join("");
+    $$("[data-hfx]").forEach(b => b.onclick = () => { antre.splice(+b.dataset.hfx, 1); gambar(); }); };
+  $("#hfFile").onchange = e => { Array.from(e.target.files || []).forEach(f => shrink(f, u => { antre.push(u); gambar(); })); e.target.value = ""; };
+  $("#hfSave").onclick = () => {
+    if (!antre.length) return toast("Pilih fotonya dulu.", "err");
+    const tk = $("#hfTk").value, b = tk ? bamkTanki(tk) : null, tgl = $("#hfTgl").value || today();
+    antre.forEach(u => DB.photos.push({ photo_id: uid("PH"), daily_id: "", bamk_id: b ? b.bamk_id : "", tank_id: tk, photo_type: "HSSE",
+      file_url: u, caption: $("#hfKeg").value + ($("#hfCap").value.trim() ? " — " + $("#hfCap").value.trim() : ""),
+      taken_at: new Date(tgl + "T" + new Date().toTimeString().slice(0, 8)).toISOString(), uploaded_by: S.user.user_id }));
+    audit("CREATE", "HSE_FOTO", "", "", antre.length + " foto");
+    save(); closeModal(); toast(antre.length + " foto tersimpan. Foto naik ke Drive saat sinkron.", "ok"); render();
+  };
+}
+
+/* ---------- LAYAR HSE & K3 ---------- */
+VIEWS.hse = {
+  html() {
+    const tab = S.tab || "ringkas";
+    let isi;
+    if (tab === "ringkas") isi = ringkasHseHtml();
+    else if (tab === "tbm") isi = tbmTabelHtml();
+    else if (tab === "foto") isi = fotoHseHtml();
+    else { const j = Object.keys(HSE_JENIS).find(k => HSE_JENIS[k].tab === tab); isi = j ? tabelHseHtml(j) : ""; }
+    return `${!hseBisaInput() ? `<div class="note warn">Anda masuk sebagai <b>${esc(S.user.user_name)} · ${esc(ROLE_LABEL[S.user.role] || S.user.role)}</b>, jadi menu HSE &amp; K3 tampil dalam mode <b>review</b> (hanya lihat).
+        Tombol input hanya muncul untuk peran <b>Safety Officer (HSE)</b> dan Project Control. Bila akun ini seharusnya Safety Officer,
+        minta Project Control mengubah perannya di Pengaturan › Pengguna, lalu keluar dan masuk lagi.</div>` : ""}
+      <div class="tabs hsetabs">${HSE_TABS.map(t => `<button data-tab="${t[0]}" class="${tab === t[0] ? "on" : ""}">${esc(t[1])}</button>`).join("")}</div>
+      <div class="mt12">${isi}</div>`;
+  },
+  bind() {
+    $$(".hsetabs [data-tab]").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; render(); });
+    $$("[data-hnew]").forEach(b => b.onclick = () => {
+      const j = b.dataset.hnew;
+      if (j === "TBM") tbmModal(null); else if (j === "FOTO") fotoHseModal(); else hseModal(j, null);
+    });
+    $$("[data-hbuka]").forEach(b => b.onclick = () => {
+      const r = byId(DB.hsse, "hsse_id", b.dataset.hbuka); if (!r) return;
+      const j = String(r.permit_status).slice(4);
+      if (j === "TBM") tbmModal(r.hsse_id); else hseModal(j, r.hsse_id);
+    });
+    $$("[data-tbmcetak]").forEach(b => b.onclick = () => { const o = hseList("TBM").find(x => x._id === b.dataset.tbmcetak); if (o) cetakTbm(o); });
+    $$("[data-hfdel]").forEach(b => b.onclick = () => {
+      if (!confirmBox("Hapus foto HSE ini?")) return;
+      DB.photos = DB.photos.filter(p => p.photo_id !== b.dataset.hfdel); tandaiHapus("photos", b.dataset.hfdel);
+      audit("DELETE", "HSE_FOTO", b.dataset.hfdel, "", ""); save(); render();
+    });
+  }
+};
+
+/* ============================================================
+   V3.3 — LAPORAN PROYEK: DAILY · WEEKLY · MONTHLY REPORT
+   Format mengikuti WR-HBM (Weekly Report) yang dipakai tim:
+     1 Work description · 2 Data tanki & volume · 3 Manpower (MD)
+     4 Equipment (ED) & material · 5 Progress status record
+     6 Ringkasan HSE · 7 Photograph · 8 Note / concern · tanda tangan
+   Semua angka dihitung dari laporan harian. Yang diketik hanya
+   rencana periode berikutnya, catatan, pilihan foto, dan nomor laporan.
+   ============================================================ */
+const LAP_TIPE = "LAPORAN_PROYEK", LAP_SETELAN = "SETELAN_LAPORAN";
+const LAP_MODE = { H: ["Harian", "DAILY REPORT", "DR"], W: ["Mingguan", "WEEKLY REPORT", "WR"], M: ["Bulanan", "MONTHLY REPORT", "MR"] };
+const MP_TIDAK_LANGSUNG = ["Project Control", "Safety Man", "Safety Officer", "Driver", "Site Coordinator", "Admin"];
+const isDocLaporan = d => d && (d.document_type === LAP_TIPE || d.document_type === LAP_SETELAN);
+
+/* ---------- SETELAN (sekali isi, ikut tersinkron) ---------- */
+function setelanLaporanDoc() { return DB.documents.find(d => d.document_type === LAP_SETELAN) || null; }
+function setelanLaporan() {
+  const d = setelanLaporanDoc(), o = (d && bukaJson("LAP", d.remarks).o) || {};
+  const sp = DB.spk.find(x => x.contract_no) || {};
+  const mulai = o.mulai || "2026-08-10";
+  return Object.assign({
+    proyek: "Unit Rate Pengecatan Tanki di Area Oil Movement",
+    lokasi: "PT. Pertamina Patra Niaga RU V Balikpapan",
+    kontrak: sp.contract_no || DB.config.contract_no || "SP3MK-030/KPI48100/2026-S0",
+    mulai, selesai: o.selesai || tambahHari(mulai, 730),
+    kode: "HBM",
+    prep_nama: "", prep_pt: "PT. HUDAYA BAYANAKA MANDIRI",
+    chk_nama: "", chk_pt: "PT. HUDAYA BAYANAKA MANDIRI",
+    app_nama: "", app_pt: ""
+  }, o);
+}
+function simpanSetelanLaporan(o) {
+  let d = setelanLaporanDoc();
+  if (!d) {
+    d = { document_id: uid("DC"), bamk_id: "", document_type: LAP_SETELAN, document_no: "SETELAN LAPORAN PROYEK",
+      document_date: "", file_url: "", required_for_billing: false, status: "AVAILABLE", remarks: "" };
+    DB.documents.push(d);
+  }
+  d.remarks = bungkusJson("LAP", o);
+  audit("UPDATE", "LAPORAN_SETELAN", d.document_id, "", "setelan laporan proyek"); save();
+}
+
+/* ---------- PERIODE & NOMOR ---------- */
+function mulaiSpkPertama() {
+  return DB.spk.filter(x => x.start_date && x.status !== "BATAL" && x.status !== "DRAFT").map(x => x.start_date).sort()[0]
+    || DB.dailies.map(d => d.report_date).filter(Boolean).sort()[0] || today();
+}
+function periodeLaporan(mode, kunci) {
+  if (mode === "H") {
+    const d = kunci || today();
+    return { mode, kunci: d, from: d, to: d, label: hariID(d) + ", " + dateID(d) };
+  }
+  if (mode === "W") {
+    const mon = weekKey(kunci || today()).key, sun = tambahHari(mon, 6), fri = tambahHari(mon, 4);
+    const akhirPekan = DB.dailies.some(d => d.report_date > fri && d.report_date <= sun && d.status !== "REJECTED" && d.status !== "DRAFT");
+    const ujung = akhirPekan ? sun : fri;
+    return { mode, kunci: mon, from: mon, to: sun, tampilAkhir: ujung, label: dateID(mon) + " ~ " + dateID(ujung) };
+  }
+  const ym = (kunci || today()).slice(0, 7);
+  return { mode, kunci: ym, from: ym + "-01", to: akhirBulan(ym), label: monthID(ym) };
+}
+function nomorLaporanAuto(P) {
+  const kode = setelanLaporan().kode || "HBM", m0 = mulaiSpkPertama();
+  const ROM = d => ROMAWI[+d.slice(5, 7) - 1] + "-" + d.slice(0, 4);
+  if (P.mode === "W") {
+    const n = Math.round((new Date(P.from + "T00:00:00") - new Date(weekKey(m0).key + "T00:00:00")) / (7 * 86400000)) + 1;
+    return "WR-" + kode + "-" + pad3(n) + "-" + ROM(P.from);
+  }
+  if (P.mode === "M") {
+    const n = (+P.kunci.slice(0, 4) - +m0.slice(0, 4)) * 12 + (+P.kunci.slice(5, 7) - +m0.slice(5, 7)) + 1;
+    return "MR-" + kode + "-" + pad3(n) + "-" + ROM(P.from);
+  }
+  let n = 0; rentangTanggal(m0, P.from).forEach(d => { if (hariKerjaEfektif(d)) n++; });
+  return "DR-" + kode + "-" + pad3(n || 1) + "-" + ROM(P.from);
+}
+
+/* ---------- ISIAN MANUAL PER LAPORAN ---------- */
+function lapDoc(P) {
+  const kunci = P.mode + ":" + P.kunci;
+  return DB.documents.find(d => d.document_type === LAP_TIPE && (bukaJson("LAP", d.remarks).o || {}).kunci === kunci) || null;
+}
+function isianLaporan(P) { const d = lapDoc(P); return (d && bukaJson("LAP", d.remarks).o) || {}; }
+function simpanIsianLaporan(P, o) {
+  let d = lapDoc(P);
+  if (!d) {
+    d = { document_id: uid("DC"), bamk_id: "", document_type: LAP_TIPE, document_no: "", document_date: "",
+      file_url: "", required_for_billing: false, status: "AVAILABLE", remarks: "" };
+    DB.documents.push(d);
+  }
+  o.kunci = P.mode + ":" + P.kunci;
+  d.document_no = o.no || nomorLaporanAuto(P);
+  d.document_date = P.tampilAkhir || P.to;
+  d.remarks = bungkusJson("LAP", o);
+  audit("UPDATE", "LAPORAN_PROYEK", d.document_id, "", d.document_no); save();
+}
+
+/* ---------- PENGUMPULAN DATA ---------- */
+const dailyResmi = d => d && d.status !== "REJECTED" && d.status !== "DRAFT";
+function uraianHarian(d) {
+  const t = tankNo(d.tank_id || (bamkOf(d.bamk_id) || {}).tank_id);
+  const pr = DB.progress.filter(p => p.daily_id === d.daily_id);
+  const grup = {};
+  prVol(pr).filter(p => nz(p.actual_qty) > 0).forEach(p => {
+    const st = tahapOf(p.stage_id), k = st ? st.stage_name : "Pekerjaan coating";
+    grup[k] = grup[k] || { bag: new Set(), q: 0 };
+    grup[k].bag.add(p.part === "SHELL" ? "Shell" : p.part === "ROOF" ? "Roof" : "Accessories"); grup[k].q += nz(p.actual_qty);
+  });
+  const out = Object.keys(grup).map(k => k + " Tanki " + t + " " + Array.from(grup[k].bag).join(" + ") + " (" + fmt(grup[k].q, 2) + " m²)");
+  prKeg(pr).forEach(p => out.push((p.activity || "Kegiatan pendukung") + " — Tanki " + t + (p.work_package ? " (" + p.work_package + ")" : "")));
+  return out;
+}
+function jumlahPer(rows, kunciF, nilaiF) {
+  const m = {};
+  rows.forEach(r => { const k = kunciF(r); if (!k) return; m[k] = (m[k] || 0) + nz(nilaiF(r)); });
+  return m;
+}
+function tabelPrevThis(sebelum, dalam) {
+  const kunci = Array.from(new Set(Object.keys(sebelum).concat(Object.keys(dalam))));
+  return kunci.map(k => ({ k, prev: sebelum[k] || 0, ini: dalam[k] || 0, acc: (sebelum[k] || 0) + (dalam[k] || 0) }));
+}
+function dataLaporan(P) {
+  const D = DB.dailies.filter(dailyResmi);
+  const bamkDari = {}; DB.dailies.forEach(d => { bamkDari[d.daily_id] = d.bamk_id; });
+  const dIn = D.filter(d => d.report_date >= P.from && d.report_date <= P.to).sort((a, b) => a.report_date.localeCompare(b.report_date));
+  const dSeb = D.filter(d => d.report_date < P.from);
+  const idIn = new Set(dIn.map(d => d.daily_id)), idSeb = new Set(dSeb.map(d => d.daily_id)), idSd = new Set(D.filter(d => d.report_date <= P.to).map(d => d.daily_id));
+
+  /* 1. uraian kegiatan per tanggal */
+  const perTgl = {};
+  dIn.forEach(d => { (perTgl[d.report_date] = perTgl[d.report_date] || []).push(...uraianHarian(d)); });
+
+  /* 3. manpower (orang-hari) */
+  const mp = (ids) => jumlahPer(DB.manpower.filter(m => ids.has(m.daily_id)), m => m.category || "Lainnya", m => m.worker_count);
+  const MP = tabelPrevThis(mp(idSeb), mp(idIn));
+  const urutMp = k => { const i = MANPOWER_CATS.indexOf(k); return i < 0 ? 99 : i; };
+  MP.sort((a, b) => urutMp(a.k) - urutMp(b.k));
+  const mpLangsung = MP.filter(r => MP_TIDAK_LANGSUNG.indexOf(r.k) < 0), mpTidak = MP.filter(r => MP_TIDAK_LANGSUNG.indexOf(r.k) >= 0);
+
+  /* 4. alat (unit-hari) dan material */
+  const eq = ids => jumlahPer((DB.equipment || []).filter(m => ids.has(m.daily_id)), m => m.equipment_name, m => m.qty || 1);
+  const EQ = tabelPrevThis(eq(idSeb), eq(idIn));
+  const mt = ids => jumlahPer(DB.materials.filter(m => ids.has(m.daily_id)), m => m.item ? m.item + (m.unit ? " (" + m.unit + ")" : "") : "", m => m.qty);
+  const MT = tabelPrevThis(mt(idSeb), mt(idIn));
+
+  /* 2 & 5. tanki dan progres per tahap */
+  const bamks = DB.bamk.filter(b => b.status !== "BATAL" && b.status !== "DRAFT" &&
+    (DB.dailies.some(d => d.bamk_id === b.bamk_id && idSd.has(d.daily_id)) || b.status === "AKTIF"));
+  const st = tahapAktif();
+  const qtyOf = (b, ids, s, part) => DB.progress.filter(p => ids.has(p.daily_id) && p.stage_id === s.stage_id && (!part || p.part === part) && !isKeg(p) &&
+    bamkDari[p.daily_id] === b.bamk_id).reduce((a, p) => a + nz(p.actual_qty), 0);
+  const TK = bamks.map(b => {
+    const t = tankOf(b.tank_id) || {}, vol = volBamk(b);
+    const rows = st.map(s => {
+      const prev = qtyOf(b, idSeb, s), ini = qtyOf(b, idIn, s), acc = prev + ini;
+      return { s, vol, prev, ini, acc, sisa: Math.max(0, vol - acc), pct: vol ? acc / vol * 100 : 0,
+        rinci: BAGIAN.filter(([k]) => volBagian(b, k) > 0).map(([k, n]) => n.split(" ")[0] + " " + fmt(qtyOf(b, idSeb, s, k) + qtyOf(b, idIn, s, k), 2) + "/" + fmt(volBagian(b, k), 2)).join(" · ") };
+    });
+    const bobot = (ids) => DB.progress.filter(p => ids.has(p.daily_id) && !isKeg(p) && bamkDari[p.daily_id] === b.bamk_id)
+      .reduce((a, p) => a + nz(p.actual_qty) * bobotTahap(p.stage_id) / 100, 0);
+    const ePrev = bobot(idSeb), eIni = bobot(idIn);
+    return { b, t, L: luasTanki(t), vol, rows, ePrev, eIni, eAcc: ePrev + eIni, pctPrev: vol ? ePrev / vol * 100 : 0, pctAcc: vol ? (ePrev + eIni) / vol * 100 : 0 };
+  });
+
+  /* 6. HSE */
+  const tbm = hseList("TBM").filter(o => o.tanggal >= P.from && o.tanggal <= P.to);
+  const permit = hseList("PERMIT").filter(o => o.tanggal >= P.from && o.tanggal <= P.to);
+  const temuan = hseList("TEMUAN").filter(o => o.tanggal >= P.from && o.tanggal <= P.to);
+  const HSE = {
+    tbm: tbm.length, peserta: tbm.reduce((a, o) => a + jumlahPesertaTbm(o), 0),
+    tbmHarian: dIn.filter(d => { const h = DB.hsse.find(x => x.daily_id === d.daily_id); return h && h.toolbox_status === "SUDAH"; }).length,
+    permit: permit.length, permitOk: permit.filter(o => o.status === "Disetujui" || o.status === "Ditutup").length,
+    temuan: temuan.length, temuanBuka: hseList("TEMUAN").filter(o => o.status !== "Ditutup" && o.tanggal <= P.to).length,
+    kecelakaan: temuan.filter(o => TEMUAN_KECELAKAAN.indexOf(o.jenis) >= 0).length,
+    alat: hseList("ALAT").filter(o => o.tanggal >= P.from && o.tanggal <= P.to).length,
+    tanpa: hariTanpaKecelakaan(P.to > today() ? today() : P.to)
+  };
+
+  /* 7. foto, 8. kendala */
+  const foto = (DB.photos || []).filter(p => idIn.has(p.daily_id) && p.file_url && p.photo_type !== "HSSE")
+    .map(p => Object.assign({ _tgl: (byId(DB.dailies, "daily_id", p.daily_id) || {}).report_date }, p))
+    .sort((a, b) => String(a._tgl).localeCompare(String(b._tgl)));
+  const kendala = DB.issues.filter(i => (idIn.has(i.daily_id) || (i.issue_date >= P.from && i.issue_date <= P.to)) || (i.status !== "CLOSED" && i.issue_date <= P.to));
+
+  /* Rencana periode berikutnya dari jadwal kerja tanki */
+  const lanjut = P.mode === "H" ? [tambahHari(P.to, 1), tambahHari(P.to, 7)] : P.mode === "W" ? [tambahHari(P.from, 7), tambahHari(P.from, 13)]
+    : [tambahHari(P.to, 1), akhirBulan(tambahHari(P.to, 1).slice(0, 7))];
+  const rencana = [];
+  bamkAktif().forEach(W => {
+    let hari = rentangTanggal(lanjut[0], lanjut[1]).filter(d => hariKerjaEfektif(d));
+    if (P.mode === "H") hari = hari.slice(0, 1);
+    const akt = new Set();
+    hari.forEach(d => { const r = rencanaTanggal(W, d); if (r) r.akt.forEach(a => akt.add(labelAkt(a))); });
+    if (akt.size) rencana.push("Tanki " + tankNo(W.tank_id) + ": " + Array.from(akt).join(", "));
+  });
+
+  return { P, dIn, perTgl, mpLangsung, mpTidak, EQ, MT, TK, HSE, foto, kendala, rencana };
+}
+
+/* ---------- SUSUN DOKUMEN ---------- */
+function laporanProyekHtml(P) {
+  const X = dataLaporan(P), I = isianLaporan(P), C = setelanLaporan(), M = LAP_MODE[P.mode];
+  const no = I.no || nomorLaporanAuto(P);
+  const lbl = P.mode === "H" ? ["Previous", "Today", "Accum"] : P.mode === "W" ? ["Previous", "This Week", "Accum"] : ["Previous", "This Month", "Accum"];
+  const kini = P.tampilAkhir || P.to;
+  const sisaHari = Math.round((new Date(C.selesai + "T00:00:00") - new Date(kini + "T00:00:00")) / 86400000);
+  const n2 = v => fmt(v, 2), n0 = v => fmt0(v);
+  const tPT = (judul, rows, kol, satuan, f) => `<table class="t"><thead><tr><th style="width:26px">No</th><th>${judul}</th>
+      <th class="n">${lbl[0]}</th><th class="n">${lbl[1]}</th><th class="n">${lbl[2]}</th></tr></thead><tbody>
+      ${rows.length ? rows.map((r, i) => `<tr><td class="c">${i + 1}</td><td>${esc(r.k)}</td><td class="n">${f(r.prev)}</td><td class="n">${f(r.ini)}</td><td class="n">${f(r.acc)}</td></tr>`).join("")
+        : `<tr><td class="c">—</td><td colspan="4" class="mut">tidak ada data</td></tr>`}
+      <tr class="tot"><td colspan="2">TOTAL ${satuan}</td><td class="n">${f(rows.reduce((a, r) => a + r.prev, 0))}</td><td class="n">${f(rows.reduce((a, r) => a + r.ini, 0))}</td>
+      <td class="n">${f(rows.reduce((a, r) => a + r.acc, 0))}</td></tr></tbody></table>`;
+
+  /* 1. Work description */
+  const tglKerja = Object.keys(X.perTgl).sort();
+  const kegiatan = tglKerja.length ? tglKerja.map(d => `<tr><td class="tg">${P.mode === "H" ? "" : esc(tglPendek(d))}</td><td>${X.perTgl[d].map(x => "&bull; " + esc(x)).join("<br>")}</td></tr>`).join("")
+    : `<tr><td></td><td class="mut">Tidak ada laporan harian pada periode ini.</td></tr>`;
+  const tambahan = barisTeks(I.uraian_tambahan);
+  const rencana = barisTeks(I.rencana).length ? barisTeks(I.rencana) : X.rencana;
+  const judulRencana = P.mode === "H" ? "NEXT DAY PLANNING" : P.mode === "W" ? "NEXT WEEK PLANNING ACTIVITIES" : "NEXT MONTH PLANNING ACTIVITIES";
+  const judulIni = P.mode === "H" ? "TODAY ACTIVITIES" : P.mode === "W" ? "THIS WEEK ACTIVITIES" : "THIS MONTH ACTIVITIES";
+
+  /* 7. foto terpilih */
+  const pilih = Array.isArray(I.foto) ? I.foto : null;
+  let fotoPakai = pilih ? X.foto.filter(p => pilih.indexOf(p.photo_id) >= 0) : (() => {
+    const ba = X.foto.filter(p => p.photo_type === "BEFORE" || p.photo_type === "AFTER");
+    const lain = X.foto.filter(p => ba.indexOf(p) < 0);
+    return ba.concat(lain).slice(0, 6);
+  })();
+  fotoPakai = fotoPakai.slice(0, 9);
+  const catatan = barisTeks(I.catatan).length ? barisTeks(I.catatan)
+    : X.kendala.map(i => (i.issue_date ? tglPendek(i.issue_date) + " — " : "") + i.description + (i.action ? " (tindakan: " + i.action + ")" : "") + (i.status === "CLOSED" ? " [selesai]" : ""));
+
+  return `<div class="wr">
+  <div class="wrkop"><img src="${logoAktif()}" alt=""><div class="wrjd">${M[1]}</div><div class="wrno">${esc(no)}</div></div>
+  <table class="hd"><tr><td class="l">Project Name</td><td>: ${esc(C.proyek)}</td><td class="l">Start Date</td><td>: ${esc(dateID(C.mulai))}</td></tr>
+    <tr><td class="l">Project Location</td><td>: ${esc(C.lokasi)}</td><td class="l">Finish Date</td><td>: ${esc(dateID(C.selesai))}</td></tr>
+    <tr><td class="l">Contract No.</td><td>: ${esc(C.kontrak)}</td><td class="l">Current Date</td><td>: ${esc(dateID(kini))}</td></tr>
+    <tr><td class="l">Report No.</td><td>: ${esc(no)}</td><td class="l">Remaining Day</td><td>: ${sisaHari} hari</td></tr>
+    <tr><td class="l">Reporting Period</td><td colspan="3">: <b>${esc(P.label)}</b></td></tr></table>
+
+  <div class="sec">1. WORK DESCRIPTION</div>
+  <table class="dua"><tr><td style="width:58%"><div class="sub">${judulIni}</div><table class="t keg">${kegiatan}
+      ${tambahan.length ? `<tr><td></td><td>${tambahan.map(x => "&bull; " + esc(x)).join("<br>")}</td></tr>` : ""}</table></td>
+    <td><div class="sub">${judulRencana}</div>${rencana.length ? rencana.map(x => `<div>&bull; ${esc(x)}</div>`).join("") : `<div class="mut">-.</div>`}</td></tr></table>
+
+  <div class="sec">2. TANK DATA &amp; VOLUME</div>
+  <table class="t"><thead><tr><th>Tank No.</th><th>Area</th><th>Type</th><th class="n">Ø (m)</th><th class="n">H (m)</th>
+    <th class="n">Shell (m²)</th><th class="n">Roof (m²)</th><th class="n">Acc. (m²)</th><th class="n">Volume BAMK (m²)</th><th class="n">Progress</th></tr></thead>
+    <tbody>${X.TK.length ? X.TK.map(x => `<tr><td><b>${esc(x.t.tank_no || "")}</b></td><td>${esc(areaName(x.t.area_id))}</td>
+      <td>${esc(x.t.tank_type || "")} <span class="mut">${esc(LABEL_TIPE[x.t.tank_type] || "")}</span></td>
+      <td class="n">${n2(x.t.shell_diameter_m)}</td><td class="n">${n2(x.t.tank_height_m)}</td>
+      <td class="n">${n2(x.b.vol_shell)}</td><td class="n">${n2(x.b.vol_roof)}</td><td class="n">${n2(x.b.vol_acc)}</td>
+      <td class="n"><b>${n2(x.vol)}</b></td><td class="n"><b>${fmt(x.pctAcc, 2)}%</b></td></tr>`).join("")
+      + `<tr class="tot"><td colspan="8">TOTAL</td><td class="n">${n2(X.TK.reduce((a, x) => a + x.vol, 0))}</td>
+        <td class="n">${fmt(pct(X.TK.reduce((a, x) => a + x.eAcc, 0), X.TK.reduce((a, x) => a + x.vol, 0)), 2)}%</td></tr>`
+      : `<tr><td colspan="10" class="mut">Belum ada tanki dengan BAMK aktif.</td></tr>`}</tbody></table>
+  <div class="mut">Shell = π·D·H · Roof = ¼·π·D²·faktor atap (CRT 1,05 · FRT 1,00 · DRT 1,12) · Volume BAMK menjadi dasar progres; volume final mengikuti BAKP.</div>
+
+  <div class="sec">3. MANPOWER STATUS (MD)</div>
+  <table class="dua"><tr><td><div class="sub">DIRECT MANPOWER</div>${tPT("Job Description", X.mpLangsung, null, "", n0)}</td>
+    <td><div class="sub">INDIRECT MANPOWER</div>${tPT("Job Description", X.mpTidak, null, "", n0)}</td></tr></table>
+
+  <div class="sec">4. EQUIPMENT STATUS (ED) &amp; MATERIAL / CONSUMABLE</div>
+  <table class="dua"><tr><td><div class="sub">EQUIPMENT LIST</div>${tPT("Equipment Description", X.EQ, null, "", n0)}</td>
+    <td><div class="sub">MATERIAL &amp; CONSUMABLE LIST</div>${tPT("Item Description", X.MT, null, "", n2)}</td></tr></table>
+
+  <div class="sec">5. PROGRESS STATUS RECORD</div>
+  <table class="t"><thead><tr><th style="width:34px">No</th><th>Description</th><th class="n">Q'ty</th><th>UOM</th>
+    <th class="n">${lbl[0]}</th><th class="n">${lbl[1]}</th><th class="n">${lbl[2]}</th><th class="n">Remain</th><th class="n">Progress (%)</th><th>Remarks</th></tr></thead>
+    <tbody>${X.TK.length ? X.TK.map((x, i) => `<tr class="grp"><td class="c">${i + 1}</td><td colspan="9"><b>TANKI ${esc(x.t.tank_no || "")}</b>
+        — ${esc(x.t.tank_type || "")} Ø${n2(x.t.shell_diameter_m)} × ${n2(x.t.tank_height_m)} m · BAMK ${esc(x.b.bamk_no || "")}</td></tr>
+      ${x.rows.map((r, j) => `<tr><td class="c">${i + 1}.${j + 1}</td><td>${esc(r.s.stage_name)} <span class="mut">(bobot ${fmt(r.s.weight_pct, 0)}%)</span></td>
+        <td class="n">${n2(r.vol)}</td><td>m²</td><td class="n">${n2(r.prev)}</td><td class="n">${n2(r.ini)}</td><td class="n">${n2(r.acc)}</td>
+        <td class="n">${n2(r.sisa)}</td><td class="n">${fmt(r.pct, 2)}%</td><td class="mut">${esc(r.rinci)}</td></tr>`).join("")}
+      <tr class="tot"><td></td><td>Progres terbobot tanki ${esc(x.t.tank_no || "")}</td><td class="n">${n2(x.vol)}</td><td>m²</td>
+        <td class="n">${n2(x.ePrev)}</td><td class="n">${n2(x.eIni)}</td><td class="n">${n2(x.eAcc)}</td><td class="n">${n2(Math.max(0, x.vol - x.eAcc))}</td>
+        <td class="n">${fmt(x.pctAcc, 2)}%</td><td class="mut">sebelumnya ${fmt(x.pctPrev, 2)}%</td></tr>`).join("")
+      : `<tr><td colspan="10" class="mut">Belum ada progres.</td></tr>`}</tbody></table>
+
+  <div class="sec">6. HSE SUMMARY</div>
+  <table class="t hse"><tr><td>Hari kerja tanpa kecelakaan<b>${X.HSE.tanpa.n}</b></td><td>Tool Box Meeting<b>${X.HSE.tbm || X.HSE.tbmHarian}</b><span class="mut">${X.HSE.peserta ? X.HSE.peserta + " peserta" : ""}</span></td>
+    <td>E-Permit<b>${X.HSE.permit}</b><span class="mut">${X.HSE.permitOk} disetujui</span></td><td>Inspeksi alat<b>${X.HSE.alat}</b></td>
+    <td>Temuan<b>${X.HSE.temuan}</b><span class="mut">${X.HSE.temuanBuka} masih terbuka</span></td><td>Kecelakaan<b>${X.HSE.kecelakaan}</b></td></tr></table>
+
+  <div class="sec">7. PHOTOGRAPH</div>
+  ${fotoPakai.length ? `<div class="foto">${fotoPakai.map(p => `<figure><img src="${p.file_url}"><figcaption><b>${esc(fotoLabel(p))}</b>
+      · ${esc(tankNo(p.tank_id))} · ${esc(tglPendek(p._tgl))}<br>${esc(fotoCap(p))}</figcaption></figure>`).join("")}</div>`
+    : `<div class="mut" style="padding:6px">Tidak ada foto pada periode ini.</div>`}
+
+  <div class="sec">8. NOTE / CONCERN ITEM</div>
+  <div class="cat">${catatan.length ? catatan.map(x => `<div>&bull; ${esc(x)}</div>`).join("") : "-"}</div>
+
+  <table class="ttd"><tr><td>Prepared by,</td><td>Checked by,</td><td>Approved by,</td></tr>
+    <tr class="pt"><td>${esc(C.prep_pt)}</td><td>${esc(C.chk_pt)}</td><td>${esc(C.app_pt)}</td></tr>
+    <tr class="ruang"><td></td><td></td><td></td></tr>
+    <tr><td>Name : <b>${esc(I.prep_nama || C.prep_nama)}</b></td><td>Name : <b>${esc(I.chk_nama || C.chk_nama)}</b></td><td>Name : <b>${esc(I.app_nama || C.app_nama)}</b></td></tr>
+    <tr><td>Date : ${esc(I.tgl_ttd ? dateID(I.tgl_ttd) : dateID(kini))}</td><td>Date :</td><td>Date :</td></tr></table>
+  </div>`;
+}
+const WR_CSS = `
+  .wr{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:10.5px;line-height:1.35;background:#fff}
+  .wr .wrkop{display:flex;align-items:center;gap:12px;border-bottom:2.5px solid #0E2233;padding-bottom:6px;margin-bottom:6px}
+  .wr .wrkop img{height:40px}.wr .wrjd{flex:1;text-align:center;font-size:17px;font-weight:700;letter-spacing:1px}
+  .wr .wrno{font-family:Consolas,monospace;font-size:10px;color:#444}
+  .wr table{border-collapse:collapse;width:100%}
+  .wr table.hd td{border:none;padding:1.5px 4px}.wr table.hd td.l{width:110px;color:#333;white-space:nowrap}
+  .wr .sec{background:#0E2233;color:#fff;font-weight:700;padding:3px 7px;margin:10px 0 4px;letter-spacing:.3px}
+  .wr .sub{background:#E4EAF0;font-weight:700;text-align:center;padding:2px;border:1px solid #9AA7B2;border-bottom:none}
+  .wr table.dua>tbody>tr>td{border:none;padding:0 4px 0 0;vertical-align:top;width:50%}
+  .wr table.t th,.wr table.t td{border:1px solid #9AA7B2;padding:2.5px 5px;vertical-align:top}
+  .wr table.t th{background:#F0F3F6;font-weight:700}
+  .wr .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.wr .c{text-align:center}
+  .wr tr.tot td{background:#F0F3F6;font-weight:700}.wr tr.grp td{background:#FBF1DF}
+  .wr .mut{color:#5C6B78;font-size:9.5px}.wr table.keg td.tg{width:62px;white-space:nowrap;color:#333}
+  .wr table.hse td{text-align:center;width:16.6%}.wr table.hse td b{display:block;font-size:15px;margin:2px 0}
+  .wr .foto{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .wr .foto figure{margin:0;border:1px solid #9AA7B2;padding:3px;page-break-inside:avoid}
+  .wr .foto img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}.wr .foto figcaption{font-size:9px;margin-top:2px}
+  .wr .cat{border:1px solid #9AA7B2;padding:5px 7px;min-height:30px}
+  .wr table.ttd{margin-top:14px;page-break-inside:avoid}.wr table.ttd td{border:none;width:33.3%;padding:2px 6px}
+  .wr table.ttd tr.pt td{font-weight:700;font-size:10px}.wr table.ttd tr.ruang td{height:52px}
+  .wr tr{page-break-inside:avoid}`;
+function cetakLaporanProyek(P) {
+  const html = laporanProyekHtml(P), M = LAP_MODE[P.mode];
+  const win = window.open("", "_blank");
+  if (!win) return toast("Jendela cetak diblokir peramban. Izinkan pop-up lalu ulangi.", "err");
+  win.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${esc(M[1] + " " + (isianLaporan(P).no || nomorLaporanAuto(P)))}</title>
+    <style>@page{size:A4 portrait;margin:10mm}body{margin:0}${WR_CSS}</style></head><body>${html}</body></html>`);
+  win.document.close();
+  setTimeout(() => { try { win.print(); } catch (e) { } }, 700);
+}
+
+/* ---------- LAYAR ---------- */
+function kunciAwal(mode) {
+  const f = S.f.lp || (S.f.lp = {});
+  if (mode === "H") return f.H || (DB.dailies.filter(dailyResmi).map(d => d.report_date).sort().slice(-1)[0] || today());
+  if (mode === "W") return f.W || weekKey(today()).key;
+  return f.M || today().slice(0, 7);
+}
+VIEWS["lap-proyek"] = {
+  html() {
+    const mode = S.tab && LAP_MODE[S.tab] ? S.tab : "W", P = periodeLaporan(mode, kunciAwal(mode));
+    const I = isianLaporan(P), ubah = can("lap_edit");
+    const pilihPeriode = mode === "H" ? `<input type="date" id="lpKunci" value="${esc(P.kunci)}">`
+      : mode === "M" ? `<input type="month" id="lpKunci" value="${esc(P.kunci)}">`
+        : `<input type="date" id="lpKunci" value="${esc(P.kunci)}" title="pilih tanggal mana pun dalam minggu itu">`;
+    return `<div class="card"><div class="tabs">${Object.keys(LAP_MODE).map(m => `<button data-lptab="${m}" class="${mode === m ? "on" : ""}">${LAP_MODE[m][0]} · ${LAP_MODE[m][1]}</button>`).join("")}</div>
+      <div class="body"><div class="row">
+        <button class="btn sm" id="lpPrev">‹ Sebelumnya</button>
+        <label class="f" style="margin:0">${pilihPeriode}</label>
+        <button class="btn sm" id="lpNext">Berikutnya ›</button>
+        <span class="grow small"><b>${esc(P.label)}</b> · ${esc(I.no || nomorLaporanAuto(P))}
+          ${I.kunci ? `<span class="b teal">isian tersimpan</span>` : ubah ? `<span class="b gray">belum ada isian manual</span>` : ""}</span>
+        ${ubah ? `<button class="btn a sm" id="lpIsi">Isian laporan</button><button class="btn sm" id="lpSet">Setelan</button>` : ""}
+        <button class="btn p sm" id="lpCetak">Cetak / simpan PDF</button>
+      </div>
+      <div class="tiny muted mt8">Angka dihitung dari laporan harian yang diajukan/disetujui (draft dan yang dikembalikan tidak dihitung).
+        ${ubah ? "Yang diketik hanya rencana periode berikut, catatan, pilihan foto, dan nomor laporan — lewat tombol Isian laporan." : ""}</div></div></div>
+      <div class="card"><div class="body wrlayar">${laporanProyekHtml(P)}</div></div>`;
+  },
+  bind() {
+    const mode = S.tab && LAP_MODE[S.tab] ? S.tab : "W", f = S.f.lp || (S.f.lp = {});
+    const P = periodeLaporan(mode, kunciAwal(mode));
+    $$("[data-lptab]").forEach(b => b.onclick = () => { S.tab = b.dataset.lptab; render(); });
+    $("#lpKunci").onchange = e => { if (e.target.value) { f[mode] = e.target.value; render(); } };
+    const geser = arah => {
+      if (mode === "H") f.H = tambahHari(P.kunci, arah);
+      else if (mode === "W") f.W = tambahHari(P.kunci, 7 * arah);
+      else { const d = new Date(+P.kunci.slice(0, 4), +P.kunci.slice(5, 7) - 1 + arah, 1); f.M = isoLokal(d).slice(0, 7); }
+      render();
+    };
+    $("#lpPrev").onclick = () => geser(-1); $("#lpNext").onclick = () => geser(1);
+    $("#lpCetak").onclick = () => cetakLaporanProyek(P);
+    if ($("#lpIsi")) $("#lpIsi").onclick = () => isianLaporanModal(P);
+    if ($("#lpSet")) $("#lpSet").onclick = () => setelanLaporanModal();
+  }
+};
+function isianLaporanModal(P) {
+  const I = isianLaporan(P), X = dataLaporan(P), C = setelanLaporan();
+  const pilih = Array.isArray(I.foto) ? I.foto : null;
+  const auto = (() => { const ba = X.foto.filter(p => p.photo_type === "BEFORE" || p.photo_type === "AFTER"); return ba.concat(X.foto.filter(p => ba.indexOf(p) < 0)).slice(0, 6).map(p => p.photo_id); })();
+  const ter = pilih || auto;
+  openModal("Isian " + LAP_MODE[P.mode][1] + " — " + P.label, `
+    <div class="fg c3">
+      <label class="f"><span>No. laporan</span><input type="text" id="liNo" value="${esc(I.no || "")}" placeholder="${esc(nomorLaporanAuto(P))}"></label>
+      <label class="f"><span>Tanggal tanda tangan</span><input type="date" id="liTgl" value="${esc(I.tgl_ttd || "")}"></label>
+      <span class="tiny muted" style="align-self:end">Kosongkan nomor untuk memakai nomor otomatis.</span>
+    </div>
+    <label class="f"><span>Rencana kegiatan periode berikutnya <span class="tiny muted">(satu butir per baris — kosong = diambil dari jadwal kerja)</span></span>
+      <textarea id="liRen" rows="4" placeholder="${esc(X.rencana.join("\n"))}">${esc(I.rencana || "")}</textarea></label>
+    <label class="f"><span>Uraian kegiatan tambahan <span class="tiny muted">(di luar laporan harian, opsional)</span></span>
+      <textarea id="liUr" rows="2">${esc(I.uraian_tambahan || "")}</textarea></label>
+    <label class="f"><span>Note / concern item <span class="tiny muted">(kosong = diambil dari Kendala &amp; Delay)</span></span>
+      <textarea id="liCat" rows="3" placeholder="${esc(X.kendala.map(i => i.description).join("\n"))}">${esc(I.catatan || "")}</textarea></label>
+    <div class="fg c3">
+      <label class="f"><span>Prepared by (nama)</span><input type="text" id="liP" value="${esc(I.prep_nama || "")}" placeholder="${esc(C.prep_nama)}"></label>
+      <label class="f"><span>Checked by (nama)</span><input type="text" id="liC" value="${esc(I.chk_nama || "")}" placeholder="${esc(C.chk_nama)}"></label>
+      <label class="f"><span>Approved by (nama)</span><input type="text" id="liA" value="${esc(I.app_nama || "")}" placeholder="${esc(C.app_nama)}"></label>
+    </div>
+    <h4 class="mt12">Foto yang dimuat <span class="tiny muted">${X.foto.length} foto pada periode ini · maksimal 9</span></h4>
+    ${X.foto.length ? `<div class="photos">${X.foto.map(p => `<label class="ph pilihfoto"><input type="checkbox" data-lf="${esc(p.photo_id)}" ${ter.indexOf(p.photo_id) >= 0 ? "checked" : ""}>
+      <span class="tag">${esc(fotoLabel(p))}</span><img src="${p.file_url}" loading="lazy"><div class="cap">${esc(tankNo(p.tank_id))} · ${esc(tglPendek(p._tgl))} · ${esc(fotoCap(p) || "—")}</div></label>`).join("")}</div>`
+      : `<div class="empty">Belum ada foto dari laporan harian pada periode ini.</div>`}`,
+    `<span class="grow"></span><button class="btn p" id="liSave">Simpan isian</button>`, true);
+  $("#liSave").onclick = () => {
+    const foto = $$("[data-lf]").filter(c => c.checked).map(c => c.dataset.lf);
+    if (foto.length > 9) return toast("Maksimal 9 foto supaya muat satu halaman.", "err");
+    simpanIsianLaporan(P, Object.assign({}, I, {
+      no: $("#liNo").value.trim(), tgl_ttd: $("#liTgl").value, rencana: $("#liRen").value, uraian_tambahan: $("#liUr").value,
+      catatan: $("#liCat").value, prep_nama: $("#liP").value.trim(), chk_nama: $("#liC").value.trim(), app_nama: $("#liA").value.trim(), foto
+    }));
+    closeModal(); toast("Isian laporan tersimpan.", "ok"); render();
+  };
+}
+function setelanLaporanModal() {
+  const C = setelanLaporan();
+  const f = (k, l, ty) => `<label class="f"><span>${esc(l)}</span><input type="${ty || "text"}" data-ls="${k}" value="${esc(C[k] || "")}"></label>`;
+  openModal("Setelan laporan proyek", `
+    <div class="note">Isian ini dipakai di kepala semua Daily, Weekly dan Monthly Report, dan ikut tersinkron ke perangkat lain.</div>
+    ${f("proyek", "Project name")}${f("lokasi", "Project location")}
+    <div class="fg c3">${f("kontrak", "Contract no.")}${f("mulai", "Start date", "date")}${f("selesai", "Finish date", "date")}</div>
+    <div class="fg c3">${f("kode", "Kode perusahaan pada nomor laporan")}</div>
+    <div class="fg c2">${f("prep_nama", "Prepared by — nama")}${f("prep_pt", "Prepared by — perusahaan")}
+      ${f("chk_nama", "Checked by — nama")}${f("chk_pt", "Checked by — perusahaan")}
+      ${f("app_nama", "Approved by — nama")}${f("app_pt", "Approved by — perusahaan")}</div>`,
+    `<span class="grow"></span><button class="btn p" id="lsSave">Simpan setelan</button>`);
+  $("#lsSave").onclick = () => {
+    const o = {}; $$("[data-ls]").forEach(el => o[el.dataset.ls] = el.value.trim());
+    if (!o.mulai) return toast("Start date wajib diisi.", "err");
+    simpanSetelanLaporan(o); closeModal(); toast("Setelan laporan tersimpan.", "ok"); render();
+  };
+}
+
+/* ============================================================
+   V3.3 — DASHBOARD PER WAJAH
+   · Project Control, Management, Finance : dashboard lengkap seperti
+     sebelumnya, ditambah kartu visual tanki di bagian atas.
+   · Admin Laporan Harian & Safety Officer : dashboard lapangan —
+     tanpa angka komersial, hanya progres tanki, laporan, dan HSE.
+   ============================================================ */
+function dashboardLapanganHtml() {
+  const L = tankiBerjalan(), aktif = L.filter(x => x.b.status === "AKTIF");
+  const hr = today(), lapHari = DB.dailies.filter(d => d.report_date === hr && d.status !== "REJECTED");
+  const tk = hariTanpaKecelakaan(hr), tbm = tbmPadaTanggal(hr);
+  const rata = aktif.length ? aktif.reduce((a, x) => a + x.pct, 0) / aktif.length : 0;
+  const k = (judul, v, sub, cls) => `<div class="kpi ${cls || ""}"><div class="eyebrow">${judul}</div><div class="v">${v}</div><div class="sub">${sub || "&nbsp;"}</div></div>`;
+  const milik = isSite() ? DB.dailies.filter(d => d.admin_user_id === S.user.user_id || !d.admin_user_id) : DB.dailies;
+  return `<div class="grid g4 hsekpi">
+      ${k("Tanki dikerjakan", aktif.length, L.length + " tanki ber-BAMK", "blue")}
+      ${k("Rata-rata progres tanki aktif", fmt(rata, 1) + "%", "setara selesai, terbobot tahap", "olive")}
+      ${k("Laporan harian hari ini", lapHari.length, lapHari.length ? lapHari.map(d => tankNo(d.tank_id)).join(", ") : "belum ada", lapHari.length ? "teal" : "amber")}
+      ${k("Hari kerja tanpa kecelakaan", tk.n, "TBM hari ini: " + (tbm.L.length || tbm.dariHarian ? "sudah" : "belum"), "teal")}
+    </div>
+    ${kartuVisualHtml()}
+    <div class="grid g2">
+      <div class="card"><h3>Laporan harian terakhir</h3><div class="body flush"><div class="tw"><table>
+        <thead><tr><th>Tanggal</th><th>Tanki</th><th class="n">Luas hari itu</th><th>Status</th></tr></thead><tbody>
+        ${milik.slice().sort((a, b) => b.report_date.localeCompare(a.report_date)).slice(0, 8).map(d => {
+          const q = prVol(DB.progress.filter(p => p.daily_id === d.daily_id)).reduce((a, p) => a + nz(p.actual_qty), 0);
+          return `<tr><td class="num tiny">${esc(tglPendek(d.report_date))}</td><td>${esc(tankNo(d.tank_id))}</td><td class="n">${fmt(q, 2)} m²</td><td>${statusBadge(d.status)}</td></tr>`;
+        }).join("") || `<tr><td colspan="4"><div class="empty">Belum ada laporan harian.</div></td></tr>`}
+        </tbody></table></div></div></div>
+      <div class="card"><h3>HSE 7 hari terakhir ${can("hse_view") ? `<button class="btn sm" data-dash="hse">Buka HSE &amp; K3</button>` : ""}</h3><div class="body flush"><div class="tw"><table>
+        <thead><tr><th>Tanggal</th><th>TBM</th><th class="n">Peserta</th><th class="n">Permit</th><th class="n">Temuan</th></tr></thead><tbody>
+        ${rentangTanggal(tambahHari(hr, -6), hr).reverse().map(d => { const t = tbmPadaTanggal(d);
+          return `<tr><td class="tiny">${hariID(d).slice(0, 3)}, ${esc(tglPendek(d))}</td>
+            <td>${t.L.length || t.dariHarian ? `<span class="b teal">sudah</span>` : `<span class="b ${hariKerjaEfektif(d) ? "amber" : "gray"}">${hariKerjaEfektif(d) ? "belum" : "libur"}</span>`}</td>
+            <td class="n">${t.peserta || ""}</td><td class="n">${hseList("PERMIT").filter(o => o.tanggal === d).length || ""}</td>
+            <td class="n">${hseList("TEMUAN").filter(o => o.tanggal === d).length || ""}</td></tr>`; }).join("")}
+        </tbody></table></div></div></div>
+    </div>`;
+}
+(function pasangDashboardV33() {
+  const asliH = VIEWS.dashboard.html, asliB = VIEWS.dashboard.bind;
+  VIEWS.dashboard.html = function () {
+    if (!can("dash")) return dashboardLapanganHtml();
+    const h = asliH.call(this), jangkar = '<div class="card mt16"><h3>Ringkasan eksekutif';
+    const i = h.indexOf(jangkar);
+    return i < 0 ? kartuVisualHtml() + h : h.slice(0, i) + kartuVisualHtml() + h.slice(i);
+  };
+  VIEWS.dashboard.bind = function () {
+    if (can("dash") && asliB) asliB.call(this);
+    else $$("[data-dash]").forEach(b => b.onclick = () => go(b.dataset.dash));
+    bindKartuVisual();
+  };
+})();
+
+TITLES.hse = ["HSE & K3", "Tool Box Meeting, E-Permit, inspeksi alat, APD, MCU, temuan & insiden"];
+TITLES["lap-proyek"] = ["Laporan Proyek", "Daily · Weekly · Monthly Report — format WR-HBM, dihitung dari laporan harian"];
+
+document.head.insertAdjacentHTML("beforeend", "<style>" + WR_CSS + "</style>");
+
 const GUARD = {
   dashboard: ["dash", "dash_view"], "tanks-status": ["dash", "dash_view"],
   "daily-new": ["daily_input"], "daily-list": ["daily_input", "daily_all"],
@@ -10197,7 +11549,8 @@ const GUARD = {
   pesan: ["pesan"],
   /* V2.6 — penegakan hak akses layar baru, sama kerasnya dengan yang lama */
   kendali: ["kendali"], scurve: ["scurve", "scurve_view"], boq: ["boq", "boq_view"],
-  finance: ["finance", "finance_view"], notif: ["notif"]
+  finance: ["finance", "finance_view"], notif: ["notif"],
+  /* V3.3 */ hse: ["hse_view"], "lap-proyek": ["lap_view"]
 };
 Object.keys(GUARD).forEach(k => {
   const v = VIEWS[k]; if (!v) return;
