@@ -502,7 +502,7 @@ label.pilihfoto input{position:absolute;right:6px;top:6px;width:18px;height:18px
            mengetik token sekali di Pengaturan › Sinkronisasi,
            lalu tersimpan di perangkatnya.
    ============================================================ */
-const APP_VERSI = "3.8";
+const APP_VERSI = "3.8.1";
 /* Versi Code.gs yang dibutuhkan aplikasi ini. Sengaja dipisah dari APP_VERSI:
    perubahan yang hanya menyentuh tampilan tidak memaksa penerapan ulang server. */
 const CODEGS_VERSI = "2.3";
@@ -13386,6 +13386,7 @@ VIEWS.volume = {
       </div></div></div>
     <div class="card"><h3>Volume terpakai — format Rincian Plafon
       <span class="row" style="gap:6px">
+        ${isPC() && !roRole() && !kunci ? `<button class="btn a sm" id="vtSusul">Input susulan</button>` : ""}
         <button class="btn sm" id="vtCetak">Cetak lampiran</button>
         ${ubah && !kunci ? `<button class="btn sm" id="vtSimpan">Simpan koreksi</button>` : ""}
         ${isPC() && !roRole() ? (kunci ? (tg ? "" : `<button class="btn d sm" id="vtBuka">Buka kunci</button>`) : `<button class="btn p sm" id="vtKunci">Kunci volume</button>`) : ""}
@@ -13415,6 +13416,7 @@ VIEWS.volume = {
     if ($("#vtSel")) $("#vtSel").onchange = e => { S.f.vtB = e.target.value; render(); };
     const b = bamkOf(S.f.vtB);
     if ($("#vtCat")) $("#vtCat").onclick = () => sistemCatModal(b.tank_id);
+    if ($("#vtSusul")) $("#vtSusul").onclick = () => susulanModal(b.bamk_id);
     const ambilManual = () => { const m = {}; $$("[data-vtm]").forEach(el => { const v = el.value.trim(); if (v !== "") m[el.dataset.vtm] = nz(v); }); return m; };
     if ($("#vtSimpan")) $("#vtSimpan").onclick = () => {
       const st = volSetelan(b); st.manual = ambilManual(); simpanVolSetelan(b, st);
@@ -14325,7 +14327,8 @@ function lembarBawaan(t) {
   const sc = sistemCat(t.tank_id), ts = teksSistemCat(sc), tipe = t.tank_type || "CRT";
   const accW = Object.keys(sc.acc).filter(k => nz(sc.acc[k]) > 0).map(k => WARNA_PU[k][3]).join(" / ");
   return {
-    judul1: "TAHAPAN PENGECATAN TANGKI TIMBUN", judul2: (JUDUL_TIPE[tipe] || tipe) + " – RU V BALIKPAPAN",
+    judul1: "UNIT RATE PENGECATAN TANK AREA " + String(areaName(t.area_id) || "").toUpperCase().replace(/^OM\b/, "OIL MOVEMENT") + " - TANKI ( " + (t.tank_no || "") + " )",
+    judul2: (JUDUL_TIPE[tipe] || tipe) + " – PT. PERTAMINA PATRA NIAGA BALIKPAPAN",
     noDrw: "HBM-TANK-COAT-" + tipe + "-" + String(t.tank_no || "").replace(/[^A-Za-z0-9]/g, ""), rev: "0", tgl: dateID(today()), sheet: "1 / 1", skala: "NTS",
     tahap: ["TAHAP 1 – PERSIAPAN PERMUKAAN\n(SURFACE PREPARATION)", "TAHAP 2 – PRIMER COAT", "TAHAP 3 – FINISH COAT"],
     foto: ["FOTO BEFORE – TAHAP 1", "FOTO AFTER – TAHAP 2", "FOTO AFTER – TAHAP 3"], cap: ["Tampak Shell Luar", "Tampak Atap"],
@@ -14339,8 +14342,9 @@ function lembarBawaan(t) {
       "Intermediate & finish diaplikasikan sesudah lapis sebelumnya lolos inspeksi.",
       "Foto before – after setiap tahap wajib dilampirkan.",
       "Dimensi & aksesoris berbeda tiap tangki; gambar tidak berskala (NTS)."],
-    ttd: [{ judul: "QC PT. HBM", nama: "", jabatan: "", tgl: "" }, { judul: "PENGAWAS MA-4\nPT. PERTAMINA PATRA NIAGA", nama: "", jabatan: "", tgl: "" },
-      { judul: "STAT-ENG MA-4\nPT. PERTAMINA PATRA NIAGA", nama: "", jabatan: "", tgl: "" }],
+    ttd: [{ judul: "PENGAWAS MA-4\nPT. PERTAMINA PATRA NIAGA", nama: "", jabatan: "", tgl: "", kaki: "Tanda Tangan Pengawas MA-4" },
+      { judul: "PENGAWAS OM-UTARA\nPT. PERTAMINA PATRA NIAGA", nama: "", jabatan: "", tgl: "", kaki: "Tanda Tangan Pengawas" },
+      { judul: "STAT-ENG MA-4\nPT. PERTAMINA PATRA NIAGA", nama: "", jabatan: "", tgl: "", kaki: "Tanda Tangan Stat-Eng" }],
     keterangan: "",
     label: { vent: "Roof Vent", roofC: "Cone Roof", roofD: "Dome Roof", roofF: "Floating Roof", girder: "Wind Girder", handrail: "Handrail", shell: "Shell",
       pipe: "Pipa (Accessories)", stair: "Stairway", manhole: "Manhole", nozzle: "Nozzle", ground: "Ground Level", H: "H", D: "D (Diameter)",
@@ -14380,7 +14384,7 @@ function lembarGambarHtml(t) {
   h += kotak(14, 12, 776, 58, `<svg width="88" height="58" style="position:absolute;left:0;top:0"><rect width="88" height="58" fill="${NAVY}"/>
       ${[0, 1, 2, 3].map(i => `<polygon points="${6 + i * 11},58 ${15 + i * 11},58 ${60 + i * 11},0 ${51 + i * 11},0" fill="${i % 2 ? RED : "#fff"}"/>`).join("")}</svg>
     <div style="position:absolute;left:88px;top:0;right:0;bottom:0;background:${NAVY};color:#fff;text-align:center">
-      <div style="font-size:23px;font-weight:800;letter-spacing:.4px;margin-top:6px">${esc(X.judul1)}</div>
+      <div style="font-size:${Math.max(13, Math.min(23, Math.floor(680 / (Math.max(1, String(X.judul1).length) * 0.62))))}px;font-weight:800;letter-spacing:.2px;margin-top:8px;white-space:nowrap;overflow:hidden">${esc(X.judul1)}</div>
       <div style="font-size:14px;font-weight:700;margin-top:2px">${esc(X.judul2)}</div></div>`);
   h += kotak(800, 12, 309, 58, `<img src="${LOGO_HBM_WR}" style="position:absolute;left:2px;top:11px;width:164px;height:auto">
     <div style="position:absolute;left:170px;top:8px;width:1px;height:42px;background:${BLUE}"></div>
@@ -14424,12 +14428,12 @@ function lembarGambarHtml(t) {
   /* persetujuan */
   h += kotak(14, 624, 1095, 17, `<div style="background:${NAVY};color:#fff;font-weight:800;font-size:11px;text-align:center;line-height:17px">PERSETUJUAN / INSPEKSI TAHAPAN PEKERJAAN</div>`);
   X.ttd.forEach((k, i) => {
-    const x = px[i], ptm = i > 0;
+    const x = px[i], ptm = /PERTAMINA/i.test(k.judul || "");
     h += kotak(x, 644, pw, 138, `${ptm ? `<div style="display:flex;height:26px"><div style="width:62px;background:#fff;display:flex;align-items:center;justify-content:center"><img src="${LOGO_PTM_WR}" style="height:20px;max-width:58px;object-fit:contain"></div>
         <div style="flex:1;background:${BLUE};color:#fff;font-weight:800;font-size:9.5px;text-align:center;display:flex;align-items:center;justify-content:center;line-height:1.1">${br(k.judul)}</div></div>`
       : `<div style="height:26px;background:${RED};color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center">${br(k.judul)}</div>`}
       <div style="font-size:9px;padding:3px 8px;line-height:15px">${["Nama", "Jabatan", "Tanggal"].map((l, j) => `<div style="display:flex"><span style="width:52px">${l}</span>: <span style="flex:1;border-bottom:1px dotted #777;margin-left:4px">${esc([k.nama, k.jabatan, k.tgl][j] || "")}</span></div>`).join("")}</div>
-      <div style="position:absolute;left:8px;right:8px;top:80px;bottom:6px;border:1px solid #A9B4BF;font-size:8.5px;color:#8A939C;font-style:italic;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px">Tanda Tangan &amp; Stempel</div>`,
+      <div style="position:absolute;left:8px;right:8px;top:80px;bottom:6px;border:1px solid #A9B4BF;font-size:8.5px;color:#8A939C;font-style:italic;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px">${esc(k.kaki || "Tanda Tangan & Stempel")}</div>`,
       `border:2px solid ${BLUE};box-sizing:border-box`);
   });
   h += kotak(800, 644, 309, 138, `<div style="height:26px;background:#EAF1FB;color:${BLUE};font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center">CATATAN / KETERANGAN</div>
@@ -14460,7 +14464,7 @@ function lembarTeksModal(t) {
     <h4 class="mt12">Spesifikasi sistem cat</h4><div class="fg c2">${X.spec.map((r, i) => f("spec." + i + ".0", r[0], "Baris " + (i + 1) + " — judul") + f("spec." + i + ".1", r[1], "Baris " + (i + 1) + " — isi")).join("")}</div>
     <h4 class="mt12">Warna tiap tahap</h4><div class="fg c2">${X.warna.map((v, i) => f("warna." + i, v, "Warna " + (i + 1))).join("")}</div>
     <h4 class="mt12">Catatan pelaksanaan</h4><div class="fg c1">${X.catatan.map((v, i) => f("catatan." + i, v, "Catatan " + (i + 1), true)).join("")}</div>
-    <h4 class="mt12">Persetujuan</h4><div class="fg c4">${X.ttd.map((k, i) => ta("ttd." + i + ".judul", k.judul, "Kotak " + (i + 1)) + f("ttd." + i + ".nama", k.nama, "Nama") + f("ttd." + i + ".jabatan", k.jabatan, "Jabatan") + f("ttd." + i + ".tgl", k.tgl, "Tanggal")).join("")}</div>
+    <h4 class="mt12">Persetujuan</h4><div class="fg c4">${X.ttd.map((k, i) => ta("ttd." + i + ".judul", k.judul, "Kotak " + (i + 1)) + f("ttd." + i + ".nama", k.nama, "Nama") + f("ttd." + i + ".jabatan", k.jabatan, "Jabatan") + f("ttd." + i + ".tgl", k.tgl, "Tanggal") + f("ttd." + i + ".kaki", k.kaki || "", "Tulisan kotak tanda tangan")).join("")}</div>
     ${ta("keterangan", X.keterangan, "Catatan / keterangan")}
     <h4 class="mt12">Label gambar</h4><div class="fg c4">${LBL.map(([k, l]) => f("label." + k, X.label[k], l)).join("")}</div>`,
     `<button class="btn d" id="lgReset">Kembalikan bawaan</button><button class="btn p" id="lgSave">Simpan tulisan</button>`, true);
@@ -14526,6 +14530,86 @@ VIEWS["lembar-gambar"] = {
     }
   }
 };
+
+/* ============================================================
+   V3.8.1 — INPUT SUSULAN (tanki yang sudah dikerjakan tanpa laporan harian)
+   Untuk tanki seperti G-1 yang selesai di lapangan sebelum laporan
+   hariannya diketik. Project Control mengisi per tahap: tanggal mulai,
+   tanggal selesai, dan luas per bagian. Aplikasi membagi luas itu rata
+   ke hari kerja pada rentang tanggal tersebut lalu membuat laporan harian
+   berstatus Disetujui bertanda [SUSULAN]. Laporan asli yang sudah ada
+   tidak diubah isinya — baris luas susulan hanya ditambahkan.
+   ============================================================ */
+const SUSULAN = "[SUSULAN]";
+function susulanModal(bamk_id) {
+  if (!isPC() || roRole()) return toast("Input susulan hanya oleh Project Control.", "err");
+  const L = DB.bamk.filter(b => b.status !== "BATAL" && b.tank_id);
+  if (!L.length) return toast("Belum ada BAMK.", "err");
+  const b = bamkOf(bamk_id) || L[0], P = rencanaHarianBamk(b), st = tahapAktif();
+  const sisa = (part, s) => Math.max(0, Math.round((volBagian(b, part) - kumulatif(b.bamk_id, part, s.stage_id, null)) * 100) / 100);
+  const hk = P.hk, j = P.jend;
+  openModal("Input susulan — Tangki " + tankNo(b.tank_id), `
+    <div class="note">Dipakai untuk tanki yang <b>sudah dikerjakan di lapangan</b> tetapi laporan hariannya belum diketik (mis. G-1).
+      Isi tanggal mulai & selesai tiap tahap sesuai lapangan, dan luasnya (bawaan = sisa volume BAMK yang belum tercatat).
+      Luas dibagi rata ke hari kerja (Senin–Jumat) pada rentang tanggal itu dan disimpan sebagai laporan harian <b>Disetujui</b> bertanda ${SUSULAN}.</div>
+    <div class="fg c2 mt12">
+      <label class="f"><span>Tangki / BAMK</span><select id="ssB">${L.map(x => `<option value="${x.bamk_id}" ${x.bamk_id === b.bamk_id ? "selected" : ""}>${esc(tankNo(x.tank_id))} — ${esc(x.bamk_no || "")}</option>`).join("")}</select></label>
+      <label class="f"><span>Rata-rata tenaga kerja per hari (orang)</span><input type="number" id="ssOrg" min="0" value="0"></label>
+    </div>
+    <div class="tw mt8"><table><thead><tr><th>Tahap</th><th>Mulai</th><th>Selesai</th>${BAGIAN.map(([k, l]) => `<th class="n">${esc(l.split(" ")[0])} (m²)</th>`).join("")}</tr></thead>
+    <tbody>${st.map((s, i) => {
+      const jj = j[i] || {};
+      const d1 = hk[(jj.hs || 1) - 1] || periodeBamk(b).mulai || today(), d2 = hk[(jj.he || 1) - 1] || periodeBamk(b).akhir || today();
+      return `<tr><td><b>${esc(s.stage_name)}</b></td>
+        <td><input type="date" data-ssd1="${s.stage_id}" value="${esc(d1)}"></td><td><input type="date" data-ssd2="${s.stage_id}" value="${esc(d2)}"></td>
+        ${BAGIAN.map(([k]) => `<td class="n"><input type="text" inputmode="decimal" data-ssq="${s.stage_id}|${k}" value="${String(sisa(k, s)).replace(".", ",")}" style="width:90px;text-align:right"></td>`).join("")}</tr>`;
+    }).join("")}</tbody></table></div>
+    <div class="chk mt8"><input type="checkbox" id="ssTutup"><label for="ssTutup">Tandai BAMK selesai (status DITUTUP) sesudah disimpan</label></div>
+    <div class="tiny muted mt8">Tanggal awal terisi dari jendela rencana SPK — ganti dengan tanggal lapangan. Laporan yang sudah ada pada tanggal yang sama tidak diubah; baris luas susulan ditambahkan ke laporan itu.</div>`,
+    `<button class="btn p" id="ssOk">Simpan input susulan</button>`, true);
+  $("#ssB").onchange = e => { closeModal(); susulanModal(e.target.value); };
+  $("#ssOk").onclick = () => {
+    const peta = kalenderPeta(), buat = {}, rows = [];
+    for (const s of st) {
+      const d1 = $(`[data-ssd1="${s.stage_id}"]`).value, d2 = $(`[data-ssd2="${s.stage_id}"]`).value;
+      const qs = BAGIAN.map(([k]) => [k, nz($(`[data-ssq="${s.stage_id}|${k}"]`).value)]).filter(x => x[1] > 0);
+      if (!qs.length) continue;
+      if (!d1 || !d2 || d2 < d1) return toast(s.stage_name + ": tanggal mulai/selesai belum benar.", "err");
+      for (const [k, q] of qs) if (q > sisa(k, s) + 0.01) return toast(s.stage_name + " " + bagianLabel(k) + ": melebihi sisa volume BAMK (" + fmt(sisa(k, s), 2) + " m²).", "err");
+      let hari = daftarTanggal(d1, d2).filter(d => hariKerjaEfektif(d, peta));
+      if (!hari.length) hari = [d1];
+      qs.forEach(([k, q]) => {
+        let sudah = 0;
+        hari.forEach((d, i) => {
+          const v = i === hari.length - 1 ? Math.round((q - sudah) * 100) / 100 : Math.round(q / hari.length * 100) / 100;
+          sudah += v; rows.push({ d, part: k, stage_id: s.stage_id, qty: v });
+        });
+      });
+    }
+    if (!rows.length) return toast("Belum ada luas yang diisi.", "err");
+    const t = tankOf(b.tank_id), org = Math.max(0, Math.round(nz($("#ssOrg").value)));
+    const harian = d => {
+      if (buat[d]) return buat[d];
+      let x = DB.dailies.find(y => y.bamk_id === b.bamk_id && y.report_date === d && y.status !== "REJECTED");
+      if (!x) {
+        x = { daily_id: uid("DL"), report_date: d, bamk_id: b.bamk_id, tank_id: b.tank_id, area_id: (t && t.area_id) || b.area_id || "",
+          admin_user_id: S.user.user_id, weather: "", shift: "Harian",
+          general_notes: SUSULAN + " Rekap pekerjaan lapangan yang dimasukkan susulan oleh Project Control.",
+          scan_url: "", supervisor_side: "", supervisor_name: "", status: "APPROVED", revision_no: 0,
+          submitted_at: new Date().toISOString(), review_note: "" };
+        DB.dailies.push(x);
+        if (org > 0) DB.manpower.push({ manpower_id: uid("MP"), daily_id: x.daily_id, bamk_id: b.bamk_id, pihak: "", category: "Tenaga kerja (rekap susulan)", worker_count: org, notes: SUSULAN });
+      }
+      return (buat[d] = x);
+    };
+    rows.forEach(r => DB.progress.push({ progress_id: uid("PR"), daily_id: harian(r.d).daily_id, bamk_id: b.bamk_id, part: r.part, stage_id: r.stage_id,
+      scope_id: "", activity: "Input susulan", work_package: "", target_qty: 0, actual_qty: r.qty, unit: "m2", pct_complete: 0 }));
+    if ($("#ssTutup").checked) b.status = "DITUTUP";
+    audit("CREATE", "V38_SUSULAN", b.bamk_id, "", Object.keys(buat).length + " hari · " + fmt(rows.reduce((a, r) => a + r.qty, 0), 2) + " m²");
+    save(); closeModal(); render();
+    toast("Input susulan tersimpan: " + Object.keys(buat).length + " hari kerja. Progres tanki sekarang " + fmt(persenBamk(b.bamk_id), 1) + "%.", "ok");
+  };
+}
 
 /* ============================================================
    V3.8 — PERAN, MENU & PENJAGA
@@ -14650,7 +14734,7 @@ function hitungNotifikasi() {
   const J = {
     isiBoqNego: ["boq", "master"], setelanKontrakModal: ["kurva", "anggaran", "master"], sistemCatModal: ["volume", "lembar", "master"],
     susunTagihanModal: ["tagih_susun"], memoModal: ["memo_input"], lembarTeksModal: ["lembar"], lembarFotoModal: ["lembar"],
-    evaluasiModal: ["evaluasi"]
+    evaluasiModal: ["evaluasi"], susulanModal: ["master", "volume"]
   };
   Object.keys(J).forEach(nm => {
     const asli = window[nm]; if (typeof asli !== "function") return;
